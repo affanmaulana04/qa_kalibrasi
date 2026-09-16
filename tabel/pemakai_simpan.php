@@ -73,6 +73,7 @@ if($status_proses=='tambah' || $status_proses=='edit'){
 
 	$mn_transaksi=$mn_tran_data_karyawan.$mn_tran_mutasi_karyawan.$mn_tran_rotasi_karyawan;
 		if($mn_transaksi=='NNN'){$mn_transaksi='N';}else{$mn_transaksi='Y';}
+//LAPORAN/REPORT////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
 	if($status_proses=='tambah'){
 		//cek sudah ada atau belum pada tabel user
 		$row = mysqli_num_rows(mysqli_query($konek,"SELECT * from user WHERE uid = '$input_uid'"));

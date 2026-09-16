@@ -93,9 +93,15 @@ $total_pages = count($pages);
 
         .row-seksi { background-color: #d9e1f2; font-weight: bold; text-align: left; }
     
+<<<<<<< HEAD
         .bg-terlewat { background-color: #ffb3b3 !important; font-weight: bold; } 
         .bg-hari-ini { background-color: #b3ffb3 !important; font-weight: bold; } 
         .bg-terjadwal { background-color: #b3d9ff !important; font-weight: bold; } 
+=======
+        .bg-terlewat { background-color: #ffb3b3 !important; font-weight: bold; color: #842029; } 
+        .bg-hari-ini { background-color: #b3ffb3 !important; font-weight: bold; color: #664d03; } 
+        .bg-terjadwal { background-color: #b3d9ff !important; font-weight: bold; color: #0f5132; } 
+>>>>>>> 0a5ed7ff6ba01531b8284390619185fbc099bef4
         
         .keterangan-wrapper { display: flex; gap: 20px; margin-top: 20px; }
         .keterangan-box { border: 1px solid #777; padding: 10px; font-size: 11px; flex: 1;}
@@ -118,6 +124,8 @@ $total_pages = count($pages);
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
             }
+            
+            .bg-terlewat, .bg-hari-ini, .bg-terjadwal { color: #000 !important; }
         }
     </style>
 </head>
@@ -170,6 +178,7 @@ $total_pages = count($pages);
                         $status_text = "";
                         $bg_class = "";
 
+                        // LOGIKA BARU: CUKUP 3 KONDISI
                         if ($selisih_hari < 0) {
                             $status_text = "Jadwal Terlewat";
                             $bg_class = "bg-terlewat";

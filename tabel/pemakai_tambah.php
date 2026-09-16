@@ -160,8 +160,7 @@
 									<select class="form-control" name='input_seksi' id="input_seksi">
 										<option value=''></option>
 										<?php
-											//include "../../inc/inc_koneksi.php";
-											//include "../../inc/fungsi_tanggal.php";
+										
 											$query = mysqli_query($konek,"select seksi from data_karyawan group by seksi order by seksi");
 											while($fetch = mysqli_fetch_array($query)){
 												$psectnm=$fetch['seksi'];

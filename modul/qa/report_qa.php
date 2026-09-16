@@ -18,10 +18,11 @@ function formatTanggalTitik($value) {
     return $time ? date('d.m.Y', $time) : '-';
 }
 
+// LOGIKA 3 WARNA SAJA: Terlewat (Merah), Hari Ini (Kuning), Terjadwal (Hijau)
 function statusJadwal($jadwal) {
-    if (!$jadwal) return ['label' => 'Terjadwal', 'class' => 'status-scheduled', 'color' => '#0f5132'];
-    $selisih = (int)((strtotime($jadwal) - strtotime(date('Y-m-d'))) / 86400);
+    if (!$jadwal) return ['label' => 'Terjadwal', 'class' => 'status-scheduled'];
     
+<<<<<<< HEAD
     if ($selisih < 0) return ['label' => 'Jadwal Terlewat', 'class' => 'status-overdue', 'color' => '#842029'];
     if ($selisih === 0) return ['label' => 'Jadwal Hari Ini', 'class' => 'status-today', 'color' => '#155724'];
     return ['label' => 'Terjadwal', 'class' => 'status-scheduled', 'color' => '#084298'];
@@ -34,6 +35,27 @@ $sql = "SELECT p.id, p.no_part AS nomor_alat, p.nama_part AS nama_alat,
         LEFT JOIN qa_seksi_pemilik sp ON sp.id = p.seksi_pemilik_id
         WHERE p.status = 'aktif'
         ORDER BY COALESCE(sp.kode_pemilik, '') ASC, p.jadwal_kalibrasi ASC, p.no_part ASC";
+=======
+    $tgl_sekarang = date('Y-m-d');
+    $selisih = (int)((strtotime($jadwal) - strtotime($tgl_sekarang)) / 86400);
+    
+    if ($selisih < 0) {
+        return ['label' => 'Jadwal Terlewat', 'class' => 'status-overdue'];
+    } elseif ($selisih === 0) {
+        return ['label' => 'Jadwal Hari Ini', 'class' => 'status-today'];
+    } else {
+        return ['label' => 'Terjadwal', 'class' => 'status-scheduled'];
+    }
+}
+
+// QUERY BARU: Langsung ambil teks seksi_pemilik, nggak perlu JOIN tabel HRD lama
+$sql = "SELECT id, no_part AS nomor_alat, nama_part AS nama_alat,
+               seksi_pemilik AS kode_pemilik,
+               jadwal_kalibrasi
+        FROM qa_part
+        WHERE status = 'aktif'
+        ORDER BY seksi_pemilik ASC, jadwal_kalibrasi ASC, no_part ASC";
+>>>>>>> 0a5ed7ff6ba01531b8284390619185fbc099bef4
 
 $result = $konek->query($sql);
 $rows = [];
@@ -41,6 +63,7 @@ if ($result) {
     while ($row = $result->fetch_assoc()) $rows[] = $row;
 }
 
+// Target 23 alat per lembar A4 landscape.
 $perPage = 23;
 $pages = $rows ? array_chunk($rows, $perPage) : [[]];
 $totalPages = count($pages);
@@ -62,9 +85,16 @@ body{padding-top:80px;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;
 .screen-table th{text-align:center;background:#f3f4f6}.screen-table td{vertical-align:middle!important}
 .print-area{display:none}
 
+<<<<<<< HEAD
 .status-scheduled{background:#b9d9f4!important; color:#084298!important; font-weight:bold;}
 .status-today{background:#c9e8c4!important; color:#155724!important; font-weight:bold;}
 .status-overdue{background:#f7b9bd!important; color:#842029!important; font-weight:bold;}
+=======
+/* WARNA UNTUK LAYAR MONITOR (3 WARNA) */
+.status-scheduled{background:#d1e7dd!important; color:#0f5132!important; font-weight:bold;} /* Hijau */
+.status-today{background:#fff3cd!important; color:#664d03!important; font-weight:bold;} /* Kuning */
+.status-overdue{background:#f8d7da!important; color:#842029!important; font-weight:bold;} /* Merah */
+>>>>>>> 0a5ed7ff6ba01531b8284390619185fbc099bef4
 
 @media print{
     @page{size:A4 landscape;margin:8mm}
@@ -114,12 +144,20 @@ body{padding-top:80px;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;
     .print-table td:nth-child(6){width:19%;text-align:center;font-weight:700}
     .section-row td{font-weight:700;padding:2.2px 7px;background:#e9ecef!important}
     
+    /* WARNA UNTUK KERTAS PRINT (3 WARNA) */
+    .status-scheduled{background:#d1e7dd!important; color:#000!important;}
+    .status-today{background:#fff3cd!important; color:#000!important;}
+    .status-overdue{background:#f8d7da!important; color:#000!important;}
+    
     .print-footer{position:absolute;left:0;right:0;bottom:0;height:32mm;display:flex;gap:4mm;box-sizing:border-box}
     .legend-box,.note-box{border:1px solid #6d7378;box-sizing:border-box;padding:3mm}
     .legend-box{width:30%}.note-box{width:70%}
     .footer-title{font-size:10.5pt;font-weight:700;margin-bottom:2mm}
     .legend-item{display:flex;align-items:center;font-size:8.2pt;line-height:1.25;margin-bottom:1.1mm}
+    
+    /* KOTAK KECIL LEGENDA BAWAH */
     .legend-color{display:inline-block;width:6mm;height:4mm;border:1px solid #777;margin-right:2mm;flex:none}
+    
     .note-line{border-bottom:1px dotted #555;height:5mm;margin-top:0.5mm}
 }
 </style>
@@ -139,16 +177,16 @@ body{padding-top:80px;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;
     <div class="card-report">
         <div class="clearfix">
             <h3 class="screen-title pull-left">Daftar Kalibrasi Alat</h3>
-            <button type="button" class="btn btn-primary pull-right" onclick="window.print()"><i class="fa fa-print"></i> Cetak</button>
+            <button type="button" class="btn btn-primary pull-right" onclick="window.print()"><i class="fa fa-print"></i> Cetak Tabel</button>
         </div>
         <div class="table-responsive">
             <table class="table table-bordered screen-table">
                 <thead><tr><th>No</th><th>Seksi Pemilik</th><th>No. Alat</th><th>Nama Alat</th><th>Tanggal Jadwal</th><th>Status</th></tr></thead>
                 <tbody>
                 <?php if ($rows): $no=1; $last=''; foreach ($rows as $row): $owner=$row['kode_pemilik']; ?>
-                    <?php if ($owner !== $last): ?><tr><td colspan="6" style="background:#e9ecef;"><strong>SEKSI: <?php echo e($owner); ?></strong></td></tr><?php $last=$owner; endif; ?>
+                    <?php if ($owner !== $last): ?><tr><td colspan="6" style="background:#e9ecef; text-align:left;"><strong>SEKSI: <?php echo e($owner); ?></strong></td></tr><?php $last=$owner; endif; ?>
                     <?php $st=statusJadwal($row['jadwal_kalibrasi']); ?>
-                    <!-- Baris diwarnai berdasarkan status -->
+                    
                     <tr class="<?php echo e($st['class']); ?>">
                         <td class="text-center" style="background:#fff; color:#333;"><?php echo $no++; ?></td>
                         <td style="background:#fff; color:#333;"><?php echo e($owner); ?></td>
@@ -192,9 +230,11 @@ body{padding-top:80px;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;
                 $ownerCode=strtoupper(trim((string)$row['kode_pemilik']));
                 $st=statusJadwal($row['jadwal_kalibrasi']);
                 $globalNo=($pageIndex*$perPage)+$localIndex+1;
+                
                 if ($ownerCode !== $lastOwner): ?>
                     <tr class="section-row"><td colspan="6">SEKSI PEMILIK: <?php echo e($row['kode_pemilik']); ?></td></tr>
                 <?php $lastOwner=$ownerCode; endif; ?>
+                
                 <tr>
                     <td><?php echo $globalNo; ?></td>
                     <td><?php echo e($row['kode_pemilik']); ?></td>
@@ -208,6 +248,7 @@ body{padding-top:80px;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;
             </tbody>
         </table>
 
+        <!-- LEGENDA BAWAH 3 WARNA -->
         <div class="print-footer">
             <div class="legend-box">
                 <div class="footer-title">Keterangan Warna:</div>
