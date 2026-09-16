@@ -22,17 +22,18 @@ function statusJadwal($jadwal) {
     if (!$jadwal) return ['label' => 'Terjadwal', 'class' => 'status-scheduled', 'color' => '#0f5132'];
     $selisih = (int)((strtotime($jadwal) - strtotime(date('Y-m-d'))) / 86400);
     
-    if ($selisih < 0) return ['label' => 'Terlewat', 'class' => 'status-overdue', 'color' => '#842029'];
-    if ($selisih === 0) return ['label' => 'Hari Ini', 'class' => 'status-today', 'color' => '#664d03'];
-    return ['label' => 'Terjadwal', 'class' => 'status-scheduled', 'color' => '#0f5132'];
+    if ($selisih < 0) return ['label' => 'Jadwal Terlewat', 'class' => 'status-overdue', 'color' => '#842029'];
+    if ($selisih === 0) return ['label' => 'Jadwal Hari Ini', 'class' => 'status-today', 'color' => '#155724'];
+    return ['label' => 'Terjadwal', 'class' => 'status-scheduled', 'color' => '#084298'];
 }
 
-$sql = "SELECT id, no_part AS nomor_alat, nama_part AS nama_alat,
-               seksi_pemilik AS kode_pemilik,
-               jadwal_kalibrasi
-        FROM qa_part
-        WHERE status = 'aktif'
-        ORDER BY seksi_pemilik ASC, jadwal_kalibrasi ASC, no_part ASC";
+$sql = "SELECT p.id, p.no_part AS nomor_alat, p.nama_part AS nama_alat,
+               COALESCE(sp.kode_pemilik, '-') AS kode_pemilik,
+               p.jadwal_kalibrasi
+        FROM qa_part p
+        LEFT JOIN qa_seksi_pemilik sp ON sp.id = p.seksi_pemilik_id
+        WHERE p.status = 'aktif'
+        ORDER BY COALESCE(sp.kode_pemilik, '') ASC, p.jadwal_kalibrasi ASC, p.no_part ASC";
 
 $result = $konek->query($sql);
 $rows = [];
@@ -61,9 +62,9 @@ body{padding-top:80px;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;
 .screen-table th{text-align:center;background:#f3f4f6}.screen-table td{vertical-align:middle!important}
 .print-area{display:none}
 
-.status-scheduled{background:#d1e7dd!important; color:#0f5132!important; font-weight:bold;} /* Hijau */
-.status-today{background:#fff3cd!important; color:#664d03!important; font-weight:bold;} /* Kuning */
-.status-overdue{background:#f8d7da!important; color:#842029!important; font-weight:bold;} /* Merah */
+.status-scheduled{background:#b9d9f4!important; color:#084298!important; font-weight:bold;}
+.status-today{background:#c9e8c4!important; color:#155724!important; font-weight:bold;}
+.status-overdue{background:#f7b9bd!important; color:#842029!important; font-weight:bold;}
 
 @media print{
     @page{size:A4 landscape;margin:8mm}
@@ -73,10 +74,35 @@ body{padding-top:80px;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;
     .print-area{display:block!important}
     .print-page{width:100%;height:194mm;box-sizing:border-box;position:relative;page-break-after:always;break-after:page;overflow:hidden}
     .print-page:last-child{page-break-after:auto;break-after:auto}
-    .print-top{position:relative;height:19mm}
-    .email-date{position:absolute;left:0;top:-1mm;font-size:10pt;font-weight:600}
-    .report-title{text-align:center;font-size:19pt;font-weight:700;line-height:1.15;margin:0;padding-top:0}
-    .page-number{text-align:right;font-size:10pt;font-weight:700;margin-top:1mm}
+    .print-top{
+        position:relative;
+        height:24mm;
+    }
+
+    .email-date{
+        position:absolute;
+        left:0;
+        top:0;
+        font-size:10pt;
+        font-weight:700;
+    }
+
+    .report-title{
+        text-align:center;
+        font-size:19pt;
+        font-weight:700;
+        line-height:1.15;
+        margin:0;
+        padding-top:7mm;
+    }
+
+    .page-number{
+        position:absolute;
+        right:0;
+        top:13mm;
+        font-size:10pt;
+        font-weight:700;
+    }
     .print-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:8.7pt}
     .print-table th,.print-table td{border:1px solid #6d7378;padding:2.4px 4px;vertical-align:middle}
     .print-table th{background:#e7eaed;text-align:center;font-weight:700;height:7mm}
@@ -142,9 +168,17 @@ body{padding-top:80px;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;
 <?php foreach ($pages as $pageIndex => $pageRows): ?>
     <section class="print-page">
         <div class="print-top">
-            <div class="email-date">Email: <?php echo e($todayLabel); ?></div>
-            <div class="report-title">DAFTAR KALIBRASI ALAT</div>
-            <div class="page-number">Halaman <?php echo $totalPages > 1 ? ($pageIndex + 1) . '/' . $totalPages : ($pageIndex + 1); ?></div>
+            <div class="email-date">
+                Tanggal: <?php echo $todayLabel; ?>
+            </div>
+
+            <div class="report-title">
+                DAFTAR KALIBRASI ALAT
+            </div>
+
+            <div class="page-number">
+                Halaman <?php echo ($pageIndex + 1) . '/' . $totalPages; ?>
+            </div>
         </div>
 
         <table class="print-table">
@@ -178,8 +212,8 @@ body{padding-top:80px;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;
             <div class="legend-box">
                 <div class="footer-title">Keterangan Warna:</div>
                 <div class="legend-item"><span class="legend-color status-scheduled"></span><strong>Terjadwal</strong></div>
-                <div class="legend-item"><span class="legend-color status-today"></span><strong>Hari Ini</strong></div>
-                <div class="legend-item"><span class="legend-color status-overdue"></span><strong>Terlewat</strong></div>
+                <div class="legend-item"><span class="legend-color status-today"></span><strong>Jadwal Hari Ini</strong></div>
+                <div class="legend-item"><span class="legend-color status-overdue"></span><strong>Jadwal Terlewat</strong></div>
             </div>
             <div class="note-box">
                 <div class="footer-title">Keterangan:</div>

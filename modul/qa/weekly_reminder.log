@@ -1,0 +1,460 @@
+PHP Warning:  require_once(C:\xampp\htdocs\qa_kalibrasi\modul\qa/../../libs/PHPMailer/src/PHPMailer.php): Failed to open stream: No such file or directory in C:\xampp\htdocs\qa_kalibrasi\modul\qa\email_helper.php on line 2
+
+Warning: require_once(C:\xampp\htdocs\qa_kalibrasi\modul\qa/../../libs/PHPMailer/src/PHPMailer.php): Failed to open stream: No such file or directory in C:\xampp\htdocs\qa_kalibrasi\modul\qa\email_helper.php on line 2
+PHP Fatal error:  Uncaught Error: Failed opening required 'C:\xampp\htdocs\qa_kalibrasi\modul\qa/../../libs/PHPMailer/src/PHPMailer.php' (include_path='C:\xampp\php\PEAR') in C:\xampp\htdocs\qa_kalibrasi\modul\qa\email_helper.php:2
+Stack trace:
+#0 C:\xampp\htdocs\qa_kalibrasi\modul\qa\weekly_reminder.php(5): require_once()
+#1 {main}
+  thrown in C:\xampp\htdocs\qa_kalibrasi\modul\qa\email_helper.php on line 2
+
+Fatal error: Uncaught Error: Failed opening required 'C:\xampp\htdocs\qa_kalibrasi\modul\qa/../../libs/PHPMailer/src/PHPMailer.php' (include_path='C:\xampp\php\PEAR') in C:\xampp\htdocs\qa_kalibrasi\modul\qa\email_helper.php:2
+Stack trace:
+#0 C:\xampp\htdocs\qa_kalibrasi\modul\qa\weekly_reminder.php(5): require_once()
+#1 {main}
+  thrown in C:\xampp\htdocs\qa_kalibrasi\modul\qa\email_helper.php on line 2
+PHP Warning:  require_once(C:\xampp\htdocs\qa_kalibrasi\modul\qa/../../libs/PHPMailer/src/PHPMailer.php): Failed to open stream: No such file or directory in C:\xampp\htdocs\qa_kalibrasi\modul\qa\email_helper.php on line 2
+
+Warning: require_once(C:\xampp\htdocs\qa_kalibrasi\modul\qa/../../libs/PHPMailer/src/PHPMailer.php): Failed to open stream: No such file or directory in C:\xampp\htdocs\qa_kalibrasi\modul\qa\email_helper.php on line 2
+PHP Fatal error:  Uncaught Error: Failed opening required 'C:\xampp\htdocs\qa_kalibrasi\modul\qa/../../libs/PHPMailer/src/PHPMailer.php' (include_path='C:\xampp\php\PEAR') in C:\xampp\htdocs\qa_kalibrasi\modul\qa\email_helper.php:2
+Stack trace:
+#0 C:\xampp\htdocs\qa_kalibrasi\modul\qa\weekly_reminder.php(5): require_once()
+#1 {main}
+  thrown in C:\xampp\htdocs\qa_kalibrasi\modul\qa\email_helper.php on line 2
+
+Fatal error: Uncaught Error: Failed opening required 'C:\xampp\htdocs\qa_kalibrasi\modul\qa/../../libs/PHPMailer/src/PHPMailer.php' (include_path='C:\xampp\php\PEAR') in C:\xampp\htdocs\qa_kalibrasi\modul\qa\email_helper.php:2
+Stack trace:
+#0 C:\xampp\htdocs\qa_kalibrasi\modul\qa\weekly_reminder.php(5): require_once()
+#1 {main}
+  thrown in C:\xampp\htdocs\qa_kalibrasi\modul\qa\email_helper.php on line 2
+PHP Warning:  require_once(C:\xampp\htdocs\qa_kalibrasi\modul\qa/../../libs/PHPMailer/src/PHPMailer.php): Failed to open stream: No such file or directory in C:\xampp\htdocs\qa_kalibrasi\modul\qa\email_helper.php on line 2
+
+Warning: require_once(C:\xampp\htdocs\qa_kalibrasi\modul\qa/../../libs/PHPMailer/src/PHPMailer.php): Failed to open stream: No such file or directory in C:\xampp\htdocs\qa_kalibrasi\modul\qa\email_helper.php on line 2
+PHP Fatal error:  Uncaught Error: Failed opening required 'C:\xampp\htdocs\qa_kalibrasi\modul\qa/../../libs/PHPMailer/src/PHPMailer.php' (include_path='C:\xampp\php\PEAR') in C:\xampp\htdocs\qa_kalibrasi\modul\qa\email_helper.php:2
+Stack trace:
+#0 C:\xampp\htdocs\qa_kalibrasi\modul\qa\weekly_reminder.php(5): require_once()
+#1 {main}
+  thrown in C:\xampp\htdocs\qa_kalibrasi\modul\qa\email_helper.php on line 2
+
+Fatal error: Uncaught Error: Failed opening required 'C:\xampp\htdocs\qa_kalibrasi\modul\qa/../../libs/PHPMailer/src/PHPMailer.php' (include_path='C:\xampp\php\PEAR') in C:\xampp\htdocs\qa_kalibrasi\modul\qa\email_helper.php:2
+Stack trace:
+#0 C:\xampp\htdocs\qa_kalibrasi\modul\qa\weekly_reminder.php(5): require_once()
+#1 {main}
+  thrown in C:\xampp\htdocs\qa_kalibrasi\modul\qa\email_helper.php on line 2
+PHP Warning:  require_once(C:\xampp\htdocs\qa_kalibrasi\modul\qa/../../libs/PHPMailer/src/PHPMailer.php): Failed to open stream: No such file or directory in C:\xampp\htdocs\qa_kalibrasi\modul\qa\email_helper.php on line 2
+
+Warning: require_once(C:\xampp\htdocs\qa_kalibrasi\modul\qa/../../libs/PHPMailer/src/PHPMailer.php): Failed to open stream: No such file or directory in C:\xampp\htdocs\qa_kalibrasi\modul\qa\email_helper.php on line 2
+PHP Fatal error:  Uncaught Error: Failed opening required 'C:\xampp\htdocs\qa_kalibrasi\modul\qa/../../libs/PHPMailer/src/PHPMailer.php' (include_path='C:\xampp\php\PEAR') in C:\xampp\htdocs\qa_kalibrasi\modul\qa\email_helper.php:2
+Stack trace:
+#0 C:\xampp\htdocs\qa_kalibrasi\modul\qa\weekly_reminder.php(5): require_once()
+#1 {main}
+  thrown in C:\xampp\htdocs\qa_kalibrasi\modul\qa\email_helper.php on line 2
+
+Fatal error: Uncaught Error: Failed opening required 'C:\xampp\htdocs\qa_kalibrasi\modul\qa/../../libs/PHPMailer/src/PHPMailer.php' (include_path='C:\xampp\php\PEAR') in C:\xampp\htdocs\qa_kalibrasi\modul\qa\email_helper.php:2
+Stack trace:
+#0 C:\xampp\htdocs\qa_kalibrasi\modul\qa\weekly_reminder.php(5): require_once()
+#1 {main}
+  thrown in C:\xampp\htdocs\qa_kalibrasi\modul\qa\email_helper.php on line 2
+MODE TEST: proses weekly reminder dijalankan manual.
+MODE TEST: proses weekly reminder dijalankan manual.
+Bukan hari Senin. Gunakan --test untuk testing manual.
+Bukan hari Senin. Gunakan --test untuk testing manual.
+MODE TEST: proses weekly reminder dijalankan manual.
+FILTER: hanya kirim ke ridhoahmadfauzan38@gmail.com
+MODE TEST: proses weekly reminder dijalankan manual.
+FILTER: hanya kirim ke ridhoahmadfauzan38@gmail.com
+MODE TEST: proses weekly reminder dijalankan manual.
+FILTER: hanya kirim ke ridhoahmadfauzan38@gmail.com
+MODE TEST: proses weekly reminder dijalankan manual.
+FILTER: hanya kirim ke ridhoahmadfauzan38@gmail.com
+MODE TEST: proses weekly reminder dijalankan manual.
+FILTER: hanya kirim ke ridhoahmadfauzan38@gmail.com
+MODE TEST: proses weekly reminder dijalankan manual.
+FILTER: hanya kirim ke ridhoahmadfauzan38@gmail.com
+MODE TEST: proses weekly reminder dijalankan manual.
+FILTER: hanya kirim ke ridhoahmadfauzan38@gmail.com
+[2026-09-10 15:23:19] ===== WEEKLY REMINDER START =====
+[2026-09-10 15:23:19] Periode: 2026-09-10 s/d 2026-09-16
+[2026-09-10 15:23:19] Memproses penerima: ridhoahmadfauzan38@gmail.com | seksi=1 | pemilik=
+[2026-09-10 15:23:19] Tidak ada jadwal untuk ridhoahmadfauzan38@gmail.com
+[2026-09-10 15:23:19] ===== WEEKLY REMINDER FINISH =====
+[2026-09-10 15:27:27] ===== WEEKLY REMINDER START =====
+[2026-09-10 15:27:27] Periode: 2026-09-10 s/d 2026-09-16
+[2026-09-10 15:27:27] Memproses penerima: ridhoahmadfauzan38@gmail.com | seksi=1 | pemilik=
+[2026-09-10 15:27:27] Tidak ada jadwal untuk ridhoahmadfauzan38@gmail.com
+[2026-09-10 15:27:27] ===== WEEKLY REMINDER FINISH =====
+[2026-09-10 15:30:00] ===== WEEKLY REMINDER START =====
+[2026-09-10 15:30:00] Periode: 2026-09-10 s/d 2026-09-16
+[2026-09-10 15:30:00] Memproses penerima: ridhoahmadfauzan38@gmail.com | seksi=1 | pemilik=
+[2026-09-10 15:30:00] Tidak ada jadwal untuk ridhoahmadfauzan38@gmail.com
+[2026-09-10 15:30:00] ===== WEEKLY REMINDER FINISH =====
+[2026-09-10 15:37:18] ===== WEEKLY REMINDER START =====
+[2026-09-10 15:37:18] Periode: 2026-09-10 s/d 2026-09-16
+[2026-09-10 15:37:18] Memproses penerima: ridhoahmadfauzan38@gmail.com | seksi=1 | pemilik=
+[2026-09-10 15:37:18] Tidak ada jadwal untuk ridhoahmadfauzan38@gmail.com
+[2026-09-10 15:37:18] ===== WEEKLY REMINDER FINISH =====
+[2026-09-10 15:43:27] ============================================================
+[2026-09-10 15:43:27] WEEKLY REMINDER START
+[2026-09-10 15:43:27] Periode: 2026-09-10 s/d 2026-09-16
+[2026-09-10 15:43:27] ------------------------------------------------------------
+[2026-09-10 15:43:27] Memproses: ridhoahmadfauzan38@gmail.com
+[2026-09-10 15:43:27] User UID: -
+[2026-09-10 15:43:27] Seksi ID: 1
+[2026-09-10 15:43:27] Seksi Pemilik ID: -
+[2026-09-10 15:43:27] Query jadwal dibuat untuk ridhoahmadfauzan38@gmail.com
+[2026-09-10 15:43:27] Jadwal ditemukan: 0
+[2026-09-10 15:43:27] Jadwal terlewat: 0
+[2026-09-10 15:43:27] TIDAK ADA JADWAL UNTUK ridhoahmadfauzan38@gmail.com
+[2026-09-10 15:43:27] WEEKLY REMINDER FINISH
+[2026-09-10 15:43:27] ============================================================
+[2026-09-10 15:45:08] ============================================================
+[2026-09-10 15:45:08] WEEKLY REMINDER START
+[2026-09-10 15:45:08] Periode: 2026-09-10 s/d 2026-09-16
+[2026-09-10 15:45:08] ------------------------------------------------------------
+[2026-09-10 15:45:08] Memproses: ridhoahmadfauzan38@gmail.com
+[2026-09-10 15:45:08] User UID: -
+[2026-09-10 15:45:08] Seksi ID: 1
+[2026-09-10 15:45:08] Seksi Pemilik ID: -
+[2026-09-10 15:45:08] Query jadwal dibuat untuk ridhoahmadfauzan38@gmail.com
+[2026-09-10 15:45:08] Jadwal ditemukan: 0
+[2026-09-10 15:45:08] Jadwal terlewat: 0
+[2026-09-10 15:45:08] TIDAK ADA JADWAL UNTUK ridhoahmadfauzan38@gmail.com
+[2026-09-10 15:45:08] WEEKLY REMINDER FINISH
+[2026-09-10 15:45:08] ============================================================
+[2026-09-10 15:51:18] ============================================================
+[2026-09-10 15:51:18] WEEKLY REMINDER START
+[2026-09-10 15:51:18] Periode: 2026-09-10 s/d 2026-09-16
+[2026-09-10 15:51:18] ------------------------------------------------------------
+[2026-09-10 15:51:18] Memproses: ridhoahmadfauzan38@gmail.com
+[2026-09-10 15:51:18] User UID: -
+[2026-09-10 15:51:18] Seksi ID: -
+[2026-09-10 15:51:18] Seksi Pemilik ID: 1
+[2026-09-10 15:51:18] Query jadwal dibuat untuk ridhoahmadfauzan38@gmail.com
+[2026-09-10 15:51:18] Jadwal ditemukan: 1
+[2026-09-10 15:51:18] Jadwal terlewat: 0
+[2026-09-10 15:51:18] JADWAL: 334455 | pH Meter | seksi_id=- | pemilik_id=1 | tanggal=2026-09-11
+[2026-09-10 15:51:18] Mencoba mengirim email ke: ridhoahmadfauzan38@gmail.com
+[2026-09-10 15:51:23] EMAIL BERHASIL: ridhoahmadfauzan38@gmail.com
+[2026-09-10 15:57:11] ============================================================
+[2026-09-10 15:57:11] WEEKLY REMINDER START
+[2026-09-10 15:57:11] Periode: 2026-09-10 s/d 2026-09-16
+[2026-09-10 15:57:11] ------------------------------------------------------------
+[2026-09-10 15:57:11] Memproses: ridhoahmadfauzan38@gmail.com
+[2026-09-10 15:57:11] User UID: -
+[2026-09-10 15:57:11] Seksi ID: -
+[2026-09-10 15:57:11] Seksi Pemilik ID: 1
+[2026-09-10 15:57:11] Query jadwal dibuat untuk ridhoahmadfauzan38@gmail.com
+[2026-09-10 15:57:11] Jadwal ditemukan: 1
+[2026-09-10 15:57:11] Jadwal terlewat: 0
+[2026-09-10 15:57:11] JADWAL: 334455 | pH Meter | seksi_id=- | pemilik_id=1 | tanggal=2026-09-11
+[2026-09-10 15:57:11] Mencoba mengirim email ke: ridhoahmadfauzan38@gmail.com
+[2026-09-10 15:57:16] EMAIL BERHASIL: ridhoahmadfauzan38@gmail.com
+[2026-09-10 15:57:16] WEEKLY REMINDER FINISH
+[2026-09-10 15:57:16] ============================================================
+[2026-09-10 16:25:07] ============================================================
+[2026-09-10 16:25:07] WEEKLY REMINDER START
+[2026-09-10 16:25:07] Periode: 2026-09-10 s/d 2026-09-16
+[2026-09-10 16:25:07] ------------------------------------------------------------
+[2026-09-10 16:25:07] Memproses: ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:25:07] User UID: RIDHO
+[2026-09-10 16:25:07] Seksi ID: -
+[2026-09-10 16:25:07] Seksi Pemilik ID: 1
+[2026-09-10 16:25:07] Query jadwal dibuat untuk ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:25:07] Jadwal ditemukan: 1
+[2026-09-10 16:25:07] Jadwal terlewat: 0
+[2026-09-10 16:25:07] JADWAL: 334455 | pH Meter | seksi_id=- | pemilik_id=1 | tanggal=2026-09-11
+[2026-09-10 16:25:07] Mencoba mengirim email ke: ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:25:15] EMAIL BERHASIL: ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:25:15] WEEKLY REMINDER FINISH
+[2026-09-10 16:25:15] ============================================================
+[2026-09-10 16:27:09] ============================================================
+[2026-09-10 16:27:09] WEEKLY REMINDER START
+[2026-09-10 16:27:09] Periode: 2026-09-10 s/d 2026-09-16
+[2026-09-10 16:27:09] ------------------------------------------------------------
+[2026-09-10 16:27:09] Memproses: ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:27:09] User UID: RIDHO
+[2026-09-10 16:27:09] Seksi ID: -
+[2026-09-10 16:27:09] Seksi Pemilik ID: 1
+[2026-09-10 16:27:09] Query jadwal dibuat untuk ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:27:09] Jadwal ditemukan: 1
+[2026-09-10 16:27:09] Jadwal terlewat: 0
+[2026-09-10 16:27:09] JADWAL: 334455 | pH Meter | seksi_id=- | pemilik_id=1 | tanggal=2026-09-11
+[2026-09-10 16:27:09] Mencoba mengirim email ke: ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:27:14] EMAIL BERHASIL: ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:27:14] WEEKLY REMINDER FINISH
+[2026-09-10 16:27:14] ============================================================
+[2026-09-10 16:28:00] ============================================================
+[2026-09-10 16:28:00] WEEKLY REMINDER START
+[2026-09-10 16:28:00] Periode: 2026-09-10 s/d 2026-09-16
+[2026-09-10 16:28:00] ------------------------------------------------------------
+[2026-09-10 16:28:00] Memproses: ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:28:00] User UID: RIDHO
+[2026-09-10 16:28:00] Seksi ID: -
+[2026-09-10 16:28:00] Seksi Pemilik ID: 1
+[2026-09-10 16:28:00] Query jadwal dibuat untuk ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:28:00] Jadwal ditemukan: 1
+[2026-09-10 16:28:00] Jadwal terlewat: 0
+[2026-09-10 16:28:00] JADWAL: 334455 | pH Meter | seksi_id=- | pemilik_id=1 | tanggal=2026-09-11
+[2026-09-10 16:28:00] Mencoba mengirim email ke: ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:28:06] EMAIL BERHASIL: ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:28:06] WEEKLY REMINDER FINISH
+[2026-09-10 16:28:06] ============================================================
+[2026-09-10 16:28:37] ============================================================
+[2026-09-10 16:28:37] WEEKLY REMINDER START
+[2026-09-10 16:28:37] Periode: 2026-09-10 s/d 2026-09-16
+[2026-09-10 16:28:37] ------------------------------------------------------------
+[2026-09-10 16:28:37] Memproses: agung.prasetyo@toto.id
+[2026-09-10 16:28:37] User UID: -
+[2026-09-10 16:28:37] Seksi ID: 2
+[2026-09-10 16:28:37] Seksi Pemilik ID: -
+[2026-09-10 16:28:37] Query jadwal dibuat untuk agung.prasetyo@toto.id
+[2026-09-10 16:28:37] Jadwal ditemukan: 0
+[2026-09-10 16:28:37] Jadwal terlewat: 0
+[2026-09-10 16:28:37] TIDAK ADA JADWAL UNTUK agung.prasetyo@toto.id
+[2026-09-10 16:28:37] ------------------------------------------------------------
+[2026-09-10 16:28:37] Memproses: ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:28:37] User UID: RIDHO
+[2026-09-10 16:28:37] Seksi ID: -
+[2026-09-10 16:28:37] Seksi Pemilik ID: 1
+[2026-09-10 16:28:37] Query jadwal dibuat untuk ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:28:37] Jadwal ditemukan: 1
+[2026-09-10 16:28:37] Jadwal terlewat: 0
+[2026-09-10 16:28:37] JADWAL: 334455 | pH Meter | seksi_id=- | pemilik_id=1 | tanggal=2026-09-11
+[2026-09-10 16:28:37] Mencoba mengirim email ke: ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:28:41] EMAIL BERHASIL: ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:28:41] WEEKLY REMINDER FINISH
+[2026-09-10 16:28:41] ============================================================
+[2026-09-10 16:30:01] ============================================================
+[2026-09-10 16:30:01] WEEKLY REMINDER START
+[2026-09-10 16:30:01] Periode: 2026-09-10 s/d 2026-09-16
+[2026-09-10 16:30:01] ------------------------------------------------------------
+[2026-09-10 16:30:01] Memproses: agung.prasetyo@toto.id
+[2026-09-10 16:30:01] User UID: -
+[2026-09-10 16:30:01] Seksi ID: 2
+[2026-09-10 16:30:01] Seksi Pemilik ID: -
+[2026-09-10 16:30:01] Query jadwal dibuat untuk agung.prasetyo@toto.id
+[2026-09-10 16:30:01] Jadwal ditemukan: 0
+[2026-09-10 16:30:01] Jadwal terlewat: 0
+[2026-09-10 16:30:01] TIDAK ADA JADWAL UNTUK agung.prasetyo@toto.id
+[2026-09-10 16:30:01] ------------------------------------------------------------
+[2026-09-10 16:30:01] Memproses: ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:30:01] User UID: RIDHO
+[2026-09-10 16:30:01] Seksi ID: -
+[2026-09-10 16:30:01] Seksi Pemilik ID: 1
+[2026-09-10 16:30:01] Query jadwal dibuat untuk ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:30:01] Jadwal ditemukan: 1
+[2026-09-10 16:30:01] Jadwal terlewat: 0
+[2026-09-10 16:30:01] JADWAL: 334455 | pH Meter | seksi_id=- | pemilik_id=1 | tanggal=2026-09-11
+[2026-09-10 16:30:01] Mencoba mengirim email ke: ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:30:08] EMAIL BERHASIL: ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:30:08] WEEKLY REMINDER FINISH
+[2026-09-10 16:30:08] ============================================================
+[2026-09-10 16:35:59] ============================================================
+[2026-09-10 16:35:59] WEEKLY REMINDER START
+[2026-09-10 16:35:59] Periode: 2026-09-10 s/d 2026-09-16
+[2026-09-10 16:35:59] ------------------------------------------------------------
+[2026-09-10 16:35:59] Memproses: agung.prasetyo@toto.id
+[2026-09-10 16:35:59] User UID: AGUNG
+[2026-09-10 16:35:59] Seksi ID: 2
+[2026-09-10 16:35:59] Seksi Pemilik ID: -
+[2026-09-10 16:35:59] Query jadwal dibuat untuk agung.prasetyo@toto.id
+[2026-09-10 16:35:59] Jadwal ditemukan: 0
+[2026-09-10 16:35:59] Jadwal terlewat: 0
+[2026-09-10 16:35:59] TIDAK ADA JADWAL UNTUK agung.prasetyo@toto.id
+[2026-09-10 16:35:59] ------------------------------------------------------------
+[2026-09-10 16:35:59] Memproses: ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:35:59] User UID: RIDHO
+[2026-09-10 16:35:59] Seksi ID: -
+[2026-09-10 16:35:59] Seksi Pemilik ID: 1
+[2026-09-10 16:35:59] Query jadwal dibuat untuk ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:35:59] Jadwal ditemukan: 1
+[2026-09-10 16:35:59] Jadwal terlewat: 0
+[2026-09-10 16:35:59] JADWAL: 334455 | pH Meter | seksi_id=- | pemilik_id=1 | tanggal=2026-09-11
+[2026-09-10 16:35:59] Mencoba mengirim email ke: ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:36:08] EMAIL BERHASIL: ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:36:08] WEEKLY REMINDER FINISH
+[2026-09-10 16:36:08] ============================================================
+[2026-09-10 16:45:01] ============================================================
+[2026-09-10 16:45:01] WEEKLY REMINDER START
+[2026-09-10 16:45:01] Periode: 2026-09-10 s/d 2026-09-16
+[2026-09-10 16:45:01] ------------------------------------------------------------
+[2026-09-10 16:45:01] Memproses: agung.prasetyo@toto.id
+[2026-09-10 16:45:01] User UID: AGUNG
+[2026-09-10 16:45:01] Seksi ID: 2
+[2026-09-10 16:45:01] Seksi Pemilik ID: -
+[2026-09-10 16:45:01] Query jadwal dibuat untuk agung.prasetyo@toto.id
+[2026-09-10 16:45:01] Jadwal ditemukan: 0
+[2026-09-10 16:45:01] Jadwal terlewat: 0
+[2026-09-10 16:45:01] TIDAK ADA JADWAL UNTUK agung.prasetyo@toto.id
+[2026-09-10 16:45:01] ------------------------------------------------------------
+[2026-09-10 16:45:01] Memproses: ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:45:01] User UID: RIDHO
+[2026-09-10 16:45:01] Seksi ID: -
+[2026-09-10 16:45:01] Seksi Pemilik ID: 1
+[2026-09-10 16:45:01] Query jadwal dibuat untuk ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:45:01] Jadwal ditemukan: 1
+[2026-09-10 16:45:01] Jadwal terlewat: 0
+[2026-09-10 16:45:01] JADWAL: 334455 | pH Meter | seksi_id=- | pemilik_id=1 | tanggal=2026-09-11
+[2026-09-10 16:45:01] Mencoba mengirim email ke: ridhoahmadfauzan38@gmail.com
+[2026-09-10 16:45:01] EMAIL GAGAL: ridhoahmadfauzan38@gmail.com | SMTP Error: Could not connect to SMTP host. Failed to connect to server SMTP server error: Failed to connect to server Additional SMTP info: php_network_getaddresses: getaddrinfo for smtp.gmail.com failed: No such host is known. 
+[2026-09-10 16:45:01] WEEKLY REMINDER FINISH
+[2026-09-10 16:45:01] ============================================================
+[2026-09-10 19:27:17] ============================================================
+[2026-09-10 19:27:17] WEEKLY REMINDER START
+[2026-09-10 19:27:17] Periode: 2026-09-10 s/d 2026-09-16
+[2026-09-10 19:27:17] ------------------------------------------------------------
+[2026-09-10 19:27:17] Memproses: ridhoahmadfauzan38@gmail.com
+[2026-09-10 19:27:17] User UID: RIDHO
+[2026-09-10 19:27:17] Seksi ID: -
+[2026-09-10 19:27:17] Seksi Pemilik ID: 1
+[2026-09-10 19:27:17] Query jadwal dibuat untuk ridhoahmadfauzan38@gmail.com
+[2026-09-10 19:27:17] Jadwal ditemukan: 1
+[2026-09-10 19:27:17] Jadwal terlewat: 0
+[2026-09-10 19:27:17] JADWAL: 334455 | pH Meter | seksi_id=- | pemilik_id=1 | tanggal=2026-09-11
+[2026-09-10 19:27:17] Mencoba mengirim email ke: ridhoahmadfauzan38@gmail.com
+[2026-09-10 19:27:23] EMAIL BERHASIL: ridhoahmadfauzan38@gmail.com
+[2026-09-10 19:27:23] WEEKLY REMINDER FINISH
+[2026-09-10 19:27:23] ============================================================
+[2026-09-10 20:14:14] ============================================================
+[2026-09-10 20:14:14] WEEKLY REMINDER START
+[2026-09-10 20:14:14] Periode: 2026-09-10 s/d 2026-09-16
+[2026-09-10 20:14:14] EMAIL TEST TIDAK TERDAFTAR: imamiskandar22@gmail.com | mode semua jadwal
+[2026-09-10 20:14:14] ------------------------------------------------------------
+[2026-09-10 20:14:14] Memproses: imamiskandar22@gmail.com
+[2026-09-10 20:14:14] User UID: -
+[2026-09-10 20:14:14] Seksi ID: -
+[2026-09-10 20:14:14] Seksi Pemilik ID: -
+[2026-09-10 20:14:14] Query jadwal dibuat untuk imamiskandar22@gmail.com
+[2026-09-10 20:14:14] Jadwal ditemukan: 3
+[2026-09-10 20:14:14] Jadwal terlewat: 1
+[2026-09-10 20:14:14] JADWAL: 334455 | pH Meter | seksi_id=- | pemilik_id=1 | tanggal=2026-09-11
+[2026-09-10 20:14:14] JADWAL: 13 | Testing Gambar | seksi_id=- | pemilik_id=6 | tanggal=2026-09-14
+[2026-09-10 20:14:14] JADWAL: 556677 | Hand Pallet Scale | seksi_id=- | pemilik_id=7 | tanggal=2026-09-16
+[2026-09-10 20:14:15] OVERDUE: 223344 | Jangka Sorong | tanggal=2026-09-09 | terlambat=1 hari
+[2026-09-10 20:14:15] Mencoba mengirim email ke: imamiskandar22@gmail.com
+[2026-09-10 20:14:21] EMAIL BERHASIL: imamiskandar22@gmail.com
+[2026-09-10 20:14:21] WEEKLY REMINDER FINISH
+[2026-09-10 20:14:21] ============================================================
+[2026-09-10 20:17:44] ============================================================
+[2026-09-10 20:17:44] WEEKLY REMINDER START
+[2026-09-10 20:17:44] Periode: 2026-09-10 s/d 2026-09-16
+[2026-09-10 20:17:44] ------------------------------------------------------------
+[2026-09-10 20:17:44] Memproses: ridhoahmadfauzan38@gmail.com
+[2026-09-10 20:17:44] User UID: RIDHO
+[2026-09-10 20:17:44] Seksi ID: -
+[2026-09-10 20:17:44] Seksi Pemilik ID: 1
+[2026-09-10 20:17:44] Query jadwal dibuat untuk ridhoahmadfauzan38@gmail.com
+[2026-09-10 20:17:44] Jadwal ditemukan: 1
+[2026-09-10 20:17:44] Jadwal terlewat: 0
+[2026-09-10 20:17:44] JADWAL: 334455 | pH Meter | seksi_id=- | pemilik_id=1 | tanggal=2026-09-11
+[2026-09-10 20:17:44] Mencoba mengirim email ke: ridhoahmadfauzan38@gmail.com
+[2026-09-10 20:17:50] EMAIL BERHASIL: ridhoahmadfauzan38@gmail.com
+[2026-09-10 20:17:50] WEEKLY REMINDER FINISH
+[2026-09-10 20:17:50] ============================================================
+[2026-09-11 07:46:43] ============================================================
+[2026-09-11 07:46:43] WEEKLY REMINDER START
+[2026-09-11 07:46:43] Periode: 2026-09-11 s/d 2026-09-17
+[2026-09-11 07:46:43] ------------------------------------------------------------
+[2026-09-11 07:46:43] Memproses: agung.prasetyo@toto.id
+[2026-09-11 07:46:43] User UID: AGUNG
+[2026-09-11 07:46:43] Seksi ID: -
+[2026-09-11 07:46:43] Seksi Pemilik ID: 2
+[2026-09-11 07:46:43] Query jadwal dibuat untuk agung.prasetyo@toto.id
+[2026-09-11 07:46:43] Jadwal ditemukan: 1
+[2026-09-11 07:46:43] Jadwal terlewat: 0
+[2026-09-11 07:46:43] JADWAL: A22 | testing | seksi_id=- | pemilik_id=2 | tanggal=2026-09-17
+[2026-09-11 07:46:43] Mencoba mengirim email ke: agung.prasetyo@toto.id
+[2026-09-11 07:46:48] EMAIL BERHASIL: agung.prasetyo@toto.id
+[2026-09-11 07:46:48] ------------------------------------------------------------
+[2026-09-11 07:46:48] Memproses: ridhoahmadfauzan38@gmail.com
+[2026-09-11 07:46:48] User UID: RIDHO
+[2026-09-11 07:46:48] Seksi ID: -
+[2026-09-11 07:46:48] Seksi Pemilik ID: 1
+[2026-09-11 07:46:48] Query jadwal dibuat untuk ridhoahmadfauzan38@gmail.com
+[2026-09-11 07:46:48] Jadwal ditemukan: 1
+[2026-09-11 07:46:48] Jadwal terlewat: 0
+[2026-09-11 07:46:48] JADWAL: 334455 | pH Meter | seksi_id=- | pemilik_id=1 | tanggal=2026-09-11
+[2026-09-11 07:46:48] Mencoba mengirim email ke: ridhoahmadfauzan38@gmail.com
+[2026-09-11 07:46:52] EMAIL BERHASIL: ridhoahmadfauzan38@gmail.com
+[2026-09-11 07:46:52] ------------------------------------------------------------
+[2026-09-11 07:46:52] Memproses: testing@gmail.com
+[2026-09-11 07:46:52] User UID: IMAM
+[2026-09-11 07:46:52] Seksi ID: 2
+[2026-09-11 07:46:52] Seksi Pemilik ID: -
+[2026-09-11 07:46:52] Query jadwal dibuat untuk testing@gmail.com
+[2026-09-11 07:46:52] Jadwal ditemukan: 0
+[2026-09-11 07:46:52] Jadwal terlewat: 0
+[2026-09-11 07:46:52] TIDAK ADA JADWAL UNTUK testing@gmail.com
+[2026-09-11 07:46:52] WEEKLY REMINDER FINISH
+[2026-09-11 07:46:52] ============================================================
+[2026-09-11 09:09:35] ============================================================
+[2026-09-11 09:09:35] WEEKLY REMINDER START
+[2026-09-11 09:09:35] Periode: 2026-09-11 s/d 2026-09-17
+[2026-09-11 09:09:35] ------------------------------------------------------------
+[2026-09-11 09:09:35] Memproses: agung.prasetyo@toto.id
+[2026-09-11 09:09:35] User UID: AGUNG
+[2026-09-11 09:09:35] Seksi ID: -
+[2026-09-11 09:09:35] Seksi Pemilik ID: 2
+[2026-09-11 09:09:35] Query jadwal dibuat untuk agung.prasetyo@toto.id
+[2026-09-11 09:09:35] Jadwal ditemukan: 1
+[2026-09-11 09:09:35] Jadwal terlewat: 0
+[2026-09-11 09:09:35] JADWAL: A22 | testing | seksi_id=- | pemilik_id=2 | tanggal=2026-09-17
+[2026-09-11 09:09:35] Mencoba mengirim email ke: agung.prasetyo@toto.id
+[2026-09-11 09:09:39] EMAIL BERHASIL: agung.prasetyo@toto.id
+[2026-09-11 09:09:39] ------------------------------------------------------------
+[2026-09-11 09:09:39] Memproses: ridhoahmadfauzan38@gmail.com
+[2026-09-11 09:09:39] User UID: RIDHO
+[2026-09-11 09:09:39] Seksi ID: -
+[2026-09-11 09:09:39] Seksi Pemilik ID: 1
+[2026-09-11 09:09:39] Query jadwal dibuat untuk ridhoahmadfauzan38@gmail.com
+[2026-09-11 09:09:39] Jadwal ditemukan: 1
+[2026-09-11 09:09:39] Jadwal terlewat: 0
+[2026-09-11 09:09:39] JADWAL: 334455 | pH Meter | seksi_id=- | pemilik_id=1 | tanggal=2026-09-11
+[2026-09-11 09:09:39] Mencoba mengirim email ke: ridhoahmadfauzan38@gmail.com
+[2026-09-11 09:09:43] EMAIL BERHASIL: ridhoahmadfauzan38@gmail.com
+[2026-09-11 09:09:43] ------------------------------------------------------------
+[2026-09-11 09:09:43] Memproses: testing@gmail.com
+[2026-09-11 09:09:43] User UID: IMAM
+[2026-09-11 09:09:43] Seksi ID: 2
+[2026-09-11 09:09:43] Seksi Pemilik ID: -
+[2026-09-11 09:09:43] Query jadwal dibuat untuk testing@gmail.com
+[2026-09-11 09:09:43] Jadwal ditemukan: 0
+[2026-09-11 09:09:43] Jadwal terlewat: 0
+[2026-09-11 09:09:43] TIDAK ADA JADWAL UNTUK testing@gmail.com
+[2026-09-11 09:09:43] WEEKLY REMINDER FINISH
+[2026-09-11 09:09:43] ============================================================
+[2026-09-11 09:15:01] ============================================================
+[2026-09-11 09:15:01] WEEKLY REMINDER START
+[2026-09-11 09:15:01] Periode: 2026-09-11 s/d 2026-09-17
+[2026-09-11 09:15:01] ------------------------------------------------------------
+[2026-09-11 09:15:01] Memproses: agung.prasetyo@toto.id
+[2026-09-11 09:15:01] User UID: AGUNG
+[2026-09-11 09:15:01] Seksi ID: -
+[2026-09-11 09:15:01] Seksi Pemilik ID: 2
+[2026-09-11 09:15:01] Query jadwal dibuat untuk agung.prasetyo@toto.id
+[2026-09-11 09:15:01] Jadwal ditemukan: 1
+[2026-09-11 09:15:01] Jadwal terlewat: 0
+[2026-09-11 09:15:01] JADWAL: A22 | testing | seksi_id=- | pemilik_id=2 | tanggal=2026-09-17
+[2026-09-11 09:15:01] Mencoba mengirim email ke: agung.prasetyo@toto.id
+[2026-09-11 09:15:05] EMAIL BERHASIL: agung.prasetyo@toto.id
+[2026-09-11 09:15:05] ------------------------------------------------------------
+[2026-09-11 09:15:05] Memproses: ridhoahmadfauzan38@gmail.com
+[2026-09-11 09:15:05] User UID: RIDHO
+[2026-09-11 09:15:05] Seksi ID: -
+[2026-09-11 09:15:05] Seksi Pemilik ID: 1
+[2026-09-11 09:15:05] Query jadwal dibuat untuk ridhoahmadfauzan38@gmail.com
+[2026-09-11 09:15:05] Jadwal ditemukan: 1
+[2026-09-11 09:15:05] Jadwal terlewat: 0
+[2026-09-11 09:15:05] JADWAL: 334455 | pH Meter | seksi_id=- | pemilik_id=1 | tanggal=2026-09-11
+[2026-09-11 09:15:05] Mencoba mengirim email ke: ridhoahmadfauzan38@gmail.com
+[2026-09-11 09:15:09] EMAIL BERHASIL: ridhoahmadfauzan38@gmail.com
+[2026-09-11 09:15:09] ------------------------------------------------------------
+[2026-09-11 09:15:09] Memproses: testing@gmail.com
+[2026-09-11 09:15:09] User UID: IMAM
+[2026-09-11 09:15:09] Seksi ID: 2
+[2026-09-11 09:15:09] Seksi Pemilik ID: -
+[2026-09-11 09:15:09] Query jadwal dibuat untuk testing@gmail.com
+[2026-09-11 09:15:09] Jadwal ditemukan: 0
+[2026-09-11 09:15:09] Jadwal terlewat: 0
+[2026-09-11 09:15:09] TIDAK ADA JADWAL UNTUK testing@gmail.com
+[2026-09-11 09:15:09] WEEKLY REMINDER FINISH
+[2026-09-11 09:15:09] ============================================================

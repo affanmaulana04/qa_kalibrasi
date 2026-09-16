@@ -550,9 +550,13 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                             if(response.history && response.history.length > 0) {
                                 response.history.forEach(function(row) {
                                     var labelStatus = '';
-                                    if(row.status === 'Good') labelStatus = '<span class="label label-success">Good</span>';
-                                    else if(row.status === 'Bad') labelStatus = '<span class="label label-danger">Bad</span>';
-                                    else labelStatus = '<span class="label label-default">'+row.status+'</span>'; 
+                                    if(row.status_kalibrasi === 'Good') {
+                                        labelStatus = '<span class="label label-success">Good</span>';
+                                    } else if(row.status_kalibrasi === 'Bad') {
+                                        labelStatus = '<span class="label label-danger">Bad</span>';
+                                    } else {
+                                        labelStatus = '<span class="label label-default">'+(row.status_kalibrasi || '-')+'</span>';
+                                    } 
                                     
                                     tGabungan.append('<tr>'+
                                         '<td>'+num+'</td>'+
@@ -569,7 +573,7 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                                         '<td><span class="label label-warning">'+(alatDitemukan.kls || "-")+'</span></td>'+
                                         '<td style="background-color:#f4f7fa;"><strong>'+(row.seksi_qa || "-")+'</strong></td>'+ 
                                         '<td style="background-color:#f4f7fa;">'+labelStatus+'</td>'+
-                                        '<td style="background-color:#f4f7fa;"><strong>'+formatTanggal(row.tanggal)+'</strong></td>'+
+                                        '<td style="background-color:#f4f7fa;"><strong>'+formatTanggal(row.tanggal_pengecekan)+'</strong></td>'+
                                     '</tr>');
                                     num++;
                                 });

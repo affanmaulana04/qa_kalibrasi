@@ -33,7 +33,6 @@ if (!$part) {
 }
 
 $today = date('Y-m-d');
-$warningHari = 7;
 $kodeStatus = 'BELUM_TERJADWAL';
 $labelStatus = 'Belum Ada Jadwal';
 
@@ -45,9 +44,6 @@ if (!empty($part['jadwal_kalibrasi'])) {
     } elseif ($selisih === 0) {
         $kodeStatus = 'HARI_INI';
         $labelStatus = 'Jadwal Hari Ini';
-    } elseif ($selisih <= $warningHari) {
-        $kodeStatus = 'WARNING';
-        $labelStatus = 'Segera Dilakukan';
     } else {
         $kodeStatus = 'TERJADWAL';
         $labelStatus = 'Terjadwal';

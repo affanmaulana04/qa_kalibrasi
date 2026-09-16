@@ -8,12 +8,15 @@ if(empty($no_pengecekan)) {
     die("Nomor pengecekan tidak ditemukan!");
 }
 
-$query = mysqli_query($konek, "
-    SELECT p.*, q.nama_part, q.ukuran, q.merk, q.resolusi, q.lokasi, q.no_seri, q.type 
-    FROM qa_pengecekan p 
-    LEFT JOIN qa_part q ON p.no_part = q.no_part 
-    WHERE p.nomor_pengecekan = '$no_pengecekan'
-");
+$stmt = $konek->prepare("
+    SELECT p.*, q.no_part, q.nama_part, q.ukuran, q.merk, q.resolusi, q.lokasi, q.no_seri, q.type
+    FROM qa_pengecekan p
+    LEFT JOIN qa_part q ON p.alat_id = q.id
+    WHERE p.nomor_pengecekan = ?
+    LIMIT 1");
+$stmt->bind_param('s', $no_pengecekan);
+$stmt->execute();
+$query = $stmt->get_result();
 
 $data = mysqli_fetch_assoc($query);
 if(!$data) die("Data kalibrasi tidak ditemukan!");
