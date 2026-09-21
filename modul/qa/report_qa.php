@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ﻿<!DOCTYPE html>
 <html>
 <head>
@@ -17,6 +18,171 @@
         .btn-action { display: block; width: 200px; padding: 12px; margin: 20px auto; background: #1E3F66; color: white; text-align: center; text-decoration: none; font-weight: bold; border-radius: 5px; cursor: pointer;}
         @media print { body { background: #fff; padding: 0; margin: 0; } .a4-page { box-shadow: none; margin: 0; padding: 10mm; } .no-print { display: none; } }
     </style>
+=======
+<?php
+session_start();
+if (empty($_SESSION['login'])) {
+    header('location: ../../logout.php');
+    exit();
+}
+
+$id_pemakai = $_SESSION['userid'] ?? '';
+include '../../inc/inc_koneksi.php';
+
+function e($value) {
+    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+}
+
+function formatTanggalTitik($value) {
+    if (!$value) return '-';
+    $time = strtotime($value);
+    return $time ? date('d.m.Y', $time) : '-';
+}
+
+// LOGIKA 3 WARNA SAJA: Terlewat (Merah), Hari Ini (Kuning), Terjadwal (Hijau)
+function statusJadwal($jadwal) {
+    if (!$jadwal) return ['label' => 'Terjadwal', 'class' => 'status-scheduled'];
+    
+<<<<<<< HEAD
+    if ($selisih < 0) return ['label' => 'Jadwal Terlewat', 'class' => 'status-overdue', 'color' => '#842029'];
+    if ($selisih === 0) return ['label' => 'Jadwal Hari Ini', 'class' => 'status-today', 'color' => '#155724'];
+    return ['label' => 'Terjadwal', 'class' => 'status-scheduled', 'color' => '#084298'];
+}
+
+$sql = "SELECT p.id, p.no_part AS nomor_alat, p.nama_part AS nama_alat,
+               COALESCE(sp.kode_pemilik, '-') AS kode_pemilik,
+               p.jadwal_kalibrasi
+        FROM qa_part p
+        LEFT JOIN qa_seksi_pemilik sp ON sp.id = p.seksi_pemilik_id
+        WHERE p.status = 'aktif'
+        ORDER BY COALESCE(sp.kode_pemilik, '') ASC, p.jadwal_kalibrasi ASC, p.no_part ASC";
+=======
+    $tgl_sekarang = date('Y-m-d');
+    $selisih = (int)((strtotime($jadwal) - strtotime($tgl_sekarang)) / 86400);
+    
+    if ($selisih < 0) {
+        return ['label' => 'Jadwal Terlewat', 'class' => 'status-overdue'];
+    } elseif ($selisih === 0) {
+        return ['label' => 'Jadwal Hari Ini', 'class' => 'status-today'];
+    } else {
+        return ['label' => 'Terjadwal', 'class' => 'status-scheduled'];
+    }
+}
+
+// QUERY BARU: Langsung ambil teks seksi_pemilik, nggak perlu JOIN tabel HRD lama
+$sql = "SELECT id, no_part AS nomor_alat, nama_part AS nama_alat,
+               seksi_pemilik AS kode_pemilik,
+               jadwal_kalibrasi
+        FROM qa_part
+        WHERE status = 'aktif'
+        ORDER BY seksi_pemilik ASC, jadwal_kalibrasi ASC, no_part ASC";
+>>>>>>> 0a5ed7ff6ba01531b8284390619185fbc099bef4
+
+$result = $konek->query($sql);
+$rows = [];
+if ($result) {
+    while ($row = $result->fetch_assoc()) $rows[] = $row;
+}
+
+// Target 23 alat per lembar A4 landscape.
+$perPage = 23;
+$pages = $rows ? array_chunk($rows, $perPage) : [[]];
+$totalPages = count($pages);
+$todayLabel = date('d.m.Y');
+?>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daftar Kalibrasi Alat</title>
+<link rel="shortcut icon" href="../../images/hrd.ico">
+<link href="../../css/bootstrap.min.css" rel="stylesheet">
+<link href="../../font-awesome-4.3.0/css/font-awesome.min.css" rel="stylesheet">
+<style>
+body{padding-top:80px;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;color:#222}
+.card-report{background:#fff;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,.05);padding:25px;margin-top:20px}
+.screen-title{font-weight:700;margin:0 0 20px}
+.screen-table th{text-align:center;background:#f3f4f6}.screen-table td{vertical-align:middle!important}
+.print-area{display:none}
+
+<<<<<<< HEAD
+.status-scheduled{background:#b9d9f4!important; color:#084298!important; font-weight:bold;}
+.status-today{background:#c9e8c4!important; color:#155724!important; font-weight:bold;}
+.status-overdue{background:#f7b9bd!important; color:#842029!important; font-weight:bold;}
+=======
+/* WARNA UNTUK LAYAR MONITOR (3 WARNA) */
+.status-scheduled{background:#d1e7dd!important; color:#0f5132!important; font-weight:bold;} /* Hijau */
+.status-today{background:#fff3cd!important; color:#664d03!important; font-weight:bold;} /* Kuning */
+.status-overdue{background:#f8d7da!important; color:#842029!important; font-weight:bold;} /* Merah */
+>>>>>>> 0a5ed7ff6ba01531b8284390619185fbc099bef4
+
+@media print{
+    @page{size:A4 landscape;margin:8mm}
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+    html,body{margin:0!important;padding:0!important;background:#fff!important}
+    .no-print{display:none!important}
+    .print-area{display:block!important}
+    .print-page{width:100%;height:194mm;box-sizing:border-box;position:relative;page-break-after:always;break-after:page;overflow:hidden}
+    .print-page:last-child{page-break-after:auto;break-after:auto}
+    .print-top{
+        position:relative;
+        height:24mm;
+    }
+
+    .email-date{
+        position:absolute;
+        left:0;
+        top:0;
+        font-size:10pt;
+        font-weight:700;
+    }
+
+    .report-title{
+        text-align:center;
+        font-size:19pt;
+        font-weight:700;
+        line-height:1.15;
+        margin:0;
+        padding-top:7mm;
+    }
+
+    .page-number{
+        position:absolute;
+        right:0;
+        top:13mm;
+        font-size:10pt;
+        font-weight:700;
+    }
+    .print-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:8.7pt}
+    .print-table th,.print-table td{border:1px solid #6d7378;padding:2.4px 4px;vertical-align:middle}
+    .print-table th{background:#e7eaed;text-align:center;font-weight:700;height:7mm}
+    .print-table td:nth-child(1){width:5%;text-align:center}
+    .print-table td:nth-child(2){width:17%}
+    .print-table td:nth-child(3){width:15%}
+    .print-table td:nth-child(4){width:27%}
+    .print-table td:nth-child(5){width:17%;text-align:center}
+    .print-table td:nth-child(6){width:19%;text-align:center;font-weight:700}
+    .section-row td{font-weight:700;padding:2.2px 7px;background:#e9ecef!important}
+    
+    /* WARNA UNTUK KERTAS PRINT (3 WARNA) */
+    .status-scheduled{background:#d1e7dd!important; color:#000!important;}
+    .status-today{background:#fff3cd!important; color:#000!important;}
+    .status-overdue{background:#f8d7da!important; color:#000!important;}
+    
+    .print-footer{position:absolute;left:0;right:0;bottom:0;height:32mm;display:flex;gap:4mm;box-sizing:border-box}
+    .legend-box,.note-box{border:1px solid #6d7378;box-sizing:border-box;padding:3mm}
+    .legend-box{width:30%}.note-box{width:70%}
+    .footer-title{font-size:10.5pt;font-weight:700;margin-bottom:2mm}
+    .legend-item{display:flex;align-items:center;font-size:8.2pt;line-height:1.25;margin-bottom:1.1mm}
+    
+    /* KOTAK KECIL LEGENDA BAWAH */
+    .legend-color{display:inline-block;width:6mm;height:4mm;border:1px solid #777;margin-right:2mm;flex:none}
+    
+    .note-line{border-bottom:1px dotted #555;height:5mm;margin-top:0.5mm}
+}
+</style>
+>>>>>>> origin/update-form-qa
 </head>
 <body>
 
@@ -81,6 +247,7 @@
                         <td style="border-top:none;"></td><td style="border-top:none;"></td>
                     </tr>
 
+<<<<<<< HEAD
                     <tr><td colspan="4" class="text-center" style="border-top: 1px solid #000; border-bottom: 1px solid #000; padding: 5px 0;">HASIL KALIBRASI</td></tr>
                     <tr>
                         <td colspan="4" style="padding:0; border:none;">
@@ -97,6 +264,24 @@
                                 </tr>
                                 <tr><td colspan="5" style="height:40px; border-bottom:1px solid #000;"></td></tr>
                 `;
+=======
+<div class="print-area">
+<?php foreach ($pages as $pageIndex => $pageRows): ?>
+    <section class="print-page">
+        <div class="print-top">
+            <div class="email-date">
+                Tanggal: <?php echo $todayLabel; ?>
+            </div>
+
+            <div class="report-title">
+                DAFTAR KALIBRASI ALAT
+            </div>
+
+            <div class="page-number">
+                Halaman <?php echo ($pageIndex + 1) . '/' . $totalPages; ?>
+            </div>
+        </div>
+>>>>>>> origin/update-form-qa
 
                 // Looping Data R
                 data.hasil_array.forEach(function(row) {

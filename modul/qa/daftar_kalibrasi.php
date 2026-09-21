@@ -7,12 +7,12 @@ if ($_SESSION['login'] == 0) {
 include "../../inc/inc_koneksi.php"; 
 
 $id_pemakai = $_SESSION['userid'];
-$tanggal_cetak = date('d.m.Y');
 $tanggal_hari_ini = date('Y-m-d');
-$sql = "SELECT no_part, nama_part, seksi_pemilik, jadwal_kalibrasi 
-        FROM qa_part 
-        WHERE status = 'aktif' 
-        ORDER BY seksi_pemilik ASC, jadwal_kalibrasi ASC";
+$sql = "SELECT p.no_part, p.nama_part, COALESCE(sp.kode_pemilik, '-') AS seksi_pemilik, p.jadwal_kalibrasi
+        FROM qa_part p
+        LEFT JOIN qa_seksi_pemilik sp ON sp.id = p.seksi_pemilik_id
+        WHERE p.status = 'aktif'
+        ORDER BY COALESCE(sp.kode_pemilik, '') ASC, p.jadwal_kalibrasi ASC";
 
 $query = mysqli_query($konek, $sql);
 $rows_per_page = 25; 
@@ -82,10 +82,9 @@ $total_pages = count($pages);
             position: relative;
         }
 
-        .report-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px;}
-        .report-title { font-weight: bold; font-size: 22px; text-align: center; flex-grow: 1; margin: 0; }
-        .date-info, .page-info { font-size: 12px; font-weight: bold; width: 150px; }
-        .page-info { text-align: right; }
+        .report-header { position: relative; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; min-height: 28px;}
+        .report-title { font-weight: bold; font-size: 22px; text-align: center; margin: 0; }
+        .page-info { position: absolute; right: 0; bottom: 12px; font-size: 12px; font-weight: bold; }
         
         .table-report { border-collapse: collapse; width: 100%; font-size: 11px; }
         .table-report th, .table-report td { border: 1px solid #777; padding: 6px; vertical-align: middle; text-align: center; }
@@ -94,9 +93,15 @@ $total_pages = count($pages);
 
         .row-seksi { background-color: #d9e1f2; font-weight: bold; text-align: left; }
     
+<<<<<<< HEAD
+        .bg-terlewat { background-color: #ffb3b3 !important; font-weight: bold; } 
+        .bg-hari-ini { background-color: #b3ffb3 !important; font-weight: bold; } 
+        .bg-terjadwal { background-color: #b3d9ff !important; font-weight: bold; } 
+=======
         .bg-terlewat { background-color: #ffb3b3 !important; font-weight: bold; color: #842029; } 
         .bg-hari-ini { background-color: #b3ffb3 !important; font-weight: bold; color: #664d03; } 
         .bg-terjadwal { background-color: #b3d9ff !important; font-weight: bold; color: #0f5132; } 
+>>>>>>> 0a5ed7ff6ba01531b8284390619185fbc099bef4
         
         .keterangan-wrapper { display: flex; gap: 20px; margin-top: 20px; }
         .keterangan-box { border: 1px solid #777; padding: 10px; font-size: 11px; flex: 1;}
@@ -137,7 +142,6 @@ $total_pages = count($pages);
     <div class="a4-paper">
         
         <div class="report-header">
-            <div class="date-info">Email: <?php echo $tanggal_cetak; ?></div>
             <h1 class="report-title">DAFTAR KALIBRASI ALAT</h1>
             <div class="page-info">Halaman <?php echo $current_page_number . " / " . $total_pages; ?></div>
         </div>
