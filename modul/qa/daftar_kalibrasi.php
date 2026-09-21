@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 session_start();
 if ($_SESSION['login'] == 0) {
     header('location: ../../logout.php');
@@ -59,7 +59,7 @@ $total_pages = count($pages);
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Daftar Kalibrasi Alat | HRD Online</title>
-    <link rel="shortcut icon" href="../../images/hrd.ico">
+    <link rel="icon" type="image/png" href="../../images/LogoTOTO.png?v=<?= time(); ?>"/>
     <link href="../../css/bootstrap.min.css" rel="stylesheet">
     <link href="../../font-awesome-4.3.0/css/font-awesome.min.css" rel="stylesheet">
     
@@ -223,3 +223,4 @@ $total_pages = count($pages);
 
 </body>
 </html>
+

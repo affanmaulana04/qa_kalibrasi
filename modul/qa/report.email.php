@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 session_start();
 if ($_SESSION['login'] == 0) {
     header('location: ../../logout.php');
@@ -13,7 +13,7 @@ $id_pemakai = $_SESSION['userid'];
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Report Email PIC | HRD Online</title>
 
-    <link rel="shortcut icon" href="../../images/hrd.ico">
+    <link rel="icon" type="image/png" href="../../images/LogoTOTO.png?v=<?= time(); ?>"/>
     <link href="../../css/bootstrap.min.css" rel="stylesheet">
     <link href="../../font-awesome-4.3.0/css/font-awesome.min.css" rel="stylesheet">
 
@@ -104,3 +104,4 @@ $id_pemakai = $_SESSION['userid'];
     <script src="../../js/bootstrap.min.js"></script>
 </body>
 </html>
+

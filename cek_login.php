@@ -63,6 +63,14 @@ if ($ketemu > 0) {
                             $_SESSION['seksi_user']     = $seksi_user;
                             $_SESSION['email_user']     = $email_user;
                             $_SESSION['namaemail_user'] = $username_tbl;
+                            
+                            // Allow access to table modules if user is an admin or has sufficient privileges
+                            if ($admin == 'Y' || $admin == '1' || strtolower($role) == 'admin' || strtolower($role) == 'manager') {
+                                $_SESSION['tabel_karyawan'] = 'Y';
+                                $_SESSION['tabel_pemakai_app'] = 'Y';
+                                $_SESSION['tabel_referensi'] = 'Y';
+                                $_SESSION['tabel_glu'] = 'Y';
+                            }
 
                             mysqli_query($konek, "UPDATE user SET uname='$name', online='Y', pc_login='$pc_name' WHERE uid='$userid'");
                             header('location:media.php');
@@ -95,6 +103,14 @@ if ($ketemu > 0) {
                 $_SESSION['email_user']     = $email_user;
                 $_SESSION['namaemail_user'] = $username_tbl;
                 
+                // Allow access to table modules if user is an admin or has sufficient privileges
+                if ($admin == 'Y' || $admin == '1' || strtolower($role) == 'admin' || strtolower($role) == 'manager') {
+                    $_SESSION['tabel_karyawan'] = 'Y';
+                    $_SESSION['tabel_pemakai_app'] = 'Y';
+                    $_SESSION['tabel_referensi'] = 'Y';
+                    $_SESSION['tabel_glu'] = 'Y';
+                }
+
                 mysqli_query($konek, "UPDATE user SET online='Y', pc_login='$pc_name' WHERE uid='$userid_tbl'");
                 
                 header('location:media.php');

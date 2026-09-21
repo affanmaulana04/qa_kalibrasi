@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 	session_start();
 	if($_SESSION['login']==0){
 		header('location: ../../logout.php');
@@ -46,7 +46,7 @@
     <meta name="description" content="">
     <meta name="author" content="">
     <title>Data Karyawan</title>
-	<link rel="shortcut icon" href="../../images/hrd.ico">
+	<link rel="icon" type="image/png" href="../../images/LogoTOTO.png?v=<?= time(); ?>"/>
 	<link href="../../css/bootstrap.min.css" rel="stylesheet">
     <link href="../../font-awesome-4.3.0/css/font-awesome.min.css" rel="stylesheet" type="text/css">
 	<link href="../../css/jquery.dataTables.css" rel="stylesheet">
@@ -403,3 +403,5 @@
 </body>
 
 </html>
+
+

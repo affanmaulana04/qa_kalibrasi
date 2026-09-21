@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 session_start();
 // Cek apakah user sudah login
 if (empty($_SESSION['login'])) {
@@ -28,7 +28,7 @@ $is_admin = ($status_admin == 'Y' || $status_admin == '1' || strtolower($role) =
     <meta http-equiv="X_UA_Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>QA System | Dashboard</title>
-    <link rel="shortcut icon" href="images/hrd.ico">
+    <link rel="icon" type="image/png" href="images/LogoTOTO.png?v=<?= time(); ?>"/>
     <link href="css/bootstrap.min.css" rel="stylesheet">
     <link href="css/jquery.smartmenus.bootstrap.css" rel="stylesheet">
     <link href="font-awesome-4.3.0/css/font-awesome.min.css" rel="stylesheet" type="text/css">
