@@ -8,9 +8,6 @@ include "../../inc/inc_koneksi.php";
 header('Content-Type: application/json; charset=utf-8');
 
 $action = isset($_GET['action']) ? $_GET['action'] : '';
-<<<<<<< HEAD
-$nama_petugas = isset($_SESSION['nama_lengkap']) ? $_SESSION['nama_lengkap'] : (isset($_SESSION['userid']) ? $_SESSION['userid'] : 'SISTEM');
-=======
 if (empty($_SESSION['login'])) {
     http_response_code(401);
     echo json_encode(['status'=>'error', 'message'=>'Silakan login kembali.']); exit;
@@ -64,39 +61,29 @@ function qa_validate_form_b_rows($rows, $master) {
     }
     return [true,'',$clean,$overall];
 }
->>>>>>> origin/update-form-qa
 
 /* ============================================================
- * HELPER - INSERT HANYA KE KOLOM YANG MEMANG ADA DI DATABASE
- * Tidak mengubah / ALTER struktur database.
+ * HELPER - INSERT LANGSUNG (TANPA CEK SKEMA DB)
+ * Sebelumnya fungsi ini melakukan SHOW COLUMNS dulu dan diam-diam
+ * membuang kolom yang "tidak ketemu", atau gagal total dengan pesan
+ * generik kalau query SHOW COLUMNS bermasalah. Itu penyebab data
+ * format A-Q kadang gagal/gak kesimpen walau tombol "Simpan" sukses.
+ * Sekarang: langsung INSERT semua kolom yang diberikan pemanggil,
+ * sama seperti logika file 1 (v1) yang sudah terbukti jalan.
  * ============================================================ */
-function qa_get_columns($konek, $table) {
-    $table = preg_replace('/[^A-Za-z0-9_]/', '', $table);
-    $cols = [];
-    $q = mysqli_query($konek, "SHOW COLUMNS FROM `$table`");
-    if ($q) {
-        while ($r = mysqli_fetch_assoc($q)) {
-            $cols[] = $r['Field'];
-        }
-    }
-    return $cols;
-}
-
 function qa_safe_insert($konek, $table, $values) {
-    $existing = qa_get_columns($konek, $table);
+    $table = preg_replace('/[^A-Za-z0-9_]/', '', $table);
     $cols = [];
     $vals = [];
 
     foreach ($values as $column => $value) {
-        if (in_array($column, $existing, true)) {
-            $safeColumn = preg_replace('/[^A-Za-z0-9_]/', '', $column);
-            $cols[] = "`$safeColumn`";
-            $vals[] = "'" . mysqli_real_escape_string($konek, (string)$value) . "'";
-        }
+        $safeColumn = preg_replace('/[^A-Za-z0-9_]/', '', $column);
+        $cols[] = "`$safeColumn`";
+        $vals[] = "'" . mysqli_real_escape_string($konek, (string)$value) . "'";
     }
 
     if (!$cols) {
-        return [false, "Tidak ditemukan kolom yang cocok pada tabel `$table`."];
+        return [false, "Tidak ada data untuk disimpan ke tabel `$table`."];
     }
 
     $sql = "INSERT INTO `$table` (" . implode(', ', $cols) . ")
@@ -110,6 +97,23 @@ function qa_safe_insert($konek, $table, $values) {
 /* ============================================================
  * HELPER RESPONSE & FORM A / FORM B
  * ============================================================ */
+function qa_safe_update($konek, $table, $values, $whereColumn, $whereValue) {
+    // Sama seperti qa_safe_insert: langsung UPDATE kolom yang diberikan,
+    // tanpa cek skema DB dulu (lihat catatan di qa_safe_insert di atas).
+    $table = preg_replace('/[^A-Za-z0-9_]/', '', $table);
+    $sets = [];
+    foreach ($values as $column => $value) {
+        $safeColumn = preg_replace('/[^A-Za-z0-9_]/', '', $column);
+        $sets[] = "`$safeColumn`='" . mysqli_real_escape_string($konek, (string)$value) . "'";
+    }
+    if (!$sets) return [false, "Tidak ada data untuk diupdate ke tabel `$table`."];
+    $safeWhere = preg_replace('/[^A-Za-z0-9_]/', '', $whereColumn);
+    $where = "`$safeWhere`='" . mysqli_real_escape_string($konek, (string)$whereValue) . "'";
+    $sql = "UPDATE `$table` SET " . implode(', ', $sets) . " WHERE $where";
+    $ok = mysqli_query($konek, $sql);
+    return [$ok, $ok ? '' : mysqli_error($konek)];
+}
+
 function json_response($status, $message = '', $extra = []) {
     $response = array_merge(['status' => $status, 'message' => $message], is_array($extra) ? $extra : []);
     echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -280,13 +284,9 @@ if ($action == 'cek_alat') {
             }
             echo json_encode(['found' => false]);
         }
-<<<<<<< HEAD
-    } catch (Exception $e) { echo json_encode(['found' => false, 'error_msg' => $e->getMessage()]); }
-=======
     } catch (Exception $e) { 
         echo json_encode(['found' => false, 'message' => $e->getMessage()]); 
     }
->>>>>>> origin/update-form-qa
     exit;
 }
 
@@ -295,15 +295,6 @@ if ($action == 'cek_alat') {
  * ============================================================ */
 elseif ($action == 'simpan_alat') {
     try {
-<<<<<<< HEAD
-        $no_part   = mysqli_real_escape_string($konek, $_POST['no_part']);
-        $nama_part = mysqli_real_escape_string($konek, $_POST['nama_part']);
-        $seksi     = mysqli_real_escape_string($konek, $_POST['seksi']);
-        $periode   = (int)$_POST['periode'];
-        
-        $kls       = ""; 
-        $type      = "";
-=======
         $no_part   = mysqli_real_escape_string($konek, trim($_POST['no_part'] ?? ''));
         $nama_part = mysqli_real_escape_string($konek, trim($_POST['nama_part'] ?? ''));
         $seksi     = mysqli_real_escape_string($konek, trim($_POST['seksi'] ?? ''));
@@ -313,7 +304,6 @@ elseif ($action == 'simpan_alat') {
         if ($no_part === '' || $nama_part === '' || $periode <= 0) {
             echo json_encode(['status'=>'error','message'=>'No. Alat, Nama Alat, dan Periode Kalibrasi wajib diisi dengan benar.']); exit;
         }
->>>>>>> origin/update-form-qa
         
         $ukuran    = isset($_POST['ukuran']) ? mysqli_real_escape_string($konek, $_POST['ukuran']) : '';
         $resolusi  = isset($_POST['resolusi']) ? mysqli_real_escape_string($konek, $_POST['resolusi']) : '';
@@ -344,19 +334,6 @@ elseif ($action == 'simpan_alat') {
             move_uploaded_file($_FILES['foto_alat']['tmp_name'], $folder_tujuan . $nama_file_foto);
         }
 
-<<<<<<< HEAD
-        // Cek dulu apakah nomor ini beneran kosong
-        $cek_dobel = mysqli_query($konek, "SELECT no_part FROM qa_part WHERE no_part = '$no_part'");
-        if(mysqli_num_rows($cek_dobel) > 0) {
-            echo json_encode(['status' => 'error', 'message' => 'Nomor Alat ini masih aktif terdaftar! Jika alat sudah rusak, update hasil kalibrasinya jadi BURUK agar no alat bisa dipakai ulang.']);
-            exit;
-        }
-
-        $sql = "INSERT INTO qa_part 
-                (no_part, nama_part, seksi_pemilik, periode_kalibrasi, jadwal_kalibrasi, status, created_at, ukuran, resolusi, lokasi, type, kls, foto_alat, spesifikasi, toleransi_global, satuan, metode_uji, standar_uji, traceability, format_laporan, titik_standar_json) 
-                VALUES 
-                ('$no_part', '$nama_part', '$seksi', '$periode', '$jadwal_kalibrasi', 'aktif', '$created_at', '$ukuran', '$resolusi', '$lokasi', '$type', '$kls', '$nama_file_foto', '$spesifikasi', '$toleransi_global', '$satuan', '$metode_uji', '$standar_uji', '$traceability', '$format_laporan', '$titik_standar_json')";
-=======
         $part_values = [
             'no_part'            => $no_part,
             'nama_part'          => $nama_part,
@@ -960,7 +937,6 @@ elseif ($action == 'simpan_alat') {
         }
 
         [$part_ok, $part_error] = qa_safe_insert($konek, 'qa_part', $part_values);
->>>>>>> origin/update-form-qa
         
         if ($part_ok) {
             $alat_id = mysqli_insert_id($konek);
@@ -976,25 +952,28 @@ elseif ($action == 'simpan_alat') {
             }
             $nomor_pengecekan = "QA-REG-" . date('YmdHis') . "-" . $alat_id;
             
-            $sql_hist = "INSERT INTO qa_pengecekan 
-                         (alat_id, no_part, nomor_pengecekan, tanggal_pengecekan, tanggal_jadwal_saat_pengecekan, status_kalibrasi, seksi_qa, periode_berikutnya, created_by, keterangan, created_at) 
-                         VALUES 
-<<<<<<< HEAD
-                         ('$alat_id', '$no_part', '$nomor_pengecekan', '$tgl_start', '$tgl_start', 'Good', 'QA', '$jadwal_kalibrasi', '$nama_petugas', '~ Registrasi', '$created_at')";
-            mysqli_query($konek, $sql_hist);
-
-            echo json_encode(['status' => 'success', 'jadwal_selanjutnya' => $jadwal_kalibrasi]);
-        } else { echo json_encode(['status' => 'error', 'message' => mysqli_error($konek)]); }
-=======
-                         ('$alat_id', '$no_part', '$nomor_pengecekan', '$tgl_start', '$tgl_start', 'Good', 'QA', '$jadwal_kalibrasi', '$created_by', 'Registrasi Alat Awal', '$created_at')";
-            if (!mysqli_query($konek, $sql_hist)) {
-                echo json_encode(['status'=>'error','message'=>'Alat tersimpan, tetapi histori registrasi gagal disimpan: '.mysqli_error($konek)]); exit;
+            [$hist_ok, $hist_error] = qa_safe_insert($konek, 'qa_pengecekan', [
+                'alat_id' => $alat_id,
+                'no_part' => $no_part,
+                'nomor_pengecekan' => $nomor_pengecekan,
+                'tanggal_pengecekan' => $tgl_start,
+                'tanggal_jadwal_saat_pengecekan' => $tgl_start,
+                'status_kalibrasi' => 'Good',
+                'seksi_qa' => 'QA',
+                'periode_berikutnya' => $jadwal_kalibrasi,
+                'created_by' => $created_by,
+                'keterangan' => 'Registrasi Alat Awal',
+                'created_at' => $created_at
+            ]);
+            if (!$hist_ok) {
+                mysqli_query($konek, "DELETE FROM qa_part WHERE id='" . (int)$alat_id . "'");
+                echo json_encode(['status'=>'error','message'=>'Alat tersimpan, tetapi histori registrasi gagal disimpan: '.$hist_error]);
+                exit;
             }
             echo json_encode(['status' => 'success']);
         } else {
             echo json_encode(['status' => 'error', 'message' => $part_error ?: mysqli_error($konek)]);
         }
->>>>>>> origin/update-form-qa
     } catch (Exception $e) { echo json_encode(['status' => 'error', 'message' => $e->getMessage()]); }
     exit;
 }
@@ -1042,24 +1021,10 @@ if ($action === 'update_form_a') {
 
 elseif ($action == 'simpan_qa') {
     try {
-<<<<<<< HEAD
-        $no_part    = mysqli_real_escape_string($konek, $_POST['no_part']);
-        $status_qa  = mysqli_real_escape_string($konek, $_POST['status_qa']); 
-        $seksi_qa   = "QA"; 
-        
-        $suhu = isset($_POST['suhu']) ? mysqli_real_escape_string($konek, $_POST['suhu']) : '';
-        $kelembapan = isset($_POST['kelembapan']) ? mysqli_real_escape_string($konek, $_POST['kelembapan']) : '';
-        $ketidakpastian = isset($_POST['ketidakpastian']) ? mysqli_real_escape_string($konek, $_POST['ketidakpastian']) : '';
-        $confidence = isset($_POST['confidence']) ? mysqli_real_escape_string($konek, $_POST['confidence']) : '';
-        $keterangan = isset($_POST['keterangan']) ? mysqli_real_escape_string($konek, $_POST['keterangan']) : '';
-        $hasil_json = isset($_POST['hasil_json']) ? mysqli_real_escape_string($konek, $_POST['hasil_json']) : '[]';
-        $traceability = isset($_POST['traceability']) ? mysqli_real_escape_string($konek, $_POST['traceability']) : '';
-=======
         $no_part    = mysqli_real_escape_string($konek, $_POST['no_part'] ?? '');
         $status_qa  = mysqli_real_escape_string($konek, $_POST['status_qa'] ?? 'Good');
         $seksi_qa   = "QA";
         $created_by = isset($_SESSION['userid']) ? mysqli_real_escape_string($konek, $_SESSION['userid']) : '';
->>>>>>> origin/update-form-qa
 
         $suhu = mysqli_real_escape_string($konek, $_POST['suhu'] ?? '');
         $kelembapan = mysqli_real_escape_string($konek, $_POST['kelembapan'] ?? '');
@@ -1108,8 +1073,6 @@ elseif ($action == 'simpan_qa') {
 
         $waktu_sekarang = date('Y-m-d H:i:s');
 
-<<<<<<< HEAD
-=======
         $q_part = mysqli_query(
             $konek,
             "SELECT *
@@ -2455,7 +2418,6 @@ elseif ($action == 'simpan_qa') {
             $hasil_json = mysqli_real_escape_string($konek, json_encode($reportQ, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         }
 
->>>>>>> origin/update-form-qa
         $nomor_pengecekan = "QA-" . date('YmdHis') . "-" . $alat_id;
         $jadwal_baru = NULL;
 
@@ -2482,67 +2444,47 @@ elseif ($action == 'simpan_qa') {
         } else {
             $jadwal_baru = date('Y-m-d', strtotime($tgl_pengecekan . " +$periode days"));
             $jadwal_baru_sql = "'$jadwal_baru'";
-            $update_part = "UPDATE qa_part SET jadwal_kalibrasi = '$jadwal_baru', status = 'aktif', traceability = '$traceability', updated_at = NOW() WHERE no_part = '$no_part'";
-            mysqli_query($konek, $update_part);
+            [$upd_ok, $upd_error] = qa_safe_update($konek, 'qa_part', [
+                'jadwal_kalibrasi' => $jadwal_baru,
+                'status' => 'aktif',
+                'traceability' => $traceability,
+                'updated_at' => $waktu_sekarang
+            ], 'no_part', $no_part);
+            if (!$upd_ok) { echo json_encode(['status'=>'error','message'=>'Gagal memperbarui master alat: '.$upd_error]); exit; }
         }
 
-<<<<<<< HEAD
-        $sql_hist = "INSERT INTO qa_pengecekan 
-                     (alat_id, no_part, nomor_pengecekan, tanggal_pengecekan, tanggal_jadwal_saat_pengecekan, status_kalibrasi, seksi_qa, periode_berikutnya, created_by, keterangan, created_at, suhu, kelembapan, ketidakpastian, confidence_level, hasil_json) 
-                     VALUES 
-                     ('$alat_id', '$no_part', '$nomor_pengecekan', '$tgl_pengecekan', '$tgl_jadwal_lama', '$status_qa', '$seksi_qa', $jadwal_baru_sql, '$nama_petugas', '$keterangan', '$waktu_sekarang', '$suhu', '$kelembapan', '$ketidakpastian', '$confidence', '$hasil_json')";
-        
-        if(mysqli_query($konek, $sql_hist)) {
-            echo json_encode(['status' => 'success', 'jadwal_selanjutnya' => $jadwal_baru, 'no_pengecekan' => $nomor_pengecekan]);
-        } else { echo json_encode(['status' => 'error', 'message' => mysqli_error($konek)]); }
-    } catch (Exception $e) { echo json_encode(['status' => 'error', 'message' => $e->getMessage()]); }
-    exit;
-}
-
-elseif ($action == 'get_bbrau') {
-    $no_part = isset($_POST['no_part']) ? mysqli_real_escape_string($konek, trim($_POST['no_part'])) : '';
-    
-    $q1 = mysqli_query($konek, "SELECT * FROM qa_part WHERE no_part = '$no_part'");
-    if(mysqli_num_rows($q1) > 0) { $alat = mysqli_fetch_assoc($q1); } 
-    else {
-        $q2 = mysqli_query($konek, "SELECT * FROM qa_alat_rusak WHERE no_part = '$no_part'");
-        if(mysqli_num_rows($q2) > 0) { $alat = mysqli_fetch_assoc($q2); }
-    }
-
-    if(isset($alat)) {
-        $history = [];
-        $qh = mysqli_query($konek, "SELECT * FROM qa_pengecekan WHERE no_part = '$no_part' ORDER BY tanggal_pengecekan ASC");
-        while($r = mysqli_fetch_assoc($qh)) { $history[] = $r; }
-        echo json_encode(['status' => 'success', 'alat' => $alat, 'history' => $history]);
-    } else {
-        echo json_encode(['status' => 'error', 'message' => 'Alat tidak ditemukan.']);
-    }
-=======
         /*
          * Struktur INSERT tetap sama seperti sistem sekarang.
          * Form A tersimpan lengkap melalui hasil_json.
          */
-        $sql_hist = "INSERT INTO qa_pengecekan
-                     (alat_id, no_part, nomor_pengecekan, tanggal_pengecekan,
-                      tanggal_jadwal_saat_pengecekan, status_kalibrasi, seksi_qa,
-                      periode_berikutnya, created_by, keterangan, created_at,
-                      suhu, kelembapan, ketidakpastian, confidence_level, hasil_json)
-                     VALUES
-                     ('$alat_id', '$no_part', '$nomor_pengecekan', '$tgl_pengecekan',
-                      '$tgl_jadwal_lama', '$status_qa', '$seksi_qa',
-                      '$jadwal_baru', '$created_by', '$keterangan', '$waktu_sekarang',
-                      '$suhu', '$kelembapan', '$ketidakpastian', '$confidence',
-                      '$hasil_json')";
-
-        $insert_hist = mysqli_query($konek, $sql_hist);
+        [$insert_hist, $hist_insert_error] = qa_safe_insert($konek, 'qa_pengecekan', [
+            'alat_id' => $alat_id,
+            'no_part' => $no_part,
+            'nomor_pengecekan' => $nomor_pengecekan,
+            'tanggal_pengecekan' => $tgl_pengecekan,
+            'tanggal_jadwal_saat_pengecekan' => $tgl_jadwal_lama,
+            'status_kalibrasi' => $status_qa,
+            'seksi_qa' => $seksi_qa,
+            'periode_berikutnya' => $jadwal_baru,
+            'created_by' => $created_by,
+            'keterangan' => $keterangan,
+            'created_at' => $waktu_sekarang,
+            'suhu' => $suhu,
+            'kelembapan' => $kelembapan,
+            'ketidakpastian' => $ketidakpastian,
+            'confidence_level' => $confidence,
+            'hasil_json' => $hasil_json
+        ]);
 
         if ($insert_hist) {
-            mysqli_query(
-                $konek,
-                "UPDATE qa_part
-                 SET jadwal_kalibrasi = '$jadwal_baru', updated_at = NOW()
-                 WHERE id = '$alat_id'"
-            );
+            [$upd_final_ok, $upd_final_error] = qa_safe_update($konek, 'qa_part', [
+                'jadwal_kalibrasi' => $jadwal_baru,
+                'updated_at' => $waktu_sekarang
+            ], 'id', $alat_id);
+            if (!$upd_final_ok) {
+                echo json_encode(['status'=>'error','message'=>'Riwayat tersimpan, tetapi master alat gagal diperbarui: '.$upd_final_error]);
+                exit;
+            }
 
             echo json_encode([
                 'status' => 'success',
@@ -2565,7 +2507,7 @@ elseif ($action == 'get_bbrau') {
         } else {
             echo json_encode([
                 'status' => 'error',
-                'message' => mysqli_error($konek)
+                'message' => $hist_insert_error ?: mysqli_error($konek)
             ]);
         }
     } catch (Exception $e) {
@@ -2629,7 +2571,6 @@ elseif ($action == 'simpan_master_kls') {
             } else { echo json_encode(['status' => 'error', 'message' => 'Gagal Insert: ' . mysqli_error($konek)]); }
         }
     } catch (Exception $e) { echo json_encode(['status' => 'error', 'message' => $e->getMessage()]); }
->>>>>>> origin/update-form-qa
     exit;
 }
 elseif ($action == 'simpan_master_seksi') {
@@ -2644,9 +2585,6 @@ elseif ($action == 'simpan_master_seksi') {
     } catch (Exception $e) { echo json_encode(['status' => 'error', 'message' => $e->getMessage()]); }
     exit;
 }
-<<<<<<< HEAD
-
-=======
 elseif ($action == 'hapus_master_kls') {
     $nama = isset($_POST['nama_kelas']) ? mysqli_real_escape_string($konek, $_POST['nama_kelas']) : '';
     if(mysqli_query($konek, "DELETE FROM qa_kls WHERE nama_kelas = '$nama'")) {
@@ -2656,7 +2594,6 @@ elseif ($action == 'hapus_master_kls') {
     }
     exit;
 }
->>>>>>> origin/update-form-qa
 elseif ($action == 'hapus_master_seksi') {
     $nama = isset($_POST['nama_seksi']) ? mysqli_real_escape_string($konek, $_POST['nama_seksi']) : '';
     if(mysqli_query($konek, "DELETE FROM qa_seksi_master WHERE nama_seksi = '$nama'")) {
