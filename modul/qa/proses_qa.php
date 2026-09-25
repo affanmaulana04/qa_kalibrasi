@@ -130,9 +130,33 @@ function qaCanPembuat($konek){ $f=qaUserFlags($konek); return qaIsAdmin() || $f[
 function qaCanPemeriksa($konek){ $f=qaUserFlags($konek); return qaIsAdmin() || $f['pemeriksa']; }
 function qaCanPenyetuju($konek){ $f=qaUserFlags($konek); return qaIsAdmin() || $f['penyetuju']; }
 
+function qaEnsureRegistryTable($konek){
+    mysqli_query($konek, "CREATE TABLE IF NOT EXISTS qa_alat_registry (
+        id INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
+        no_part VARCHAR(50) NOT NULL,
+        status_alat VARCHAR(30) NOT NULL DEFAULT 'AKTIF',
+        alasan_status VARCHAR(50) NULL,
+        hasil_terakhir VARCHAR(40) NULL,
+        tanggal_hasil_terakhir DATE NULL,
+        sumber_tabel VARCHAR(64) NULL,
+        sumber_id INT(10) UNSIGNED NULL,
+        nomor_arsip_terakhir VARCHAR(150) NULL,
+        diaktifkan_oleh VARCHAR(100) NULL,
+        diaktifkan_at DATETIME NULL,
+        created_by VARCHAR(100) NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uk_qa_registry_no_part (no_part),
+        KEY idx_qa_registry_status (status_alat),
+        KEY idx_qa_registry_source (sumber_tabel, sumber_id)
+    ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
+}
+qaEnsureRegistryTable($konek);
+
 function qaArchiveDefs(){
     return [
-        'NOT GOOD' => ['table'=>'qa_alat_ng','code'=>'NOTGOOD','permanent'=>false,'label'=>'NOT GOOD'],
+        'NOT GOOD' => ['table'=>'qa_alat_ng','code'=>'NOTGOOD','permanent'=>true,'label'=>'NOT GOOD'],
         'RUSAK' => ['table'=>'qa_alat_rusak','code'=>'RUSAK','permanent'=>true,'label'=>'RUSAK'],
         'DISCONTINUE' => ['table'=>'qa_alat_discontinue','code'=>'DISCONTINUE','permanent'=>false,'label'=>'DISCONTINUE'],
         'DITARIK MECHANICAL' => ['table'=>'qa_alat_ditarik','code'=>'DITARIK','permanent'=>false,'label'=>'DITARIK MECHANICAL'],
@@ -144,6 +168,39 @@ function qaNormalizeFinalStatus($raw){
     return $map[$s] ?? '';
 }
 function qaArchiveNoPart($original,$code){ return '_'.$code.'_'.date('YmdHis'); }
+
+function qaGetRegistry($konek,$no_part){
+    $no=esc($konek,strtoupper(trim((string)$no_part)));
+    $q=mysqli_query($konek,"SELECT * FROM qa_alat_registry WHERE UPPER(TRIM(no_part))='$no' LIMIT 1");
+    return $q ? (mysqli_fetch_assoc($q) ?: null) : null;
+}
+function qaRegistryHistory($konek,$registryId,$no_part,$limit=5){
+    $registryId=(int)$registryId; $no=esc($konek,$no_part); $limit=max(1,(int)$limit); $rows=[];
+    if($registryId>0){
+        $q=mysqli_query($konek,"SELECT * FROM qa_pengecekan WHERE alat_registry_id='$registryId' ORDER BY tanggal_pengecekan DESC,id DESC LIMIT $limit");
+        if($q){while($r=mysqli_fetch_assoc($q))$rows[]=$r;}
+    }
+    if(!$rows){
+        $q=mysqli_query($konek,"SELECT * FROM qa_pengecekan WHERE UPPER(TRIM(no_part))='$no' ORDER BY tanggal_pengecekan DESC,id DESC LIMIT $limit");
+        if($q){while($r=mysqli_fetch_assoc($q))$rows[]=$r;}
+    }
+    return $rows;
+}
+function qaRegistrySet($konek,$no_part,$status,$reason,$result,$resultDate,$sourceTable,$sourceId,$archiveNo=null,$activatedBy=null,$activatedAt=null){
+    $no=esc($konek,$no_part); $status=esc($konek,$status);
+    $reason=$reason===null?'NULL':"'".esc($konek,$reason)."'";
+    $result=$result===null?'NULL':"'".esc($konek,$result)."'";
+    $resultDate=$resultDate?"'".esc($konek,substr((string)$resultDate,0,10))."'":'NULL';
+    $sourceTable=$sourceTable?"'".esc($konek,$sourceTable)."'":'NULL'; $sourceId=(int)$sourceId;
+    $archiveNo=$archiveNo?"'".esc($konek,$archiveNo)."'":'NULL';
+    $activatedBy=$activatedBy?"'".esc($konek,$activatedBy)."'":'NULL';
+    $activatedAt=$activatedAt?"'".esc($konek,$activatedAt)."'":'NULL';
+    $createdBy=esc($konek,$GLOBALS['nama_petugas']??'SISTEM');
+    $sql="INSERT INTO qa_alat_registry (no_part,status_alat,alasan_status,hasil_terakhir,tanggal_hasil_terakhir,sumber_tabel,sumber_id,nomor_arsip_terakhir,diaktifkan_oleh,diaktifkan_at,created_by)
+        VALUES ('$no','$status',$reason,$result,$resultDate,$sourceTable,$sourceId,$archiveNo,$activatedBy,$activatedAt,'$createdBy')
+        ON DUPLICATE KEY UPDATE status_alat=VALUES(status_alat),alasan_status=VALUES(alasan_status),hasil_terakhir=VALUES(hasil_terakhir),tanggal_hasil_terakhir=VALUES(tanggal_hasil_terakhir),sumber_tabel=VALUES(sumber_tabel),sumber_id=VALUES(sumber_id),nomor_arsip_terakhir=VALUES(nomor_arsip_terakhir),diaktifkan_oleh=VALUES(diaktifkan_oleh),diaktifkan_at=VALUES(diaktifkan_at)";
+    if(!mysqli_query($konek,$sql)) throw new Exception('Gagal memperbarui registry nomor alat: '.mysqli_error($konek));
+}
 function qaDisplayStatus($status, $validation){
     $final = qaNormalizeFinalStatus($status);
     $validation = strtolower(trim((string)$validation));
@@ -154,9 +211,7 @@ function qaDisplayStatus($status, $validation){
 }
 
 function qaExtractOriginalNoPart($archiveNo){
-    $archiveNo=trim((string)$archiveNo);
-    $parsed=preg_replace('/_(?:NOTGOOD|RUSAK|DISCONTINUE|DITARIK)_\d{14}$/i','',$archiveNo);
-    return ($parsed === '' || $parsed === null) ? $archiveNo : $parsed;
+    return preg_replace('/_(?:NOTGOOD|RUSAK|DISCONTINUE|DITARIK)_\d{14}$/i','',$archiveNo);
 }
 
 /* =====================================================================
@@ -177,10 +232,15 @@ pastikan_kolom($konek, 'qa_pengecekan', 'operator', "VARCHAR(100) NULL AFTER cre
 pastikan_kolom($konek, 'qa_pengecekan', 'status_validasi', "VARCHAR(30) NOT NULL DEFAULT 'menunggu_pemeriksa' AFTER status_kalibrasi");
 pastikan_kolom($konek, 'qa_pengecekan', 'jenis_transaksi', "VARCHAR(40) NULL AFTER nomor_pengecekan");
 pastikan_kolom($konek, 'qa_pengecekan', 'no_laporan', "VARCHAR(150) NULL AFTER nomor_pengecekan");
+foreach (['qa_part','qa_alat_ng','qa_alat_rusak','qa_alat_discontinue','qa_alat_ditarik'] as $masterTable) {
+    if ($masterTable !== 'qa_part') mysqli_query($konek, "CREATE TABLE IF NOT EXISTS `$masterTable` LIKE `qa_part`");
+    pastikan_kolom($konek, $masterTable, 'alat_registry_id', "INT(10) UNSIGNED NULL AFTER id");
+}
 foreach (['qa_alat_ng','qa_alat_rusak','qa_alat_discontinue','qa_alat_ditarik'] as $archiveTable) {
-    mysqli_query($konek, "CREATE TABLE IF NOT EXISTS `$archiveTable` LIKE `qa_part`");
     pastikan_kolom($konek, $archiveTable, 'nomor_arsip', "VARCHAR(150) NULL AFTER no_part");
 }
+pastikan_kolom($konek, 'qa_pengecekan', 'alat_registry_id', "INT(10) UNSIGNED NULL AFTER id");
+
 
 /* Laporan Harian/Bulanan/Tahunan juga memakai validator 2 tahap yang sama. */
 mysqli_query($konek, "CREATE TABLE IF NOT EXISTS qa_laporan_transaksi (
@@ -226,84 +286,59 @@ mysqli_query($konek, "CREATE TABLE IF NOT EXISTS qa_validasi (
  * =================================================================== */
 function qaFinalizeApprovedResult($konek, $pengecekan_id)
 {
-    $q = mysqli_query($konek, "SELECT * FROM qa_pengecekan WHERE id='".(int)$pengecekan_id."' LIMIT 1");
-    $row = $q ? mysqli_fetch_assoc($q) : null;
-    if (!$row) throw new Exception('Data pengecekan tidak ditemukan.');
+    $q=mysqli_query($konek,"SELECT * FROM qa_pengecekan WHERE id='".(int)$pengecekan_id."' LIMIT 1");
+    $row=$q?mysqli_fetch_assoc($q):null;
+    if(!$row) throw new Exception('Data pengecekan tidak ditemukan.');
 
-    $status = qaNormalizeFinalStatus($row['status_kalibrasi'] ?? '');
-    $alat_id = (int)($row['alat_id'] ?? 0);
-    $periode = 30;
-    $part = null;
-    if ($alat_id > 0) {
-        $qp = mysqli_query($konek, "SELECT * FROM qa_part WHERE id='$alat_id' LIMIT 1");
-        $part = $qp ? mysqli_fetch_assoc($qp) : null;
-    }
+    $status=qaNormalizeFinalStatus($row['status_kalibrasi']??'');
+    $no_part=normalisasi_no_part($konek,$row['no_part']??'');
+    if($no_part==='') throw new Exception('Nomor alat pada histori finalisasi kosong.');
 
-    if ($status === 'OK') {
-        if (!$part) throw new Exception('Alat aktif tidak ditemukan untuk finalisasi status OK.');
-        $periode = !empty($part['periode_kalibrasi']) ? (int)$part['periode_kalibrasi'] : 30;
-        $tgl = $row['tanggal_pengecekan'] ?: date('Y-m-d');
-        $jadwal = date('Y-m-d', strtotime($tgl.' +'.$periode.' days'));
-        if (!mysqli_query($konek, "UPDATE qa_part SET status='aktif', jadwal_kalibrasi='".mysqli_real_escape_string($konek,$jadwal)."' WHERE id='$alat_id' LIMIT 1")) {
-            throw new Exception('Gagal memperbarui jadwal alat: '.mysqli_error($konek));
-        }
-        if (!mysqli_query($konek, "UPDATE qa_pengecekan SET periode_berikutnya='".mysqli_real_escape_string($konek,$jadwal)."' WHERE id='".(int)$pengecekan_id."' LIMIT 1")) {
-            throw new Exception('Gagal memperbarui periode berikutnya: '.mysqli_error($konek));
-        }
-        return;
-    }
+    $reg=qaGetRegistry($konek,$no_part);
+    if(!$reg) throw new Exception('Registry nomor alat tidak ditemukan. Jalankan migration registry terlebih dahulu.');
+    $registryId=(int)$reg['id'];
 
-    $defs = qaArchiveDefs();
-    $def = $defs[$status] ?? null;
-    if (!$def) throw new Exception('Status final tidak didukung untuk finalisasi.');
-    if (!$part) throw new Exception('Alat aktif tidak ditemukan untuk finalisasi status '.$status.'.');
+    $alat_id=(int)($row['alat_id']??0); $part=null;
+    if($alat_id>0){$qp=mysqli_query($konek,"SELECT * FROM qa_part WHERE id='$alat_id' LIMIT 1");$part=$qp?mysqli_fetch_assoc($qp):null;}
+    if(!$part){$qp=mysqli_query($konek,"SELECT * FROM qa_part WHERE alat_registry_id='$registryId' OR UPPER(TRIM(no_part))='$no_part' LIMIT 1");$part=$qp?mysqli_fetch_assoc($qp):null;}
+    if(!$part) throw new Exception('Alat aktif tidak ditemukan untuk finalisasi status '.$status.'.');
 
-    // Pastikan tabel arsip status ini memang ada sebelum proses pindah data.
-    // Ini mencegah tombol validasi/restore gagal hanya karena tabel arsip belum dibuat.
-    if (!mysqli_query($konek, "CREATE TABLE IF NOT EXISTS `{$def['table']}` LIKE `qa_part`")) {
-        throw new Exception('Gagal menyiapkan tabel arsip '.$def['table'].': '.mysqli_error($konek));
+    $resultDate=$row['tanggal_pengecekan']?:date('Y-m-d');
+    if($status==='OK'){
+        $periode=!empty($part['periode_kalibrasi'])?(int)$part['periode_kalibrasi']:30;
+        $jadwal=date('Y-m-d',strtotime($resultDate.' +'.$periode.' days')); $jadwalEsc=esc($konek,$jadwal); $partId=(int)$part['id'];
+        if(!mysqli_query($konek,"UPDATE qa_part SET status='aktif',jadwal_kalibrasi='$jadwalEsc',alat_registry_id='$registryId' WHERE id='$partId' LIMIT 1")) throw new Exception('Gagal memperbarui jadwal alat: '.mysqli_error($konek));
+        if(!mysqli_query($konek,"UPDATE qa_pengecekan SET periode_berikutnya='$jadwalEsc',alat_registry_id='$registryId',no_part='".esc($konek,$no_part)."',alat_id='$partId' WHERE id='".(int)$pengecekan_id."' LIMIT 1")) throw new Exception('Gagal memperbarui histori final OK: '.mysqli_error($konek));
+        qaRegistrySet($konek,$no_part,'AKTIF',null,'OK',$resultDate,'qa_part',$partId,null,null,null); return;
     }
 
-    // Nomor alat tetap sama. Identitas arsip disimpan terpisah pada nomor_arsip
-    // dengan format: _STATUS_YYYYMMDDHHMMSS
-    pastikan_kolom($konek, $def['table'], 'nomor_arsip', "VARCHAR(150) NULL AFTER no_part");
-    $originalNo = (string)$part['no_part'];
-    $originalEsc = mysqli_real_escape_string($konek, $originalNo);
-    $archiveNo = qaArchiveNoPart($originalNo, $def['code']);
-    $archiveNoEsc = mysqli_real_escape_string($konek, $archiveNo);
-    $exists = mysqli_query($konek, "SELECT id FROM `{$def['table']}` WHERE nomor_arsip='$archiveNoEsc' LIMIT 1");
-    if ($exists && mysqli_num_rows($exists) > 0) throw new Exception('Nomor arsip bentrok.');
+    $defs=qaArchiveDefs(); $def=$defs[$status]??null;
+    if(!$def) throw new Exception('Status final tidak didukung untuk finalisasi.');
+    if(!mysqli_query($konek,"CREATE TABLE IF NOT EXISTS `{$def['table']}` LIKE `qa_part`")) throw new Exception('Gagal menyiapkan tabel arsip '.$def['table'].': '.mysqli_error($konek));
+    pastikan_kolom($konek,$def['table'],'alat_registry_id',"INT(10) UNSIGNED NULL AFTER id");
+    pastikan_kolom($konek,$def['table'],'nomor_arsip',"VARCHAR(150) NULL AFTER no_part");
 
-    // Tabel arsip memiliki kolom tambahan nomor_arsip, jadi jangan gunakan
-    // INSERT ... SELECT * karena jumlah kolom bisa tidak sama. Salin hanya
-    // kolom yang memang berasal dari qa_part.
-    $kolomPart = [];
-    $qKolomPart = mysqli_query($konek, "SHOW COLUMNS FROM `qa_part`");
-    if (!$qKolomPart) {
-        throw new Exception('Gagal membaca struktur qa_part: '.mysqli_error($konek));
-    }
-    while ($c = mysqli_fetch_assoc($qKolomPart)) {
-        $field = str_replace('`', '``', $c['Field']);
-        $kolomPart[] = '`'.$field.'`';
-    }
-    if (!$kolomPart) {
-        throw new Exception('Kolom qa_part tidak ditemukan.');
-    }
-    $kolomInsert = implode(',', $kolomPart);
-    $sqlInsertArsip = "INSERT INTO `{$def['table']}` ($kolomInsert) SELECT $kolomInsert FROM `qa_part` WHERE id='$alat_id' LIMIT 1";
-    if (!mysqli_query($konek, $sqlInsertArsip)) {
-        throw new Exception('Gagal memindahkan alat ke arsip: '.mysqli_error($konek));
-    }
-    $statusArchive = mysqli_real_escape_string($konek, strtolower($status));
-    if (!mysqli_query($konek, "UPDATE `{$def['table']}` SET no_part='$originalEsc', nomor_arsip='$archiveNoEsc', status='$statusArchive', jadwal_kalibrasi=NULL WHERE id='$alat_id' LIMIT 1")) {
-        throw new Exception('Gagal memberi nomor arsip: '.mysqli_error($konek));
-    }
-    if (!mysqli_query($konek, "UPDATE qa_pengecekan SET no_part='$originalEsc', periode_berikutnya=NULL WHERE id='".(int)$pengecekan_id."' LIMIT 1")) {
-        throw new Exception('Gagal mengunci histori hasil final: '.mysqli_error($konek));
-    }
-    if (!mysqli_query($konek, "DELETE FROM qa_part WHERE id='$alat_id' LIMIT 1")) {
-        throw new Exception('Gagal menghapus master aktif setelah finalisasi arsip: '.mysqli_error($konek));
-    }
+    $archiveNo=qaArchiveNoPart($no_part,$def['code']); $archiveNoEsc=esc($konek,$archiveNo); $noEsc=esc($konek,$no_part);
+    $exists=mysqli_query($konek,"SELECT id FROM `{$def['table']}` WHERE alat_registry_id='$registryId' OR UPPER(TRIM(no_part))='$noEsc' LIMIT 1");
+    if($exists&&mysqli_num_rows($exists)>0) throw new Exception('Nomor alat sudah memiliki arsip aktif pada status '.$status.'.');
+    $existsNo=mysqli_query($konek,"SELECT id FROM `{$def['table']}` WHERE nomor_arsip='$archiveNoEsc' LIMIT 1");
+    if($existsNo&&mysqli_num_rows($existsNo)>0) throw new Exception('Nomor arsip bentrok.');
+
+    $cols=[];$qCols=mysqli_query($konek,"SHOW COLUMNS FROM `qa_part`");
+    if(!$qCols) throw new Exception('Gagal membaca struktur qa_part: '.mysqli_error($konek));
+    while($c=mysqli_fetch_assoc($qCols)){if($c['Field']==='id')continue;$cols[]='`'.str_replace('`','``',$c['Field']).'`';}
+    if(!$cols) throw new Exception('Kolom qa_part tidak ditemukan.');
+    $colList=implode(',',$cols);
+    if(!mysqli_query($konek,"INSERT INTO `{$def['table']}` ($colList) SELECT $colList FROM qa_part WHERE id='".(int)$part['id']."' LIMIT 1")) throw new Exception('Gagal memindahkan alat ke arsip: '.mysqli_error($konek));
+    $archiveId=(int)mysqli_insert_id($konek); if($archiveId<=0) throw new Exception('ID arsip tidak terbentuk.');
+
+    $statusArchive=esc($konek,strtolower($status));
+    if(!mysqli_query($konek,"UPDATE `{$def['table']}` SET no_part='$noEsc',nomor_arsip='$archiveNoEsc',alat_registry_id='$registryId',status='$statusArchive',jadwal_kalibrasi=NULL WHERE id='$archiveId' LIMIT 1")) throw new Exception('Gagal menyimpan identitas arsip: '.mysqli_error($konek));
+    if(!mysqli_query($konek,"UPDATE qa_pengecekan SET no_part='$noEsc',alat_registry_id='$registryId',alat_id='$archiveId',periode_berikutnya=NULL WHERE id='".(int)$pengecekan_id."' LIMIT 1")) throw new Exception('Gagal mengunci histori hasil final: '.mysqli_error($konek));
+    if(!mysqli_query($konek,"DELETE FROM qa_part WHERE id='".(int)$part['id']."' LIMIT 1")) throw new Exception('Gagal menghapus master aktif setelah finalisasi arsip: '.mysqli_error($konek));
+
+    $registryStatus=$def['permanent']?'BLOKIR_PERMANEN':'NONAKTIF_SEMENTARA';
+    qaRegistrySet($konek,$no_part,$registryStatus,$status,$status,$resultDate,$def['table'],$archiveId,$archiveNo,null,null);
 }
 
 /* =====================================================================
@@ -313,70 +348,30 @@ function qaFinalizeApprovedResult($konek, $pengecekan_id)
  * =================================================================== */
 if ($action == 'cek_alat') {
     try {
-        $no_part = isset($_POST['no_part']) ? normalisasi_no_part($konek, $_POST['no_part']) : '';
-
-        if ($no_part === '') {
-            echo json_encode(['found' => false, 'error_msg' => 'Nomor alat wajib diisi.']);
-            exit;
-        }
-
-        $query = mysqli_query($konek, "SELECT * FROM qa_part WHERE UPPER(TRIM(no_part)) = '$no_part'");
-
-        if ($query && mysqli_num_rows($query) > 0) {
-            $data_alat = mysqli_fetch_assoc($query);
-            $history = [];
-
-            // Limit riwayat ke 5 baris terakhir saja (mencegah payload besar / bocor data historis penuh)
-            $q_hist = mysqli_query($konek, "SELECT * FROM qa_pengecekan WHERE alat_id = '{$data_alat['id']}' ORDER BY tanggal_pengecekan DESC, id DESC LIMIT 5");
-            if ($q_hist) {
-                while ($row = mysqli_fetch_assoc($q_hist)) {
-                    $history[] = [
-                        'id'                => $row['id'],
-                        'tanggal'           => $row['tanggal_pengecekan'],
-                        'status'            => $row['status_kalibrasi'],           // hasil kandidat/internal
-                        'status_validasi'   => isset($row['status_validasi']) ? $row['status_validasi'] : 'menunggu_pemeriksa',
-                        'display_status'    => qaDisplayStatus($row['status_kalibrasi'] ?? '', $row['status_validasi'] ?? 'menunggu_pemeriksa'),
-                        'seksi_qa'          => $row['seksi_qa'],
-                        'operator'          => isset($row['operator']) ? $row['operator'] : null, // [MEETING] operator pengecek
-                        'suhu'              => $row['suhu'],
-                        'kelembapan'        => $row['kelembapan'],
-                        'ketidakpastian'    => $row['ketidakpastian'],
-                        'confidence_level'  => $row['confidence_level'],
-                        'keterangan'        => $row['keterangan'],
-                        'hasil_json'        => $row['hasil_json'],
-                        'petugas'           => $row['created_by'],
-                        'jadwal_berikutnya' => $row['periode_berikutnya']
-                    ];
+        $no_part=isset($_POST['no_part'])?normalisasi_no_part($konek,$_POST['no_part']):'';
+        if($no_part===''){echo json_encode(['found'=>false,'error_msg'=>'Nomor alat wajib diisi.']);exit;}
+        $reg=qaGetRegistry($konek,$no_part);
+        if($reg){
+            $rid=(int)$reg['id']; $st=strtoupper(trim((string)$reg['status_alat']));
+            if($st==='AKTIF'){
+                $q=mysqli_query($konek,"SELECT * FROM qa_part WHERE alat_registry_id='$rid' OR UPPER(TRIM(no_part))='$no_part' LIMIT 1"); $alat=$q?mysqli_fetch_assoc($q):null;
+                if($alat){
+                    $alat['registry_id']=$rid; $alat['registry_status']='AKTIF'; $alat['hasil_terakhir']=$reg['hasil_terakhir']; $alat['alasan_status']=$reg['alasan_status'];
+                    echo json_encode(['found'=>true,'data'=>$alat,'history'=>qaRegistryHistory($konek,$rid,$no_part,5),'registry'=>$reg],JSON_UNESCAPED_UNICODE); exit;
                 }
             }
-            echo json_encode(['found' => true, 'data' => $data_alat, 'history' => $history]);
-        } else {
-            // Cari seluruh arsip status negatif berdasarkan nomor alat asli.
-            foreach (qaArchiveDefs() as $statusLabel=>$def) {
-                $table=$def['table'];
-                $qArc=mysqli_query($konek, "SELECT * FROM `$table` WHERE UPPER(TRIM(no_part)) LIKE '{$no_part}\\_{$def['code']}\\_%' ORDER BY id DESC LIMIT 1");
-                if ($qArc && mysqli_num_rows($qArc)>0) {
-                    $arc=mysqli_fetch_assoc($qArc);
-                    $history=[];
-                    $arcNo=$arc['no_part'];
-                    $qhh=mysqli_query($konek,"SELECT id,tanggal_pengecekan,status_kalibrasi,status_validasi,operator,created_by,keterangan,periode_berikutnya,hasil_json FROM qa_pengecekan WHERE UPPER(TRIM(no_part)) = '".mysqli_real_escape_string($konek,$arcNo)."' OR UPPER(TRIM(no_part)) = '".mysqli_real_escape_string($konek,$no_part)."' ORDER BY id DESC LIMIT 5");
-                    if($qhh){while($hr=mysqli_fetch_assoc($qhh)){$hr['display_status']=qaDisplayStatus($hr['status_kalibrasi']??'', $hr['status_validasi']??'menunggu_pemeriksa');$history[]=$hr;}}
-                    echo json_encode([
-                        'found'=>false,'is_archived'=>true,'is_rusak'=>$def['permanent'],
-                        'archive_status'=>$statusLabel,'archive_table'=>$table,'archive_no_part'=>$arcNo,
-                        'original_no_part'=>$no_part,'can_restore'=>(qaIsAdmin() && !$def['permanent']),
-                        'archive_data'=>$arc,'history'=>$history,
-                        'message'=>$def['permanent']
-                            ? "Nomor alat ini sudah berstatus RUSAK dan permanen tidak dapat digunakan kembali."
-                            : "Nomor alat ini pernah berstatus {$statusLabel}. Admin dapat mengembalikan data alat yang sama."
-                    ]); exit;
-                }
+            $archiveTable=$reg['sumber_tabel']??''; $allowed=array_column(qaArchiveDefs(),'table');
+            if(!in_array($archiveTable,$allowed,true)){
+                $archiveTable=''; foreach(qaArchiveDefs() as $label=>$def){if(strtoupper($label)===strtoupper((string)$reg['alasan_status'])){$archiveTable=$def['table'];break;}}
             }
-            echo json_encode(['found' => false]);
+            $arc=null; if($archiveTable!==''){$qArc=mysqli_query($konek,"SELECT * FROM `$archiveTable` WHERE alat_registry_id='$rid' OR UPPER(TRIM(no_part))='$no_part' ORDER BY id DESC LIMIT 1");$arc=$qArc?mysqli_fetch_assoc($qArc):null;}
+            $permanent=($st==='BLOKIR_PERMANEN'); $reason=$reg['alasan_status']?:$reg['hasil_terakhir']?:'ARSIP';
+            echo json_encode(['found'=>false,'is_archived'=>true,'is_rusak'=>$permanent,'archive_status'=>$reason,'archive_table'=>$archiveTable,'archive_no_part'=>$no_part,'original_no_part'=>$no_part,'nomor_arsip'=>$arc['nomor_arsip']??($reg['nomor_arsip_terakhir']??''),'can_restore'=>(qaIsAdmin()&&$st==='NONAKTIF_SEMENTARA'),'archive_data'=>$arc,'registry'=>$reg,'history'=>qaRegistryHistory($konek,$rid,$no_part,5),'message'=>$permanent?"Nomor alat ini sudah diblokir permanen karena {$reason} dan tidak dapat digunakan kembali.":"Nomor alat ini sedang nonaktif karena {$reason}. Admin dapat mengaktifkan kembali nomor alat ini."],JSON_UNESCAPED_UNICODE); exit;
         }
-    } catch (Exception $e) {
-        echo json_encode(['found' => false, 'error_msg' => $e->getMessage()]);
-    }
+        $q=mysqli_query($konek,"SELECT * FROM qa_part WHERE UPPER(TRIM(no_part))='$no_part' LIMIT 1");
+        if($q&&mysqli_num_rows($q)>0){$alat=mysqli_fetch_assoc($q);echo json_encode(['found'=>true,'data'=>$alat,'history'=>qaRegistryHistory($konek,(int)($alat['alat_registry_id']??0),$no_part,5)],JSON_UNESCAPED_UNICODE);exit;}
+        echo json_encode(['found'=>false]);
+    }catch(Exception $e){echo json_encode(['found'=>false,'error_msg'=>$e->getMessage()]);}
     exit;
 }
 
@@ -387,89 +382,44 @@ if ($action == 'cek_alat') {
  * (mengandung pola arsip internal) - [MEETING] no alat Bad tidak bisa dipakai lagi.
  * =================================================================== */
 elseif ($action == 'restore_alat') {
-    if (!qaIsAdmin()) {
-        http_response_code(403);
-        echo json_encode(['status'=>'error','message'=>'Hanya admin yang dapat mengembalikan nomor alat.']);
-        exit;
-    }
-
-    $archiveTable = preg_replace('/[^a-z_]/', '', strtolower((string)($_POST['archive_table'] ?? '')));
-    $archiveNo = trim((string)($_POST['archive_no_part'] ?? ''));
-    $allowed = array_column(qaArchiveDefs(), 'table');
-
-    if (!in_array($archiveTable, $allowed, true) || $archiveNo === '') {
-        echo json_encode(['status'=>'error','message'=>'Data arsip tidak valid.']);
-        exit;
-    }
-
-    if ($archiveTable === 'qa_alat_rusak') {
-        echo json_encode(['status'=>'error','message'=>'Alat RUSAK bersifat permanen dan tidak dapat dikembalikan.']);
-        exit;
-    }
-
-    // Pastikan tabel arsip tersedia.
-    if (!mysqli_query($konek, "CREATE TABLE IF NOT EXISTS `$archiveTable` LIKE `qa_part`")) {
-        echo json_encode(['status'=>'error','message'=>'Gagal menyiapkan tabel arsip: '.mysqli_error($konek)]);
-        exit;
-    }
-
-    $archiveNoEsc = mysqli_real_escape_string($konek, $archiveNo);
-    $original = qaExtractOriginalNoPart($archiveNo);
-    $originalEsc = mysqli_real_escape_string($konek, $original);
-
+    if(!qaIsAdmin()){http_response_code(403);echo json_encode(['status'=>'error','message'=>'Hanya admin yang dapat mengaktifkan kembali nomor alat.']);exit;}
+    $archiveTable=preg_replace('/[^a-z_]/','',strtolower((string)($_POST['archive_table']??'')));
+    $archiveNo=normalisasi_no_part($konek,$_POST['archive_no_part']??''); $nomorArsip=trim((string)($_POST['nomor_arsip']??''));
+    $allowed=array_column(qaArchiveDefs(),'table'); $allowed[]='qa_part'; if(!in_array($archiveTable,$allowed,true)||$archiveNo===''){echo json_encode(['status'=>'error','message'=>'Data arsip tidak valid.']);exit;}
+    $def=null;foreach(qaArchiveDefs() as $d){if($d['table']===$archiveTable){$def=$d;break;}}
+    if(!$def){echo json_encode(['status'=>'error','message'=>'Jenis arsip tidak valid.']);exit;}
+    if($def['permanent']){echo json_encode(['status'=>'error','message'=>'Nomor alat '.$def['label'].' bersifat permanen dan tidak dapat diaktifkan kembali.']);exit;}
     mysqli_begin_transaction($konek);
-    try {
-        $q = mysqli_query($konek, "SELECT * FROM `$archiveTable` WHERE no_part='$archiveNoEsc' LIMIT 1");
-        if (!$q) throw new Exception('Gagal membaca data arsip: '.mysqli_error($konek));
-        $arc = mysqli_fetch_assoc($q);
-        if (!$arc) throw new Exception('Data arsip tidak ditemukan.');
-
-        $ex = mysqli_query($konek, "SELECT id FROM qa_part WHERE UPPER(TRIM(no_part))='$originalEsc' LIMIT 1");
-        if (!$ex) throw new Exception('Gagal mengecek nomor alat aktif: '.mysqli_error($konek));
-        if (mysqli_num_rows($ex) > 0) throw new Exception('Nomor alat sudah digunakan kembali di data aktif.');
-
-        $set = [];
-        foreach ($arc as $column => $value) {
-            if ($column === 'id' || $column === 'no_part' || $column === 'status') continue;
-            $colSafe = preg_replace('/[^a-zA-Z0-9_]/', '', $column);
-            if ($value === null) {
-                $set[] = "`$colSafe`=NULL";
-            } else {
-                $set[] = "`$colSafe`='".mysqli_real_escape_string($konek, (string)$value)."'";
-            }
+    try{
+        $reg=qaGetRegistry($konek,$archiveNo); if(!$reg)throw new Exception('Registry nomor alat tidak ditemukan.');
+        if(($reg['status_alat']??'')!=='NONAKTIF_SEMENTARA')throw new Exception('Nomor alat ini bukan status nonaktif sementara.');
+        $rid=(int)$reg['id']; $where="(alat_registry_id='$rid' OR UPPER(TRIM(no_part))='$archiveNo')";
+        if($nomorArsip!=='')$where.=" AND nomor_arsip='".esc($konek,$nomorArsip)."'";
+        $arc=null;
+        if($archiveTable==='qa_part'){
+            $q=mysqli_query($konek,"SELECT * FROM qa_part WHERE alat_registry_id='$rid' OR UPPER(TRIM(no_part))='$archiveNo' ORDER BY id DESC LIMIT 1");
+            $arc=$q?mysqli_fetch_assoc($q):null;
+        }else{
+            $q=mysqli_query($konek,"SELECT * FROM `$archiveTable` WHERE $where ORDER BY id DESC LIMIT 1");
+            $arc=$q?mysqli_fetch_assoc($q):null;
         }
-        $set[] = "`no_part`='$originalEsc'";
-        $set[] = "`status`='aktif'";
-
-        $sqlInsert = 'INSERT INTO qa_part SET '.implode(',', $set);
-        if (!mysqli_query($konek, $sqlInsert)) {
-            throw new Exception('Gagal mengembalikan data ke qa_part: '.mysqli_error($konek));
+        if(!$arc)throw new Exception('Data alat untuk aktivasi kembali tidak ditemukan.');
+        $ex=mysqli_query($konek,"SELECT id FROM qa_part WHERE UPPER(TRIM(no_part))='$archiveNo' AND (alat_registry_id<>'$rid' OR alat_registry_id IS NULL) LIMIT 1");if($ex&&mysqli_num_rows($ex)>0)throw new Exception('Nomor alat sudah aktif di data master.');
+        $newId=0;
+        if($archiveTable==='qa_part'){
+            $newId=(int)$arc['id'];
+            if(!mysqli_query($konek,"UPDATE qa_part SET alat_registry_id='$rid',status='aktif' WHERE id='$newId' LIMIT 1"))throw new Exception('Gagal mengaktifkan kembali data aktif: '.mysqli_error($konek));
+        }else{
+            $cols=[];$vals=[];foreach($arc as $c=>$v){if($c==='id'||$c==='nomor_arsip')continue;$safe=preg_replace('/[^a-zA-Z0-9_]/','',$c);$cols[]='`'.$safe.'`';if($c==='no_part')$vals[]="'".esc($konek,$archiveNo)."'";elseif($c==='status')$vals[]="'aktif'";elseif($v===null)$vals[]='NULL';else$vals[]="'".esc($konek,(string)$v)."'";}
+            if(!mysqli_query($konek,"INSERT INTO qa_part (".implode(',',$cols).") VALUES (".implode(',',$vals).")"))throw new Exception('Gagal mengaktifkan kembali data alat: '.mysqli_error($konek));
+            $newId=(int)mysqli_insert_id($konek);if($newId<=0)throw new Exception('ID alat hasil aktivasi tidak terbentuk.');
+            if(!mysqli_query($konek,"UPDATE qa_part SET alat_registry_id='$rid',status='aktif',jadwal_kalibrasi=NULL WHERE id='$newId' LIMIT 1"))throw new Exception('Gagal menyinkronkan data aktif.');
+            if(!mysqli_query($konek,"DELETE FROM `$archiveTable` WHERE id='".(int)$arc['id']."' LIMIT 1"))throw new Exception('Gagal menghapus salinan arsip setelah aktivasi.');
         }
-        $newId = (int)mysqli_insert_id($konek);
-        if ($newId <= 0) throw new Exception('ID alat hasil restore tidak terbentuk.');
-
-        $sqlHist = "UPDATE qa_pengecekan
-                     SET alat_id='$newId', no_part='$originalEsc'
-                     WHERE UPPER(TRIM(no_part))='$archiveNoEsc'";
-        if (!mysqli_query($konek, $sqlHist)) {
-            throw new Exception('Gagal mengembalikan riwayat alat: '.mysqli_error($konek));
-        }
-
-        if (!mysqli_query($konek, "DELETE FROM `$archiveTable` WHERE no_part='$archiveNoEsc' LIMIT 1")) {
-            throw new Exception('Gagal menghapus salinan arsip setelah restore: '.mysqli_error($konek));
-        }
-
-        mysqli_commit($konek);
-        echo json_encode([
-            'status'=>'success',
-            'message'=>'Nomor alat berhasil dikembalikan ke data aktif beserta data lamanya.',
-            'no_part'=>$original,
-            'alat_id'=>$newId
-        ], JSON_UNESCAPED_UNICODE);
-    } catch (Exception $e) {
-        mysqli_rollback($konek);
-        echo json_encode(['status'=>'error','message'=>$e->getMessage()], JSON_UNESCAPED_UNICODE);
-    }
+        if(!mysqli_query($konek,"UPDATE qa_pengecekan SET alat_id='$newId',no_part='$archiveNo',alat_registry_id='$rid' WHERE alat_registry_id='$rid' OR UPPER(TRIM(no_part))='$archiveNo'"))throw new Exception('Gagal menyinkronkan histori nomor alat.');
+        qaRegistrySet($konek,$archiveNo,'AKTIF',null,$reg['hasil_terakhir']??null,$reg['tanggal_hasil_terakhir']??null,'qa_part',$newId,$arc['nomor_arsip']??($reg['nomor_arsip_terakhir']??null),$nama_petugas,date('Y-m-d H:i:s'));
+        mysqli_commit($konek);echo json_encode(['status'=>'success','message'=>'Nomor alat berhasil diaktifkan kembali.','no_part'=>$archiveNo,'alat_id'=>$newId],JSON_UNESCAPED_UNICODE);
+    }catch(Exception $e){mysqli_rollback($konek);echo json_encode(['status'=>'error','message'=>$e->getMessage()],JSON_UNESCAPED_UNICODE);}
     exit;
 }
 
@@ -558,44 +508,39 @@ elseif ($action == 'simpan_alat') {
             move_uploaded_file($_FILES['foto_alat']['tmp_name'], $folder_tujuan . $nama_file_foto);
         }
 
-        // Cek dobel: no_part masih aktif terdaftar
-        $cek_dobel = mysqli_query($konek, "SELECT no_part FROM qa_part WHERE UPPER(TRIM(no_part)) = '$no_part'");
-        if ($cek_dobel && mysqli_num_rows($cek_dobel) > 0) {
-            echo json_encode(['status' => 'error', 'message' => 'Nomor Alat ini masih aktif terdaftar! Jika alat sudah rusak, update hasil kalibrasinya jadi "Bad" dan gunakan Restore Admin untuk nomor yang masih dapat dikembalikan.']);
-            exit;
-        }
-
         mysqli_begin_transaction($konek);
         try {
-            $sql = "INSERT INTO qa_part
-                    (no_part, nama_part, seksi_pemilik, periode_kalibrasi, jadwal_kalibrasi, status, created_at, ukuran, resolusi, lokasi, type, kls, foto_alat, spesifikasi, toleransi_global, satuan, metode_uji, standar_uji, traceability, format_laporan, titik_standar_json)
+            $existingRegistry=qaGetRegistry($konek,$no_part);
+            if($existingRegistry){
+                $st=strtoupper((string)$existingRegistry['status_alat']);
+                if($st==='BLOKIR_PERMANEN')throw new Exception('Nomor Alat '.$no_part.' sudah diblokir permanen karena '.($existingRegistry['alasan_status']?:$existingRegistry['hasil_terakhir']).' dan tidak dapat digunakan kembali.');
+                if($st==='NONAKTIF_SEMENTARA')throw new Exception('Nomor Alat '.$no_part.' sedang nonaktif karena '.($existingRegistry['alasan_status']?:'status sementara').'. Hanya Admin yang dapat mengaktifkan kembali nomor alat ini.');
+                throw new Exception('Nomor Alat '.$no_part.' sudah terdaftar dan masih aktif.');
+            }
+            $registrySql="INSERT INTO qa_alat_registry (no_part,status_alat,hasil_terakhir,tanggal_hasil_terakhir,created_by) VALUES ('".esc($konek,$no_part)."','AKTIF','OK','".esc($konek,$tgl_start)."','".esc($konek,$nama_petugas)."')";
+            if(!mysqli_query($konek,$registrySql))throw new Exception('Gagal membuat registry nomor alat: '.mysqli_error($konek));
+            $registryId=(int)mysqli_insert_id($konek); if($registryId<=0)throw new Exception('Registry nomor alat tidak terbentuk.');
+            $sql="INSERT INTO qa_part
+                    (alat_registry_id,no_part,nama_part,seksi_pemilik,periode_kalibrasi,jadwal_kalibrasi,status,created_at,ukuran,resolusi,lokasi,type,kls,foto_alat,spesifikasi,toleransi_global,satuan,metode_uji,standar_uji,traceability,format_laporan,titik_standar_json)
                     VALUES
-                    ('$no_part', '$nama_part', '$seksi', '$periode', '$jadwal_kalibrasi', 'aktif', '$created_at', '$ukuran', '$resolusi', '$lokasi', '$type', '$kls', '$nama_file_foto', '$spesifikasi', '$toleransi_global', '$satuan', '$metode_uji', '$standar_uji', '$traceability', '$format_laporan', '$titik_standar_json')";
-
-            if (!mysqli_query($konek, $sql)) {
-                throw new Exception(mysqli_error($konek));
-            }
-
-            $alat_id = mysqli_insert_id($konek);
-            $nomor_pengecekan = "QA-REG-" . date('YmdHis') . "-" . $alat_id;
-
-            $sql_hist = "INSERT INTO qa_pengecekan
-                         (alat_id, no_part, nomor_pengecekan, tanggal_pengecekan, tanggal_jadwal_saat_pengecekan, status_kalibrasi, status_validasi, jenis_transaksi, seksi_qa, operator, periode_berikutnya, created_by, keterangan, created_at)
-                         VALUES
-                         ('$alat_id', '$no_part', '$nomor_pengecekan', '$tgl_start', '$tgl_start', 'Good', 'setuju', 'registrasi_alat', 'QA', '$nama_petugas', '$jadwal_kalibrasi', '$nama_petugas', '~ Registrasi Alat Baru', '$created_at')";
-
-            if (!mysqli_query($konek, $sql_hist)) {
-                throw new Exception(mysqli_error($konek));
-            }
-
+                    ('$registryId','$no_part','$nama_part','$seksi','$periode','$jadwal_kalibrasi','aktif','$created_at','$ukuran','$resolusi','$lokasi','$type','$kls','$nama_file_foto','$spesifikasi','$toleransi_global','$satuan','$metode_uji','$standar_uji','$traceability','$format_laporan','$titik_standar_json')";
+            if(!mysqli_query($konek,$sql))throw new Exception(mysqli_error($konek));
+            $alat_id=(int)mysqli_insert_id($konek);if($alat_id<=0)throw new Exception('ID alat tidak terbentuk.');
+            if(!mysqli_query($konek,"UPDATE qa_alat_registry SET sumber_tabel='qa_part',sumber_id='$alat_id' WHERE id='$registryId' LIMIT 1"))throw new Exception(mysqli_error($konek));
+            $nomor_pengecekan='QA-REG-'.date('YmdHis').'-'.$alat_id;
+            $sql_hist="INSERT INTO qa_pengecekan
+                (alat_registry_id,alat_id,no_part,nomor_pengecekan,tanggal_pengecekan,tanggal_jadwal_saat_pengecekan,status_kalibrasi,status_validasi,jenis_transaksi,seksi_qa,operator,periode_berikutnya,created_by,keterangan,created_at)
+                VALUES
+                ('$registryId','$alat_id','$no_part','$nomor_pengecekan','$tgl_start','$tgl_start','Good','setuju','registrasi_alat','QA','$nama_petugas','$jadwal_kalibrasi','$nama_petugas','~ Registrasi Alat Baru','$created_at')";
+            if(!mysqli_query($konek,$sql_hist))throw new Exception(mysqli_error($konek));
             mysqli_commit($konek);
-            echo json_encode(['status' => 'success', 'jadwal_selanjutnya' => $jadwal_kalibrasi]);
+            echo json_encode(['status'=>'success','jadwal_selanjutnya'=>$jadwal_kalibrasi,'registry_id'=>$registryId]);
         } catch (Exception $ex) {
             mysqli_rollback($konek);
-            echo json_encode(['status' => 'error', 'message' => 'Gagal menyimpan: ' . $ex->getMessage()]);
+            echo json_encode(['status'=>'error','message'=>'Gagal menyimpan: '.$ex->getMessage()]);
         }
     } catch (Exception $e) {
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode(['status'=>'error','message'=>$e->getMessage()]);
     }
     exit;
 }
@@ -661,6 +606,8 @@ elseif ($action == 'simpan_qa') {
             echo json_encode(['status' => 'error', 'message' => 'Alat tidak ditemukan atau sudah tidak aktif.']);
             exit;
         }
+        $registryId=(int)($d_part['alat_registry_id']??0); if($registryId<=0){$regTmp=qaGetRegistry($konek,$no_part);$registryId=(int)($regTmp['id']??0);} if($registryId<=0){echo json_encode(['status'=>'error','message'=>'Registry nomor alat belum tersedia. Jalankan migration registry terlebih dahulu.']);exit;}
+        $regCurrent=qaGetRegistry($konek,$no_part); if($regCurrent && strtoupper((string)$regCurrent['status_alat'])!=='AKTIF'){echo json_encode(['status'=>'error','message'=>'Nomor alat sedang tidak aktif dan tidak dapat digunakan untuk update hasil.']);exit;}
 
         // Semua field editable saat pengecekan: jika dikirim kosong, pertahankan nilai master.
         $nama_part        = $nama_part !== '' ? $nama_part : mysqli_real_escape_string($konek, $d_part['nama_part'] ?? '');
@@ -731,12 +678,12 @@ elseif ($action == 'simpan_qa') {
 
             $jadwal_sql = 'NULL';
             $sql_hist = "INSERT INTO qa_pengecekan
-                (alat_id, no_part, nomor_pengecekan, no_laporan, tanggal_pengecekan,
+                (alat_registry_id, alat_id, no_part, nomor_pengecekan, no_laporan, tanggal_pengecekan,
                  tanggal_jadwal_saat_pengecekan, status_kalibrasi, status_validasi, jenis_transaksi,
                  seksi_qa, operator, periode_berikutnya, created_by, keterangan,
                  created_at, suhu, kelembapan, ketidakpastian, confidence_level, hasil_json)
                 VALUES
-                ('$alat_id', '$no_part_final', '$nomor_pengecekan', '$no_laporan', '$tgl_pengecekan',
+                ('$registryId', '$alat_id', '$no_part_final', '$nomor_pengecekan', '$no_laporan', '$tgl_pengecekan',
                  '$tgl_jadwal_lama', '$status_qa', 'menunggu_pemeriksa', 'update_hasil_kalibrasi',
                  '$seksi_qa', '$operator', $jadwal_sql, '$nama_petugas', '$keterangan',
                  '$waktu_sekarang', '$suhu', '$kelembapan', '$ketidakpastian', '$confidence', '$snapshot_json_sql')";
@@ -1063,32 +1010,16 @@ elseif ($action == 'get_riwayat_validasi') {
  * Ambil data alat + full history (untuk cetak laporan / BBRAU).
  * =================================================================== */
 elseif ($action == 'get_bbrau') {
-    $no_part = isset($_POST['no_part']) ? normalisasi_no_part($konek, trim($_POST['no_part'])) : '';
-    $alat = null;
-
-    $q1 = mysqli_query($konek, "SELECT * FROM qa_part WHERE UPPER(TRIM(no_part)) = '$no_part'");
-    if ($q1 && mysqli_num_rows($q1) > 0) {
-        $alat = mysqli_fetch_assoc($q1);
-    } else {
-        foreach (qaArchiveDefs() as $def) {
-            $table = $def['table'];
-            @mysqli_query($konek, "CREATE TABLE IF NOT EXISTS `$table` LIKE `qa_part`");
-            $q2 = mysqli_query($konek, "SELECT * FROM `$table` WHERE UPPER(TRIM(no_part)) = '$no_part' OR UPPER(TRIM(no_part)) LIKE '{$no_part}\\_{$def['code']}\\_%' ORDER BY id DESC LIMIT 1");
-            if ($q2 && mysqli_num_rows($q2) > 0) {
-                $alat = mysqli_fetch_assoc($q2);
-                break;
-            }
-        }
+    $no_part=isset($_POST['no_part'])?normalisasi_no_part($konek,$_POST['no_part']):'';
+    if($no_part===''){echo json_encode(['status'=>'error','message'=>'Nomor alat wajib diisi.']);exit;}
+    $reg=qaGetRegistry($konek,$no_part);$alat=null;
+    if($reg){
+        $src=$reg['sumber_tabel']??''; if($src==='qa_part'||$src===''){$q=mysqli_query($konek,"SELECT * FROM qa_part WHERE alat_registry_id='".(int)$reg['id']."' OR UPPER(TRIM(no_part))='$no_part' LIMIT 1");$alat=$q?mysqli_fetch_assoc($q):null;}
+        elseif(in_array($src,array_column(qaArchiveDefs(),'table'),true)){$q=mysqli_query($konek,"SELECT * FROM `$src` WHERE alat_registry_id='".(int)$reg['id']."' OR UPPER(TRIM(no_part))='$no_part' ORDER BY id DESC LIMIT 1");$alat=$q?mysqli_fetch_assoc($q):null;}
     }
-
-    if ($alat) {
-        $history = [];
-        $qh = mysqli_query($konek, "SELECT * FROM qa_pengecekan WHERE alat_id = '{$alat['id']}' ORDER BY tanggal_pengecekan ASC, id ASC");
-        while ($r = mysqli_fetch_assoc($qh)) { $history[] = $r; }
-        echo json_encode(['status' => 'success', 'alat' => $alat, 'history' => $history], JSON_UNESCAPED_UNICODE);
-    } else {
-        echo json_encode(['status' => 'error', 'message' => 'Alat tidak ditemukan.']);
-    }
+    if(!$alat){$q=mysqli_query($konek,"SELECT * FROM qa_part WHERE UPPER(TRIM(no_part))='$no_part' LIMIT 1");$alat=$q?mysqli_fetch_assoc($q):null;}
+    if(!$alat){foreach(qaArchiveDefs() as $def){$q=mysqli_query($konek,"SELECT * FROM `{$def['table']}` WHERE UPPER(TRIM(no_part))='$no_part' ORDER BY id DESC LIMIT 1");if($q&&mysqli_num_rows($q)>0){$alat=mysqli_fetch_assoc($q);break;}}}
+    if($alat){echo json_encode(['status'=>'success','alat'=>$alat,'history'=>qaRegistryHistory($konek,(int)($reg['id']??($alat['alat_registry_id']??0)),$no_part,1000),'registry'=>$reg],JSON_UNESCAPED_UNICODE);}else echo json_encode(['status'=>'error','message'=>'Alat tidak ditemukan.']);
     exit;
 }
 

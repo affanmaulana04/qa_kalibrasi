@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 session_start();
 if (empty($_SESSION['login'])) {
     header('location: ../../logout.php');
@@ -204,16 +204,33 @@ if ($qApproved) {
     while ($q = mysqli_fetch_assoc($qApproved)) $approvedByNo[$q['no_part']] = $q;
 }
 
-function displayMasterStatus($master, $latestByNo) {
-    $no = (string)($master['no_part'] ?? '');
-    $final = (string)($master['_final_status'] ?? '');
-    $latest = $latestByNo[$no] ?? null;
+/* Registry = sumber kebenaran status nomor alat. Ini penting untuk legacy
+ * seperti nomor yang masih ada di qa_part tetapi sudah final RUSAK/NOT GOOD. */
+$registryByNo = [];
+$qRegistry = mysqli_query($konek, "SELECT no_part,status_alat,alasan_status,hasil_terakhir FROM qa_alat_registry");
+if ($qRegistry) {
+    while ($r = mysqli_fetch_assoc($qRegistry)) $registryByNo[strtoupper(trim((string)$r['no_part']))] = $r;
+}
+
+function displayMasterStatus($master, $latestByNo, $registryByNo = []) {
+    $no = strtoupper(trim((string)($master['no_part'] ?? '')));
+    $final = strtoupper(trim((string)($master['_final_status'] ?? '')));
+    $latest = $latestByNo[$master['no_part']] ?? ($latestByNo[$no] ?? null);
+    $registry = $registryByNo[$no] ?? null;
+
     if ($latest) {
         $sv = strtolower((string)($latest['status_validasi'] ?? ''));
         if ($sv === 'menunggu_pemeriksa' || $sv === 'menunggu_penyetuju') return 'MENUNGGU VALIDASI';
         if ($sv === 'ditolak_pemeriksa' || $sv === 'ditolak_penyetuju') return 'DITOLAK VALIDASI';
-        if ($sv === 'final_disetujui') return $final !== '' ? $final : 'OK';
     }
+
+    if ($registry) {
+        $rs = strtoupper(trim((string)($registry['status_alat'] ?? '')));
+        if ($rs === 'BLOKIR_PERMANEN') return strtoupper((string)($registry['alasan_status'] ?: ($registry['hasil_terakhir'] ?: 'RUSAK')));
+        if ($rs === 'NONAKTIF_SEMENTARA') return strtoupper((string)($registry['alasan_status'] ?: ($registry['hasil_terakhir'] ?: 'NONAKTIF')));
+        if ($rs === 'AKTIF' && $latest && strtolower((string)($latest['status_validasi'] ?? '')) === 'final_disetujui') return 'OK';
+    }
+
     return $final !== '' ? $final : 'OK';
 }
 function statusMatches($rowStatus, $filterStatus) {
@@ -232,7 +249,7 @@ function masterColValue($row, $keys, $fallback='') {
 
 $filteredMasters = [];
 foreach ($masterRows as $r) {
-    $r['_display_status'] = displayMasterStatus($r, $latestByNo);
+    $r['_display_status'] = displayMasterStatus($r, $latestByNo, $registryByNo);
     if ($filter_seksi !== 'ALL' && strtoupper((string)$r['seksi_pemilik']) !== strtoupper((string)$filter_seksi)) continue;
     if (!statusMatches($r['_display_status'], $filter_status)) continue;
     $filteredMasters[] = $r;
@@ -319,7 +336,7 @@ if ($filter_waktu === 'harian') {
     foreach ($planEvents as $e) {
         if ($e['plan_date'] !== $val_harian) continue;
         if ($filter_seksi !== 'ALL' && strtoupper($e['seksi']) !== strtoupper($filter_seksi)) continue;
-        if (!statusMatches(displayMasterStatus($masterByNo[$e['no_part']] ?? ['_final_status'=>$e['status']], $latestByNo), $filter_status)) continue;
+        if (!statusMatches(displayMasterStatus($masterByNo[$e['no_part']] ?? ['_final_status'=>$e['status'],'no_part'=>$e['no_part']], $latestByNo, $registryByNo), $filter_status)) continue;
         $daily[$e['no_part']] = [
             'no_part'=>$e['no_part'], 'nama_part'=>$e['nama_part'], 'spesifikasi'=>$e['spesifikasi'], 'resolusi'=>$e['resolusi'],
             'seksi'=>$e['seksi'], 'periode'=>$e['periode'], 'rencana'=>$e['plan_date'], 'aktual'=>'', 'hasil'=>'', 'next'=>'', 'petugas'=>$e['petugas'], 'status'=>$e['status']
@@ -348,7 +365,7 @@ if ($filter_waktu === 'harian') {
     foreach ($planEvents as $e) {
         if (substr($e['plan_date'],0,7) !== $val_bulanan) continue;
         if ($filter_seksi !== 'ALL' && strtoupper($e['seksi']) !== strtoupper($filter_seksi)) continue;
-        $display = displayMasterStatus($masterByNo[$e['no_part']] ?? ['_final_status'=>$e['status']], $latestByNo);
+        $display = displayMasterStatus($masterByNo[$e['no_part']] ?? ['_final_status'=>$e['status'],'no_part'=>$e['no_part']], $latestByNo, $registryByNo);
         if (!statusMatches($display, $filter_status)) continue;
         $gk = strtoupper(trim($e['seksi'])).'|'.strtoupper(trim($e['nama_part']));
         $key = $gk.'|'.$e['no_part'].'|'.$e['plan_date'];
@@ -380,7 +397,7 @@ if ($filter_waktu === 'harian') {
     foreach ($planEvents as $e) {
         if ((int)substr($e['plan_date'],0,4)!==$year) continue;
         if ($filter_seksi !== 'ALL' && strtoupper($e['seksi']) !== strtoupper($filter_seksi)) continue;
-        $display=displayMasterStatus($masterByNo[$e['no_part']] ?? ['_final_status'=>$e['status']], $latestByNo);
+        $display=displayMasterStatus($masterByNo[$e['no_part']] ?? ['_final_status'=>$e['status'],'no_part'=>$e['no_part']], $latestByNo, $registryByNo);
         if (!statusMatches($display,$filter_status)) continue;
         $gk=strtoupper(trim($e['seksi'])).'|'.strtoupper(trim($e['nama_part']));
         $key=$gk.'|'.$e['no_part'].'|'.$e['plan_date']; if(isset($rSeen[$key])) continue; $rSeen[$key]=true;
@@ -442,6 +459,7 @@ body{padding-top:80px;background:#fff}.filter-box{background:#fff;border:1px sol
 <div class="form-group view-date" data-view="tahunan" style="margin-right:12px;display:none"><select class="form-control" name="tgl_tahunan"><?php for($y=(int)date('Y')-5;$y<=(int)date('Y')+2;$y++):?><option value="<?=$y?>" <?=$val_tahunan==(string)$y?'selected':''?>><?=$y?></option><?php endfor;?></select></div>
 <button class="btn btn-primary" type="submit"><i class="fa fa-search"></i> Tampilkan</button>
 </form>
+<div style="margin-top:10px;color:#666;font-size:12px">Default: <b>Daftar No. Alat Ukur</b>. Harian, Bulanan, dan Tahunan ditampilkan langsung tanpa validasi laporan.</div>
 </div>
 
 <?php if($filter_waktu==='daftar'): ?>

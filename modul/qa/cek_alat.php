@@ -1800,27 +1800,30 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                             }else{
                                 const openReg=function(){ $('#nomor_alat').prop('disabled',true);$('#reg_nomor_alat').val(res.original_no_part||noAlat).prop('readonly',true).prop('disabled',true);$('#section-form-registrasi').hide();$('#section-pilih-format').show();$('#reg_pilih_format').val('');$('#reg_no_laporan,#reg_nama_alat,#reg_spesifikasi,#reg_resolusi,#reg_toleransi,#reg_satuan,#reg_lokasi,#reg_metode,#reg_standar_uji,#reg_trace,#reg_periode,#reg_tgl_manual').val('');$('#preview_gambar_alat').attr('src','https://via.placeholder.com/300x200?text=Tidak+Ada+Gambar');$('#form-registrasi').slideDown();};
                                 if(res.is_archived) {
-                                    var histHtml='<div><b>Status Arsip:</b> '+qaEsc(res.archive_status||'-')+'<br><b>No. Arsip:</b> '+qaEsc(res.archive_no_part||'-')+'</div>';
+                                    var noAlatArsip=res.archive_no_part||res.original_no_part||noAlat;
+                                    var noArsip=res.nomor_arsip||((res.registry||{}).nomor_arsip_terakhir)||'-';
+                                    var statusArsip=res.archive_status||res.alasan_status||'-';
+                                    var histHtml='<div><b>No. Alat:</b> '+qaEsc(noAlatArsip)+'<br><b>Status Nomor:</b> '+qaEsc(statusArsip)+'<br><b>No. Arsip:</b> '+qaEsc(noArsip)+'</div>';
                                     histHtml+='<hr><b>History Nomor Alat</b><div class="table-responsive" style="margin-top:10px;max-height:240px;overflow:auto;"><table class="table table-bordered table-condensed"><thead><tr><th>Tanggal</th><th>Status</th><th>Operator</th><th>Keterangan</th></tr></thead><tbody>';
                                     (res.history||[]).forEach(function(h){histHtml+='<tr><td>'+qaEsc(h.tanggal_pengecekan||h.tanggal||'-')+'</td><td>'+qaEsc(h.display_status||h.status_display||h.status_kalibrasi||h.status||'-')+'</td><td>'+qaEsc(h.operator||h.created_by||'-')+'</td><td>'+qaEsc(h.keterangan||'-')+'</td></tr>';});
                                     if(!(res.history||[]).length) histHtml+='<tr><td colspan="4" class="text-center">Belum ada history.</td></tr>';
                                     histHtml+='</tbody></table></div>';
                                     var canRestore=!!res.can_restore && !res.is_rusak;
-                                    var dlg=BootstrapDialog.show({title:'NOMOR ALAT TERARSIP',type:res.is_rusak?BootstrapDialog.TYPE_DANGER:BootstrapDialog.TYPE_WARNING,message:(res.message||'Nomor alat sedang di arsip.')+'<br><br>'+histHtml,closable:true,buttons:[{label:'Tutup',cssClass:'btn-default',action:function(d){d.close();}}]});
-                                    if(canRestore){dlg.getModalFooter().prepend('<button type="button" class="btn btn-success" id="btnRestoreArchived"><i class="fa fa-undo"></i> Kembalikan Nomor & Data Lama</button>');
+                                    var dlg=BootstrapDialog.show({title:res.is_rusak?'NOMOR ALAT BLOKIR PERMANEN':'NOMOR ALAT NONAKTIF',type:res.is_rusak?BootstrapDialog.TYPE_DANGER:BootstrapDialog.TYPE_WARNING,message:(res.message||'Nomor alat sedang nonaktif.')+'<br><br>'+histHtml,closable:true,buttons:[{label:'Tutup',cssClass:'btn-default',action:function(d){d.close();}}]});
+                                    if(canRestore){dlg.getModalFooter().prepend('<button type="button" class="btn btn-success" id="btnRestoreArchived"><i class="fa fa-check"></i> Aktifkan Kembali Nomor Alat</button>');
                                         $('#btnRestoreArchived').off('click').on('click',function(){
                                             var rb=$(this).prop('disabled',true);
-                                            $.post('proses_qa.php?action=restore_alat',{archive_table:res.archive_table,archive_no_part:res.archive_no_part},function(rr){
+                                            $.post('proses_qa.php?action=restore_alat',{archive_table:res.archive_table,archive_no_part:noAlatArsip,nomor_arsip:noArsip},function(rr){
                                                 if(rr&&rr.status==='success'){
                                                     dlg.close();
-                                                    BootstrapDialog.alert({title:'Restore Berhasil',type:BootstrapDialog.TYPE_SUCCESS,message:'Nomor <b>'+qaEsc(rr.no_part)+'</b> sudah kembali aktif dengan data lama.',callback:function(){location.reload();}});
+                                                    BootstrapDialog.alert({title:'Aktivasi Berhasil',type:BootstrapDialog.TYPE_SUCCESS,message:'Nomor <b>'+qaEsc(rr.no_part)+'</b> sudah kembali AKTIF.',callback:function(){location.reload();}});
                                                 }else{
                                                     rb.prop('disabled',false);
-                                                    BootstrapDialog.alert({title:'Restore Gagal',type:BootstrapDialog.TYPE_DANGER,message:qaEsc(rr&&rr.message||'Restore gagal.')});
+                                                    BootstrapDialog.alert({title:'Aktivasi Gagal',type:BootstrapDialog.TYPE_DANGER,message:qaEsc(rr&&rr.message||'Aktivasi gagal.')});
                                                 }
                                             },'json').fail(function(xhr){
                                                 rb.prop('disabled',false);
-                                                BootstrapDialog.alert({title:'Restore Gagal',type:BootstrapDialog.TYPE_DANGER,message:qaEsc(xhr.responseText||'Request gagal.')});
+                                                BootstrapDialog.alert({title:'Aktivasi Gagal',type:BootstrapDialog.TYPE_DANGER,message:qaEsc(xhr.responseText||'Request gagal.')});
                                             });
                                         });
                                     }

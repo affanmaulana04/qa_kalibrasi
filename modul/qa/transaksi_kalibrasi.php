@@ -309,7 +309,7 @@ function statusLabel($s){
             keterangan:keterangan
         },function(res){
             if(res&&res.status==='success'){
-                notif('Berhasil','Validasi '+role+' berhasil disimpan beserta keterangannya.',type,refresh);
+                notif('Berhasil','Validasi '+role+' berhasil disimpan.',type,refresh);
             }else{
                 setDecisionButtons(false);
                 btn.html(oldText);
