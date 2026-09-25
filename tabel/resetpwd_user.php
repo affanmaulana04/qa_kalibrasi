@@ -20,7 +20,7 @@
     <meta name="description" content="">
     <meta name="author" content="">
 
-    <title>HRD Online</title>
+    <title>QA Kalibrasi</title>
 	<link rel="icon" type="image/png" href="../images/LogoTOTO.png?v=<?= time(); ?>"/>
     <link href="../../css/bootstrap.min.css" rel="stylesheet">
     <link href="../../font-awesome-4.3.0/css/font-awesome.min.css" rel="stylesheet" type="text/css">

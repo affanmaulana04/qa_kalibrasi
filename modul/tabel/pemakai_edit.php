@@ -1,730 +1,105 @@
-﻿<?php
-	session_start();
-	if($_SESSION['login']==0){
-		header('location: ../../logout.php');
-	}else{
-		if($_SESSION['tabel_pemakai_app']=='Y'){
-			include "../../inc/inc_koneksi.php";
-			$id_pemakai=$_SESSION['userid'];
-			$nama_pemakai=$_SESSION['username'];
-			$jam_login=$_SESSION['jamlogin'];
-			$xuid=$_GET['xuid'];
-		}else{
-			header('location: ../../logout.php');
-		}
-	}
-	include "../../inc/inc_koneksi.php";
+<?php
+session_start();
+if (empty($_SESSION['login'])) { header('Location: ../../logout.php'); exit; }
+include '../../inc/inc_koneksi.php';
+
+$id_pemakai = trim((string)($_SESSION['userid'] ?? ''));
+$nama_pemakai = trim((string)($_SESSION['username'] ?? $id_pemakai));
+$is_admin = strtoupper((string)($_SESSION['admin'] ?? 'N')) === 'Y' || strtolower((string)($_SESSION['role'] ?? '')) === 'admin';
+if (!$is_admin) { http_response_code(403); exit('Akses ditolak.'); }
+
+function ensure_user_column($db, $col, $def) {
+    $safe = mysqli_real_escape_string($db, $col);
+    $q = mysqli_query($db, "SHOW COLUMNS FROM `user` LIKE '$safe'");
+    if ($q && mysqli_num_rows($q) === 0) {
+        mysqli_query($db, "ALTER TABLE `user` ADD COLUMN `$col` $def");
+    }
+}
+ensure_user_column($konek, 'pembuat', "ENUM('Y','N') NOT NULL DEFAULT 'N'");
+ensure_user_column($konek, 'pemeriksa', "ENUM('Y','N') NOT NULL DEFAULT 'N'");
+ensure_user_column($konek, 'penyetuju', "ENUM('Y','N') NOT NULL DEFAULT 'N'");
+ensure_user_column($konek, 'block', "ENUM('Y','N') NOT NULL DEFAULT 'N'");
+
+$target = trim((string)($_GET['xuid'] ?? ''));
+$stmt = mysqli_prepare($konek, "SELECT * FROM `user` WHERE uid=? LIMIT 1");
+mysqli_stmt_bind_param($stmt, 's', $target);
+mysqli_stmt_execute($stmt);
+$user = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+mysqli_stmt_close($stmt);
+
+if (!$user) { http_response_code(404); exit('User tidak ditemukan.'); }
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="">
-    <meta name="author" content="">
-
-    <title>HRD Online</title>
-	<link rel="icon" type="image/png" href="../../images/LogoTOTO.png?v=<?= time(); ?>"/>
-    <link href="../../css/bootstrap.min.css" rel="stylesheet">
-    <link href="../../font-awesome-4.3.0/css/font-awesome.min.css" rel="stylesheet" type="text/css">
-	<link href="../../css/jquery.dataTables.css" rel="stylesheet">
-	<link href="../../css/dataTables.responsive.css" rel="stylesheet">
-	<link href="../../css/bootstrap-dialog.css" rel="stylesheet">
-	<link href="../../css/jquery-ui.css" rel="stylesheet">
-	
-	<style>
-
-		#jsontable tbody tr.inactive, #jsontable tbody tr.inactive td.sorting_1 {
-			background-color: #fccfcf
-		}
-		#jsontable tbody tr:hover, #jsontable tbody tr:hover td.sorting_1 {
-			background-color: #e2ebff;
-			cursor: pointer
-		}		
-		
-		.navbar-default .navbar-nav > li > a:hover, .navbar-default .navbar-nav > li > a:focus {
-			background-color: #E7E7E7;
-			color: #333333; /*7F7F7F;*/
-		}
-		.bootstrap-dialog .modal-header.bootstrap-dialog-draggable{
-			cursor: move;
-		}
-		html,body {height: 100%;}		
-		body {padding-top: 50px;}			
-		@media(max-width:991px) {
-			.customer-img,
-			.img-related {margin-bottom: 30px;}
-		}
-		@media(max-width:767px) {
-			.img-portfolio {margin-bottom: 15px;}
-		}
-		footer {margin: 50px 0;}
-	</style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Edit User QA</title>
+<link href="../../css/bootstrap.min.css" rel="stylesheet">
+<link href="../../font-awesome-4.3.0/css/font-awesome.min.css" rel="stylesheet">
+<link href="../../css/bootstrap-dialog.css" rel="stylesheet">
+<style>
+body{padding-top:70px;background:#f4f6f9}.navbar-brand img{height:25px;margin-top:-3px}
+.card{background:#fff;border:1px solid #ddd;border-radius:10px;padding:24px;margin-bottom:20px}
+.form-title{font-weight:700;color:#1E3F66;margin-top:0}.flag-box{padding:15px;background:#f7f9fb;border:1px solid #d9e2ec;border-radius:8px}.btn-row{margin-top:25px}
+</style>
 </head>
-
-<body oncontextmenu="return false;">
-
-    <!-- Navigation -->
-	<nav class="navbar navbar-default navbar-fixed-top" role="navigation">
-        <div class="container">
-            <!-- Brand and toggle get grouped for better mobile display -->
-            <div class="navbar-header">
-                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1">
-                    <span class="sr-only">Toggle navigation</span>
-                    <span class="icon-bar"></span>
-                    <span class="icon-bar"></span>
-                    <span class="icon-bar"></span>
-                </button>
-				<a class="navbar-brand" href="../../media.php"><img class="img-responsive" src="../../images/toto.png"></a>
-            </div>
-            <!-- Collect the nav links, forms, and other content for toggling -->
-            <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
-                <ul class="nav navbar-nav navbar-right">
-                    <li><a href="../../logout.php">Logout</a></li>				
-                </ul>
-            </div>
-            <!-- /.navbar-collapse -->
-        </div>
-        <!-- /.container -->
-    </nav>
-
-    <!-- Page Content -->
-    <div class="container">
-        <div class="row">
-            <div class="col-lg-12">
-                <h2 class="page-header" id='judul'>
-                    Pemakai Aplikasi
-                </h2>
-				<ol class="breadcrumb">
-                    <li><a href="../../media.php">Menu Utama</a></li>
-					<li><a href="pemakai.php">Tabel Pemakai Aplikasi</a></li>
-					<li class="active">Edit Data</li>
-                </ol>				
-            </div>
-			<div class="col-lg-12">
-				<form id='my-form' class="form-horizontal" role="form">
-					<div class="col-lg-12">
-						<div class="col-lg-5">
-							<div class="form-group">
-								<label for="input_uid" class="col-sm-2 control-label">ID</label>
-								<div class="col-sm-10">
-									<input type="text" class="form-control" name="input_uid" id="input_uid" value='<?php echo $xuid;?>' disabled>
-								</div>
-							</div>
-							<div class="form-group">
-								<label for="input_uname" class="col-sm-2 control-label">Nama</label>
-								<div class="col-sm-10">
-									<input type="text" class="form-control" name="input_uname" id="input_uname" maxlength='30'>
-								</div>
-							</div>
-							<div class="form-group">
-								<label class="col-sm-2 control-label">Status</label>
-								<div class="col-sm-10">
-									<label class='checkbox-inline'><input type='checkbox' name='input_admin' id='input_admin' value="Y">Admin</label>
-									<label class='checkbox-inline'><input type='checkbox' name='input_hrd' id='input_hrd' value="Y">HRD</label>
-									<label class='checkbox-inline'><input type='checkbox' name='input_manager' id='input_manager' value="Y">Manager</label>
-									<label class='checkbox-inline'><input type='checkbox' name='input_supervisor' id='input_supervisor' value="Y">Supervisor</label>
-									<label class='checkbox-inline'><input type='checkbox' name='input_foreman' id='input_foreman' value="Y">Foreman</label>
-									<label class='checkbox-inline'><input type='checkbox' name='input_user' id='input_user' value='Y'>Indirect/User</label>
-								</div>
-							</div>
-							<div class="form-group">
-								<label for="input_sapaan" class="col-sm-2 control-label">Sapaan</label>
-								<div class="col-sm-10">
-									<select class="form-control" name='input_sapaan' id="input_sapaan">
-										<option value=''></option>
-										<option value='Bpk.'>Bpk.</option>
-										<option value='Ibu'>Ibu</option>
-										<option value='Mr.'>Mr.</option>
-										<option value='Mrs.'>Mrs.</option>
-										<option value='Miss'>Miss</option>
-									</select>
-								</div>
-							</div>
-							<div class="form-group">
-								<label for="input_seksi" class="col-sm-2 control-label">Seksi</label>
-								<div class="col-sm-10">
-									<select class="form-control" name='input_seksi' id="input_seksi">
-										<option value=''></option>
-										<?php
-												$query = mysqli_query($konek,"select seksi from data_karyawan group by seksi order by seksi");
-											while($fetch = mysqli_fetch_array($query)){
-												$psectnm=$fetch['seksi'];
-												echo "<option value='$psectnm'>$psectnm</option>";				
-											}
-										?>
-									</select>
-								</div>
-							</div>
-							<div class="form-group">
-								<label for="input_email" class="col-sm-2 control-label">e-Mail</label>
-								<div class="col-sm-10">
-									<input type="text" class="form-control" name="input_email" id="input_email" maxlength='50'>
-								</div>
-							</div>
-							<div class="form-group">
-								<br>
-								<div class="col-sm-offset-2 col-sm-10">
-									<button id='simpan' type="button" class="btn btn-primary">Simpan</button>
-									<button id='batal' type="button" class="btn btn-default">Kembali</button>
-									<input type="hidden" name="xloginid"  id="xloginid" value='<?php echo $id_pemakai; ?>' />
-									<input type="hidden" name="status_proses"  id="status_proses" value='edit' />
-									<input type="hidden" name="zuid"  id="zuid" value='<?php echo $xuid; ?>' />
-								</div>
-							</div>
-						</div>
-						<div class="col-lg-7">
-							<div class="panel-group" id="accordion">
-								<div class="panel panel-default">
-									<div class="panel-heading">
-										<h4 class="panel-title">
-											<a data-toggle="collapse" data-parent="#accordion" href="#collapse1">Tabel</a>
-										</h4>
-									</div>
-									<div id="collapse1" class="panel-collapse collapse">
-										<div class="panel-body">
-											<div class="col-lg-12">
-												<label class="checkbox"><input type="checkbox" name='tbl_glu' id='tbl_glu' value="Y">Gambar Layar Utama</label>
-												<label class="checkbox"><input type="checkbox" name='tbl_karyawan' id='tbl_karyawan' value="Y">Karyawan</label>
-												<label class="checkbox"><input type="checkbox" name='tbl_pemakai_aplikasi' id='tbl_pemakai_aplikasi' value="Y">Pemakai Aplikasi</label>
-											</div>
-										</div>
-									</div>
-								</div>
-								
-								<div class="panel panel-default">
-									<div class="panel-heading">
-										<h4 class="panel-title">
-											<a data-toggle="collapse" data-parent="#accordion" href="#collapse3">Transaksi</a>
-										</h4>
-									</div>
-									<div id="collapse3" class="panel-collapse collapse">
-										<div class="panel-body">
-											<div class="col-lg-12">
-												<div class="col-lg-4">Transaksi - Data Karyawan</div>
-												<div class="col-lg-8">
-													<label class="checkbox"><input type="checkbox" name='tran_data_karyawan' id='tran_data_karyawan' value="Y">Data Karyawan</label>
-												</div>
-											</div>
-											<div class="col-lg-12">
-												<div class="col-lg-4">Transaksi - Mutasi Karyawan</div>
-												<div class="col-lg-8">
-													<label class="checkbox"><input type="checkbox" name='tran_data_mutasi' id='tran_data_mutasi' value="Y">Mutasi Karyawan - regist</label>
-													<label class="checkbox"><input type="checkbox" name='tran_val_mutasi_mng_asal' id='tran_val_mutasi_mng_asal' value="Y">Mutasi Karyawan - Validasi Manager (Asal)</label>
-													<label class="checkbox"><input type="checkbox" name='tran_val_mutasi_mng_tujuan' id='tran_val_mutasi_mng_tujuan' value="Y">Mutasi Karyawan - Validasi Manager (Tujuan)</label>
-													<label class="checkbox"><input type="checkbox" name='tran_val_mutasi_sv_asal' id='tran_val_mutasi_sv_asal' value="Y">Mutasi Karyawan - Validasi Supervisor (Asal)</label>
-													<label class="checkbox"><input type="checkbox" name='tran_val_mutasi_sv_tujuan' id='tran_val_mutasi_sv_tujuan' value="Y">Mutasi Karyawan - Validasi Supervisor (Tujuan)</label>
-													<label class="checkbox"><input type="checkbox" name='tran_val_mutasi_hrd' id='tran_val_mutasi_hrd' value="Y">Mutasi Karyawan - Validasi HRD</label>
-												</div>
-											</div>
-											<div class="col-lg-12">
-												<div class="col-lg-4">Transaksi - Rotasi Karyawan</div>
-												<div class="col-lg-8">
-													<label class="checkbox"><input type="checkbox" name='tran_data_rotasi' id='tran_data_rotasi' value="Y">Rotasi Karyawan - regist</label>
-													<label class="checkbox"><input type="checkbox" name='tran_val_rotasi_mng' id='tran_val_rotasi_mng' value="Y">Rotasi Karyawan - Validasi Manager</label>
-													<label class="checkbox"><input type="checkbox" name='tran_val_rotasi_sv_asal' id='tran_val_rotasi_sv_asal' value="Y">Rotasi Karyawan - Validasi Supervisor (Asal)</label>
-													<label class="checkbox"><input type="checkbox" name='tran_val_rotasi_sv_tujuan' id='tran_val_rotasi_sv_tujuan' value="Y">Rotasi Karyawan - Validasi Supervisor (Tujuan)</label>
-													<label class="checkbox"><input type="checkbox" name='tran_val_rotasi_hrd' id='tran_val_rotasi_hrd' value="Y">Rotasi Karyawan - Validasi HRD</label>
-												</div>
-											</div>
-										</div>
-									</div>
-								</div>				
-							</div>				
-						</div>									
-					</div>
-				</form>
-			</div>
-        </div>
-	    <!-- /.row -->				
-		<br>
-		<br>
-    </div>
-    <!-- /.container -->
-
-    <script src="../../js/jquery.js"></script>
-    <script src="../../js/bootstrap.min.js"></script>
-	<script src="../../js/jquery.dataTables.js"></script>
-	<script src="../../js/dataTables.responsive.js"></script>
-	<script src="../../js/bootstrap-dialog.js"></script>
-	<script src="../../js/jquery-ui.js"></script>
-    <script>
-
-// fitur auto checklist penyesuaian
-		$(document).ready( function () {
-			bacadata($('#input_uid').val());		
-			function bacadata(e){
-				$.ajax({
-					type	: "POST",
-					url		: "pemakai_cari.php",
-					data	: "uid="+e,
-					//dataType : "json",				  
-					success	: function(data){	
-						var JSONObject = $.parseJSON("["+data+"]");
-					//	$("#zuid").val(JSONObject[0]["uid"]);
-						$("#input_uname").val(JSONObject[0]["uname"]);
-					//	$("#zuid").val(data.uid);
-												
-						if(JSONObject[0]["role"]=='admin'){
-							$("#tbl_glu").prop('checked',true);
-							$("#tbl_karyawan").prop('checked',true);
-							$("#tbl_pemakai_aplikasi").prop('checked',true);
-							
-							$("#tran_data_karyawan").prop('checked',true);
-			
-							$("#tran_data_mutasi").prop('checked',true);
-							$("#tran_val_mutasi_mng_asal").prop('checked',true);
-							$("#tran_val_mutasi_mng_tujuan").prop('checked',true);
-							$("#tran_val_mutasi_sv_asal").prop('checked',true);
-							$("#tran_val_mutasi_sv_tujuan").prop('checked',true);
-							$("#tran_val_mutasi_hrd").prop('checked',true);
-							
-							$("#tran_data_rotasi").prop('checked',true);
-							$("#tran_val_rotasi_mng").prop('checked',true);
-							$("#tran_val_rotasi_sv_asal").prop('checked',true);
-							$("#tran_val_rotasi_sv_tujuan").prop('checked',true);
-							$("#tran_val_rotasi_hrd").prop('checked',true);
-
-							$("#input_hrd").prop('checked',false);
-							$("#input_manager").prop('checked',false);
-							$("#input_supervisor").prop('checked',false);
-							$("#input_foreman").prop('checked',false);
-							$("#input_user").prop('checked',false);
-							$("#input_admin").prop('checked',true);
-						};
-						if(JSONObject[0]["role"]=='hrd'){
-								$("#tbl_glu").prop('checked',true);
-								$("#tbl_karyawan").prop('checked',true);
-								$("#tbl_pemakai_aplikasi").prop('checked',true);
-								
-								$("#tran_data_karyawan").prop('checked',true);
-			
-								$("#tran_data_mutasi").prop('checked',true);
-								$("#tran_val_mutasi_mng_asal").prop('checked',false);
-								$("#tran_val_mutasi_mng_tujuan").prop('checked',false);
-								$("#tran_val_mutasi_sv_asal").prop('checked',false);
-								$("#tran_val_mutasi_sv_tujuan").prop('checked',false);
-								$("#tran_val_mutasi_hrd").prop('checked',true);
-								
-								$("#tran_data_rotasi").prop('checked',true);
-								$("#tran_val_rotasi_mng").prop('checked',false);
-								$("#tran_val_rotasi_sv_asal").prop('checked',false);
-								$("#tran_val_rotasi_sv_tujuan").prop('checked',false);
-								$("#tran_val_rotasi_hrd").prop('checked',true);
-
-								$("#input_admin").prop('checked',false);
-								$("#input_manager").prop('checked',false);
-								$("#input_supervisor").prop('checked',false);
-								$("#input_foreman").prop('checked',false);
-								$("#input_user").prop('checked',false);	
-								$("#input_hrd").prop('checked',true);
-						};
-						if(JSONObject[0]["role"]=='manager'){
-								$("#tbl_glu").prop('checked',false);
-								$("#tbl_karyawan").prop('checked',false);
-								$("#tbl_pemakai_aplikasi").prop('checked',false);
-								
-								$("#tran_data_karyawan").prop('checked',true);
-			
-								$("#tran_data_mutasi").prop('checked',false);
-								$("#tran_val_mutasi_mng_asal").prop('checked',true);
-								$("#tran_val_mutasi_mng_tujuan").prop('checked',true);
-								$("#tran_val_mutasi_sv_asal").prop('checked',false);
-								$("#tran_val_mutasi_sv_tujuan").prop('checked',false);
-								$("#tran_val_mutasi_hrd").prop('checked',false);
-								
-								$("#tran_data_rotasi").prop('checked',false);
-								$("#tran_val_rotasi_mng").prop('checked',true);
-								$("#tran_val_rotasi_sv_asal").prop('checked',false);
-								$("#tran_val_rotasi_sv_tujuan").prop('checked',false);
-								$("#tran_val_rotasi_hrd").prop('checked',false);
-
-								$("#input_hrd").prop('checked',false);
-								$("#input_admin").prop('checked',false);
-								$("#input_supervisor").prop('checked',false);
-								$("#input_foreman").prop('checked',false);
-								$("#input_user").prop('checked',false);	
-								$("#input_manager").prop('checked',true);
-						};
-						if(JSONObject[0]["role"]=='supervisor'){
-								$("#tbl_glu").prop('checked',false);
-								$("#tbl_karyawan").prop('checked',false);
-								$("#tbl_pemakai_aplikasi").prop('checked',false);
-								
-								$("#tran_data_karyawan").prop('checked',false);
-			
-								$("#tran_data_mutasi").prop('checked',true);
-								$("#tran_val_mutasi_mng_asal").prop('checked',false);
-								$("#tran_val_mutasi_mng_tujuan").prop('checked',false);
-								$("#tran_val_mutasi_sv_asal").prop('checked',true);
-								$("#tran_val_mutasi_sv_tujuan").prop('checked',true);
-								$("#tran_val_mutasi_hrd").prop('checked',false);
-								
-								$("#tran_data_rotasi").prop('checked',true);
-								$("#tran_val_rotasi_mng").prop('checked',false);
-								$("#tran_val_rotasi_sv_asal").prop('checked',true);
-								$("#tran_val_rotasi_sv_tujuan").prop('checked',true);
-								$("#tran_val_rotasi_hrd").prop('checked',false);
-
-								$("#input_hrd").prop('checked',false);
-								$("#input_manager").prop('checked',false);
-								$("#input_admin").prop('checked',false);
-								$("#input_user").prop('checked',false);
-								$("#input_foreman").prop('checked',false);
-								$("#input_supervisor").prop('checked',true);	
-						};
-						if(JSONObject[0]["role"]=='foreman'){
-								$("#tbl_glu").prop('checked',false);
-								$("#tbl_karyawan").prop('checked',false);
-								$("#tbl_pemakai_aplikasi").prop('checked',false);
-								
-								$("#tran_data_karyawan").prop('checked',false);
-			
-								$("#tran_data_mutasi").prop('checked',true);
-								$("#tran_val_mutasi_mng_asal").prop('checked',false);
-								$("#tran_val_mutasi_mng_tujuan").prop('checked',false);
-								$("#tran_val_mutasi_sv_asal").prop('checked',true);
-								$("#tran_val_mutasi_sv_tujuan").prop('checked',true);
-								$("#tran_val_mutasi_hrd").prop('checked',false);
-								
-								$("#tran_data_rotasi").prop('checked',true);
-								$("#tran_val_rotasi_mng").prop('checked',false);
-								$("#tran_val_rotasi_sv_asal").prop('checked',true);
-								$("#tran_val_rotasi_sv_tujuan").prop('checked',true);
-								$("#tran_val_rotasi_hrd").prop('checked',false);
-
-								$("#input_hrd").prop('checked',false);
-								$("#input_manager").prop('checked',false);
-								$("#input_admin").prop('checked',false);
-								$("#input_user").prop('checked',false);
-								$("#input_foreman").prop('checked',true);
-								$("#input_supervisor").prop('checked',false);	
-						};
-						if(JSONObject[0]["role"]=='user'){
-								$("#tbl_glu").prop('checked',false);
-								$("#tbl_karyawan").prop('checked',false);
-								$("#tbl_pemakai_aplikasi").prop('checked',false);
-								
-								$("#trn_dk").prop('checked',true);
-								
-								$("#trn_mk_regist").prop('checked',true);
-								$("#trn_mk_vm_sl").prop('checked',false);
-								$("#trn_mk_vm_sb").prop('checked',false);
-								$("#trn_mk_vs").prop('checked',false);
-								$("#trn_mk_vf").prop('checked',false);
-								$("#trn_mk_vhrd").prop('checked',false);
-								
-								$("#trn_rk_regist").prop('checked',true);
-								$("#trn_rk_vm").prop('checked',false);
-								$("#trn_rk_vs").prop('checked',false);
-								$("#trn_rk_vf").prop('checked',false);
-								$("#trn_rk_vhrd").prop('checked',false);
-
-								$("#input_hrd").prop('checked',false);
-								$("#input_manager").prop('checked',false);
-								$("#input_supervisor").prop('checked',false);
-								$("#input_admin").prop('checked',false);
-								$("#input_foreman").prop('checked',false);
-								$("#input_user").prop('checked',true);		
-						};
-								
-						$("#input_sapaan").val(JSONObject[0]["sapaan"]);
-						$("#input_seksi").val(JSONObject[0]["seksi"]);
-						$("#input_email").val(JSONObject[0]["email_pembuat"]);
-						
-					}
-				});
-			};	
-			
-			$('#input_admin').change(function() {
-				if($(this).is(":checked")) {
-					$("#tbl_glu").prop('checked',true);
-					$("#tbl_karyawan").prop('checked',true);
-					$("#tbl_pemakai_aplikasi").prop('checked',true);
-										
-					$("#tran_data_karyawan").prop('checked',true);
-			
-					$("#tran_data_mutasi").prop('checked',true);
-					$("#tran_val_mutasi_mng_asal").prop('checked',true);
-					$("#tran_val_mutasi_mng_tujuan").prop('checked',true);
-					$("#tran_val_mutasi_sv_asal").prop('checked',true);
-					$("#tran_val_mutasi_sv_tujuan").prop('checked',true);
-					$("#tran_val_mutasi_hrd").prop('checked',true);
-					
-					$("#tran_data_rotasi").prop('checked',true);
-					$("#tran_val_rotasi_mng").prop('checked',true);
-					$("#tran_val_rotasi_sv_asal").prop('checked',true);
-					$("#tran_val_rotasi_sv_tujuan").prop('checked',true);
-					$("#tran_val_rotasi_hrd").prop('checked',true);
-
-					$("#input_hrd").prop('checked',false);
-					$("#input_manager").prop('checked',false);
-					$("#input_supervisor").prop('checked',false);
-					$("#input_foreman").prop('checked',false);
-					$("#input_user").prop('checked',false);
-				}       
-			});		
-			$('#input_hrd').change(function() {
-				if($(this).is(":checked")) {
-					$("#tbl_glu").prop('checked',true);
-					$("#tbl_karyawan").prop('checked',true);
-					$("#tbl_pemakai_aplikasi").prop('checked',true);
-					
-					$("#tran_data_karyawan").prop('checked',true);
-			
-					$("#tran_data_mutasi").prop('checked',true);
-					$("#tran_val_mutasi_mng_asal").prop('checked',false);
-					$("#tran_val_mutasi_mng_tujuan").prop('checked',false);
-					$("#tran_val_mutasi_sv_asal").prop('checked',false);
-					$("#tran_val_mutasi_sv_tujuan").prop('checked',false);
-					$("#tran_val_mutasi_hrd").prop('checked',true);
-					
-					$("#tran_data_rotasi").prop('checked',true);
-					$("#tran_val_rotasi_mng").prop('checked',false);
-					$("#tran_val_rotasi_sv_asal").prop('checked',false);
-					$("#tran_val_rotasi_sv_tujuan").prop('checked',false);
-					$("#tran_val_rotasi_hrd").prop('checked',true);
-
-					$("#input_admin").prop('checked',false);
-					$("#input_manager").prop('checked',false);
-					$("#input_supervisor").prop('checked',false);
-					$("#input_foreman").prop('checked',false);
-					$("#input_user").prop('checked',false);	
-				}       
-			});
-			$('#input_manager').change(function() {
-				if($(this).is(":checked")) {
-					$("#tbl_glu").prop('checked',false);
-					$("#tbl_karyawan").prop('checked',false);
-					$("#tbl_pemakai_aplikasi").prop('checked',false);
-					
-					$("#tran_data_karyawan").prop('checked',true);
-			
-					$("#tran_data_mutasi").prop('checked',false);
-					$("#tran_val_mutasi_mng_asal").prop('checked',true);
-					$("#tran_val_mutasi_mng_tujuan").prop('checked',true);
-					$("#tran_val_mutasi_sv_asal").prop('checked',false);
-					$("#tran_val_mutasi_sv_tujuan").prop('checked',false);
-					$("#tran_val_mutasi_hrd").prop('checked',false);
-					
-					$("#tran_data_rotasi").prop('checked',false);
-					$("#tran_val_rotasi_mng").prop('checked',true);
-					$("#tran_val_rotasi_sv_asal").prop('checked',false);
-					$("#tran_val_rotasi_sv_tujuan").prop('checked',false);
-					$("#tran_val_rotasi_hrd").prop('checked',false);
-
-					$("#input_hrd").prop('checked',false);
-					$("#input_admin").prop('checked',false);
-					$("#input_supervisor").prop('checked',false);
-					$("#input_foreman").prop('checked',false);
-					$("#input_user").prop('checked',false);	
-				}       
-			});
-			$('#input_supervisor').change(function() {
-				if($(this).is(":checked")) {
-					$("#tbl_glu").prop('checked',false);
-					$("#tbl_karyawan").prop('checked',false);
-					$("#tbl_pemakai_aplikasi").prop('checked',false);
-					
-					$("#tran_data_karyawan").prop('checked',false);
-			
-					$("#tran_data_mutasi").prop('checked',true);
-					$("#tran_val_mutasi_mng_asal").prop('checked',false);
-					$("#tran_val_mutasi_mng_tujuan").prop('checked',false);
-					$("#tran_val_mutasi_sv_asal").prop('checked',true);
-					$("#tran_val_mutasi_sv_tujuan").prop('checked',true);
-					$("#tran_val_mutasi_hrd").prop('checked',false);
-					
-					$("#tran_data_rotasi").prop('checked',true);
-					$("#tran_val_rotasi_mng").prop('checked',false);
-					$("#tran_val_rotasi_sv_asal").prop('checked',true);
-					$("#tran_val_rotasi_sv_tujuan").prop('checked',true);
-					$("#tran_val_rotasi_hrd").prop('checked',false);
-
-					$("#input_hrd").prop('checked',false);
-					$("#input_manager").prop('checked',false);
-					$("#input_foreman").prop('checked',false);
-					$("#input_admin").prop('checked',false);
-					$("#input_user").prop('checked',false);	
-				}      
-			});
-			$('#input_foreman').change(function() {
-				if($(this).is(":checked")) {
-					$("#tbl_glu").prop('checked',false);
-					$("#tbl_karyawan").prop('checked',false);
-					$("#tbl_pemakai_aplikasi").prop('checked',false);
-					
-					$("#tran_data_karyawan").prop('checked',false);
-			
-					$("#tran_data_mutasi").prop('checked',true);
-					$("#tran_val_mutasi_mng_asal").prop('checked',false);
-					$("#tran_val_mutasi_mng_tujuan").prop('checked',false);
-					$("#tran_val_mutasi_sv_asal").prop('checked',true);
-					$("#tran_val_mutasi_sv_tujuan").prop('checked',true);
-					$("#tran_val_mutasi_hrd").prop('checked',false);
-					
-					$("#tran_data_rotasi").prop('checked',true);
-					$("#tran_val_rotasi_mng").prop('checked',false);
-					$("#tran_val_rotasi_sv_asal").prop('checked',true);
-					$("#tran_val_rotasi_sv_tujuan").prop('checked',true);
-					$("#tran_val_rotasi_hrd").prop('checked',false);
-
-					$("#input_hrd").prop('checked',false);
-					$("#input_manager").prop('checked',false);
-					$("#input_supervisor").prop('checked',false);
-					$("#input_admin").prop('checked',false);
-					$("#input_user").prop('checked',false);	
-				}      
-			});
-			$('#input_user').change(function() {
-				if($(this).is(":checked")) {
-					$("#tbl_glu").prop('checked',false);
-					$("#tbl_karyawan").prop('checked',false);
-					$("#tbl_pemakai_aplikasi").prop('checked',false);
-					
-					$("#tran_data_karyawan").prop('checked',false);
-			
-					$("#tran_data_mutasi").prop('checked',true);
-					$("#tran_val_mutasi_mng_asal").prop('checked',false);
-					$("#tran_val_mutasi_mng_tujuan").prop('checked',false);
-					$("#tran_val_mutasi_sv_asal").prop('checked',false);
-					$("#tran_val_mutasi_sv_tujuan").prop('checked',false);
-					$("#tran_val_mutasi_hrd").prop('checked',false);
-					
-					$("#tran_data_rotasi").prop('checked',true);
-					$("#tran_val_rotasi_mng").prop('checked',false);
-					$("#tran_val_rotasi_sv_asal").prop('checked',false);
-					$("#tran_val_rotasi_sv_tujuan").prop('checked',false);
-					$("#tran_val_rotasi_hrd").prop('checked',false);
-
-					$("#input_hrd").prop('checked',false);
-					$("#input_manager").prop('checked',false);
-					$("#input_supervisor").prop('checked',false);
-					$("#input_foreman").prop('checked',false);
-					$("#input_admin").prop('checked',false);	
-				}       
-			});
-			
-			$('#input_sapaan').change(function() {
-				$("#input_seksi").focus();
-			});
-			$('#input_seksi').change(function() {
-				$("#input_email").focus();
-			});	
-			
-			$('#batal').on('click', function(event) {
-				window.history.back();
-			});
-			
-			$('#input_uname').keydown(function(e) {if (e.keyCode == 13) {e.preventDefault();$('#input_sapaan').focus();}});
-			
-			$('#simpan').on('click', function(event) {
-				var input_uid=$.trim($('#input_uid').val());
-				var input_uname=$.trim($('#input_uname').val());
-				var input_sapaan=$.trim($('#input_sapaan').val());
-				var input_seksi=$.trim($('#input_seksi').val());
-				var input_email=$.trim($('#input_email').val());
-				if($('#input_ldap').is(":checked")) {
-					var input_ldap = "Y";
-				}else{
-					var input_ldap = "N";
-					if(input_uname.length==0){
-						BootstrapDialog.show({
-							type: BootstrapDialog.TYPE_WARNING,
-							title: 'Konfirmasi Simpan: ',
-							message: 'Nama Pemakai tidak boleh kosong',
-							buttons: [{
-								label: 'OK',
-								action: function(dialogRef){
-									dialogRef.close();
-									$("#input_uname").focus();
-								}
-							}]
-						});
-						return false;												
-					}
-				}
-				
-				if(input_sapaan.length==0){
-					BootstrapDialog.show({
-						type: BootstrapDialog.TYPE_WARNING,
-						title: 'Konfirmasi Simpan: ',
-						message: 'Sapaan tidak boleh kosong',
-						buttons: [{
-							label: 'OK',
-							action: function(dialogRef){
-								dialogRef.close();
-								$("#input_sapaan").focus();
-							}
-						}]
-					});
-					return false;
-				}
-
-				if(input_seksi.length==0){
-					BootstrapDialog.show({
-						type: BootstrapDialog.TYPE_WARNING,
-						title: 'Konfirmasi Simpan: ',
-						message: 'Seksi tidak boleh kosong',
-						buttons: [{
-							label: 'OK',
-							action: function(dialogRef){
-								dialogRef.close();
-								$("#input_seksi").focus();
-							}
-						}]
-					});
-					return false;
-				}
-
-				if(input_email.length==0){
-					BootstrapDialog.show({
-						type: BootstrapDialog.TYPE_WARNING,
-						title: 'Konfirmasi Simpan: ',
-						message: 'E-mail tidak boleh kosong',
-						buttons: [{
-							label: 'OK',
-							action: function(dialogRef){
-								dialogRef.close();
-								$("#input_email").focus();
-							}
-						}]
-					});
-					return false;
-				}
-				
-				$("#input_uid").prop("disabled",false);
-				$("#input_uname").prop("disabled",false);
-				var string = $("#my-form").serialize();
-				
-				$.ajax({
-					type	: "POST",
-					url		: "pemakai_simpan.php",  
-					data	: string,
-					success	: function(data){
-						if(data=='Proses edit data berhasil dilakukan'){
-							BootstrapDialog.show({
-								type: BootstrapDialog.TYPE_INFO,
-								title: 'Konfirmasi Edit: ',
-								message: 'Proses edit data berhasil dilakukan'
-							});
-							window.setTimeout( function(){window.history.back();}, 2000 );
-						}else{
-							BootstrapDialog.show({
-								type: BootstrapDialog.TYPE_INFO,
-								title: 'Konfirmasi Tambah: ',
-								message: data
-							});
-							window.setTimeout( function(){window.open("pemakai.php",'_self',false);}, 2000 );
-						}				
-					}
-				});		
-			});
-			
-		});		
-    </script>
+<body>
+<nav class="navbar navbar-default navbar-fixed-top">
+<div class="container-fluid">
+<div class="navbar-header"><a class="navbar-brand" href="../../media.php"><img src="../../images/toto.png"></a></div>
+<ul class="nav navbar-nav navbar-left"><li><a href="pemakai.php"><i class="fa fa-arrow-left"></i> Tabel Pemakai QA</a></li></ul>
+<ul class="nav navbar-nav navbar-right"><li><a><i class="fa fa-user"></i> <?php echo htmlspecialchars($nama_pemakai, ENT_QUOTES); ?></a></li><li><a href="../../logout.php">Logout</a></li></ul>
+</div>
+</nav>
+<div class="container">
+<div class="card">
+<h3 class="form-title">Edit User QA</h3>
+<p class="text-muted">Kelola identitas dan hak akses user QA.</p>
+<form id="formUser">
+<input type="hidden" name="status_proses" value="edit">
+<input type="hidden" name="zuid" value="<?php echo htmlspecialchars($user['uid'], ENT_QUOTES); ?>">
+<input type="hidden" name="xloginid" value="<?php echo htmlspecialchars($id_pemakai, ENT_QUOTES); ?>">
+<div class="row">
+<div class="col-md-6">
+<div class="form-group"><label>ID User</label><input class="form-control" value="<?php echo htmlspecialchars($user['uid'], ENT_QUOTES); ?>" readonly></div>
+<div class="form-group"><label>Nama *</label><input class="form-control" name="input_uname" value="<?php echo htmlspecialchars($user['uname'], ENT_QUOTES); ?>" required></div>
+<div class="form-group"><label>Sapaan</label><select class="form-control" name="input_sapaan"><option value="">-</option><?php foreach(['Bpk.','Ibu','Mr.','Mrs.','Miss'] as $s){?><option value="<?php echo $s; ?>" <?php echo ($user['sapaan'] === $s ? 'selected' : ''); ?>><?php echo $s; ?></option><?php } ?></select></div>
+<div class="form-group"><label>Seksi</label><input class="form-control" name="input_seksi" value="<?php echo htmlspecialchars($user['seksi'] ?? '', ENT_QUOTES); ?>"></div>
+<div class="form-group"><label>E-mail</label><input type="email" class="form-control" name="input_email" value="<?php echo htmlspecialchars($user['email_pembuat'] ?? '', ENT_QUOTES); ?>"></div>
+</div>
+<div class="col-md-6">
+<div class="flag-box">
+<h4 style="margin-top:0">Hak Akses QA</h4>
+<label class="checkbox"><input type="checkbox" name="input_admin" value="Y" <?php echo strtoupper((string)$user['admin'])==='Y'?'checked':''; ?>> <b>Admin QA</b></label>
+<label class="checkbox"><input type="checkbox" name="input_pembuat" value="Y" <?php echo strtoupper((string)$user['pembuat'])==='Y'?'checked':''; ?>> <b>Pembuat</b> — Check / Update QA</label>
+<label class="checkbox"><input type="checkbox" name="input_pemeriksa" value="Y" <?php echo strtoupper((string)$user['pemeriksa'])==='Y'?'checked':''; ?>> <b>Pemeriksa</b> — validasi tahap pemeriksa</label>
+<label class="checkbox"><input type="checkbox" name="input_penyetuju" value="Y" <?php echo strtoupper((string)$user['penyetuju'])==='Y'?'checked':''; ?>> <b>Penyetuju</b> — validasi tahap penyetuju</label>
+<label class="checkbox"><input type="checkbox" name="input_block" value="Y" <?php echo strtoupper((string)$user['block'])==='Y'?'checked':''; ?>> <b>Block</b> — tidak dapat login</label>
+</div>
+<div class="form-group" style="margin-top:15px"><label>Role</label><select class="form-control" name="input_role"><option value="QA" <?php echo strtolower((string)$user['role']) !== 'admin' ? 'selected' : ''; ?>>QA</option><option value="admin" <?php echo strtolower((string)$user['role']) === 'admin' ? 'selected' : ''; ?>>admin</option></select></div>
+<div class="btn-row"><button type="button" id="simpan" class="btn btn-primary"><i class="fa fa-save"></i> Simpan</button> <button type="button" id="batal" class="btn btn-default"><i class="fa fa-arrow-left"></i> Kembali</button></div>
+</div>
+</div>
+</form>
+</div>
+</div>
+<script src="../../js/jquery.js"></script><script src="../../js/bootstrap.min.js"></script><script src="../../js/bootstrap-dialog.js"></script>
+<script>
+$(function(){
+  $('#batal').on('click',function(){window.location.href='pemakai.php';});
+  $('#simpan').on('click',function(){
+    var f=$('#formUser')[0]; if(!f.checkValidity()){f.reportValidity();return;}
+    var b=$(this).prop('disabled',true);
+    $.post('pemakai_simpan.php',$('#formUser').serialize(),function(r){
+      if(r.status==='success'){
+        BootstrapDialog.alert({title:'Berhasil',type:BootstrapDialog.TYPE_SUCCESS,message:r.message,callback:function(){window.location.href='pemakai.php';}});
+      }else{
+        b.prop('disabled',false); BootstrapDialog.alert({title:'Gagal',type:BootstrapDialog.TYPE_DANGER,message:r.message||'Gagal memperbarui user.'});
+      }
+    },'json').fail(function(x){b.prop('disabled',false);BootstrapDialog.alert({title:'Gagal',type:BootstrapDialog.TYPE_DANGER,message:x.responseText||'Request gagal.'});});
+  });
+});
+</script>
 </body>
-
 </html>
-

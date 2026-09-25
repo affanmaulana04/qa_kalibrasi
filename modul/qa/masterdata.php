@@ -1,537 +1,482 @@
-﻿<?php
+<?php
 session_start();
-if ($_SESSION['login'] == 0) { header('location: ../../logout.php'); exit(); }
+if (empty($_SESSION['login'])) {
+    header('location: ../../logout.php');
+    exit();
+}
 include "../../inc/inc_koneksi.php";
 
-$nama_petugas = isset($_SESSION['nama_lengkap']) ? $_SESSION['nama_lengkap'] : $_SESSION['userid'];
+$nama_petugas = isset($_SESSION['nama_lengkap']) && $_SESSION['nama_lengkap'] !== ''
+    ? $_SESSION['nama_lengkap'] : ($_SESSION['userid'] ?? '');
+$id_pemakai = $_SESSION['userid'] ?? '';
+$role = strtolower(trim((string)($_SESSION['role'] ?? '')));
+$is_admin = strtoupper((string)($_SESSION['admin'] ?? 'N')) === 'Y' || $role === 'admin';
 
-mysqli_query($konek, "CREATE TABLE IF NOT EXISTS qa_alat_rusak LIKE qa_part");
-
-// Query Master Seksi untuk Dropdown Filter
-$q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_seksi ASC");
-
-// Tangkap Filter
-$filter_seksi = isset($_GET['seksi']) ? mysqli_real_escape_string($konek, $_GET['seksi']) : 'ALL';
-$filter_status = isset($_GET['status']) ? $_GET['status'] : 'aktif';
-$filter_waktu = isset($_GET['waktu']) ? $_GET['waktu'] : 'semua';
-
-$val_harian = isset($_GET['tgl_harian']) ? $_GET['tgl_harian'] : date('Y-m-d');
-$val_mingguan = isset($_GET['tgl_mingguan']) ? $_GET['tgl_mingguan'] : date('Y-\WW');
-$val_bulanan = isset($_GET['tgl_bulanan']) ? $_GET['tgl_bulanan'] : date('Y-m');
-$val_tahunan = isset($_GET['tgl_tahunan']) ? $_GET['tgl_tahunan'] : date('Y');
-
-$table = ($filter_status == 'rusak') ? 'qa_alat_rusak' : 'qa_part';
-$date_col = ($filter_status == 'rusak') ? 'DATE(updated_at)' : 'jadwal_kalibrasi';
-
-$where = "1=1";
-if ($filter_seksi !== 'ALL') {
-    $where .= " AND seksi_pemilik = '$filter_seksi'";
+function h($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
+function esc($db, $v) { return mysqli_real_escape_string($db, (string)$v); }
+function safeTable($table) { return preg_replace('/[^a-z0-9_]/i', '', $table); }
+function finalStatusFromTable($table) {
+    return [
+        'qa_part' => 'OK',
+        'qa_alat_ng' => 'NOT GOOD',
+        'qa_alat_rusak' => 'RUSAK',
+        'qa_alat_discontinue' => 'DISCONTINUE',
+        'qa_alat_ditarik' => 'DITARIK MECHANICAL',
+    ][$table] ?? '';
+}
+function originalNoPartFromArchive($no) {
+    return preg_replace('/_(?:NOTGOOD|RUSAK|DISCONTINUE|DITARIK)_\d{10,14}$/i','',$no);
 }
 
-if ($filter_waktu == 'harian') {
-    $where .= " AND $date_col = '$val_harian'";
-} elseif ($filter_waktu == 'mingguan') {
-    $y = substr($val_mingguan, 0, 4);
-    $w = substr($val_mingguan, 6, 2);
-    $where .= " AND YEAR($date_col) = '$y' AND WEEKOFYEAR($date_col) = '$w'";
-} elseif ($filter_waktu == 'bulanan') {
-    $y = substr($val_bulanan, 0, 4);
-    $m = substr($val_bulanan, 5, 2);
-    $where .= " AND YEAR($date_col) = '$y' AND MONTH($date_col) = '$m'";
-} elseif ($filter_waktu == 'tahunan') {
-    $where .= " AND YEAR($date_col) = '$val_tahunan'";
+/* Semua tabel arsip QA dibuat seperti qa_part jika belum tersedia.
+   Tidak memakai INFORMATION_SCHEMA/PREPARE agar aman untuk phpMyAdmin lokal. */
+foreach (['qa_alat_ng','qa_alat_rusak','qa_alat_discontinue','qa_alat_ditarik'] as $archiveTable) {
+    @mysqli_query($konek, "CREATE TABLE IF NOT EXISTS `$archiveTable` LIKE `qa_part`");
+}
+@mysqli_query($konek, "CREATE TABLE IF NOT EXISTS qa_laporan_transaksi (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    jenis_transaksi VARCHAR(40) NOT NULL,
+    periode_key VARCHAR(30) NOT NULL,
+    periode_label VARCHAR(120) NOT NULL,
+    status_validasi VARCHAR(40) NOT NULL DEFAULT 'menunggu_pemeriksa',
+    created_by VARCHAR(100) NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NULL,
+    payload_json LONGTEXT NULL,
+    UNIQUE KEY uq_jenis_periode (jenis_transaksi, periode_key),
+    INDEX idx_status (status_validasi),
+    INDEX idx_periode (periode_key)
+)");
+@mysqli_query($konek, "CREATE TABLE IF NOT EXISTS qa_laporan_validasi (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    laporan_id INT NOT NULL,
+    tahap ENUM('pemeriksa','penyetuju') NOT NULL,
+    keputusan ENUM('setuju','tolak') NOT NULL,
+    nama_validator VARCHAR(100) NOT NULL,
+    keterangan VARCHAR(500) NULL,
+    created_at DATETIME NOT NULL,
+    INDEX idx_laporan (laporan_id)
+)");
+
+// ------------------------ FILTER ------------------------
+$filter_seksi  = $_GET['seksi'] ?? 'ALL';
+$filter_status = $_GET['status'] ?? 'ALL';
+$filter_waktu  = $_GET['waktu'] ?? 'daftar';
+if (!in_array($filter_waktu, ['daftar','harian','bulanan','tahunan'], true)) $filter_waktu = 'daftar';
+
+$today = date('Y-m-d');
+$val_harian  = $_GET['tgl_harian'] ?? $today;
+$val_bulanan = $_GET['tgl_bulanan'] ?? date('Y-m');
+$val_tahunan = $_GET['tgl_tahunan'] ?? date('Y');
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $val_harian)) $val_harian = $today;
+if (!preg_match('/^\d{4}-\d{2}$/', $val_bulanan)) $val_bulanan = date('Y-m');
+if (!preg_match('/^\d{4}$/', $val_tahunan)) $val_tahunan = date('Y');
+
+$selectedYear = (int)substr($val_bulanan, 0, 4);
+$selectedMonth = (int)substr($val_bulanan, 5, 2);
+$daysInMonth = cal_days_in_month(CAL_GREGORIAN, $selectedMonth, $selectedYear);
+
+/* Hari libur Indonesia yang ditandai sebagai tanggal merah/cuti bersama.
+ * Sabtu dan Minggu otomatis ditandai untuk semua tahun.
+ * Daftar 2026 mengikuti SKB 3 Menteri Tahun 2026.
+ */
+$holidayDates = [
+    '2026-01-01' => 'Tahun Baru 2026',
+    '2026-01-16' => 'Isra Mikraj Nabi Muhammad SAW',
+    '2026-02-16' => 'Cuti Bersama Tahun Baru Imlek',
+    '2026-02-17' => 'Tahun Baru Imlek 2577 Kongzili',
+    '2026-03-18' => 'Cuti Bersama Hari Suci Nyepi',
+    '2026-03-19' => 'Hari Suci Nyepi',
+    '2026-03-20' => 'Cuti Bersama Idul Fitri',
+    '2026-03-21' => 'Idul Fitri 1447 H',
+    '2026-03-22' => 'Idul Fitri 1447 H',
+    '2026-03-23' => 'Cuti Bersama Idul Fitri',
+    '2026-03-24' => 'Cuti Bersama Idul Fitri',
+    '2026-04-03' => 'Wafat Yesus Kristus',
+    '2026-04-05' => 'Kebangkitan Yesus Kristus (Paskah)',
+    '2026-05-01' => 'Hari Buruh Internasional',
+    '2026-05-14' => 'Kenaikan Yesus Kristus',
+    '2026-05-15' => 'Cuti Bersama Kenaikan Yesus Kristus',
+    '2026-05-27' => 'Idul Adha 1447 H',
+    '2026-05-28' => 'Cuti Bersama Idul Adha',
+    '2026-05-31' => 'Hari Raya Waisak 2570 BE',
+    '2026-06-01' => 'Hari Lahir Pancasila',
+    '2026-06-16' => 'Tahun Baru Islam 1448 H',
+    '2026-08-17' => 'Proklamasi Kemerdekaan RI',
+    '2026-08-25' => 'Maulid Nabi Muhammad SAW',
+    '2026-12-24' => 'Cuti Bersama Natal',
+    '2026-12-25' => 'Hari Raya Natal',
+
+    '2027-01-01' => 'Tahun Baru 2027',
+    '2027-01-05' => 'Isra Mikraj Nabi Muhammad SAW',
+    '2027-02-05' => 'Cuti Bersama Tahun Baru Imlek',
+    '2027-02-06' => 'Tahun Baru Imlek 2578 Kongzili',
+    '2027-03-08' => 'Hari Suci Nyepi',
+    '2027-03-09' => 'Cuti Bersama Idul Fitri',
+    '2027-03-10' => 'Idul Fitri 1448 H',
+    '2027-03-11' => 'Idul Fitri 1448 H',
+    '2027-03-12' => 'Cuti Bersama Idul Fitri',
+    '2027-03-15' => 'Cuti Bersama Idul Fitri',
+    '2027-03-25' => 'Cuti Bersama Wafat Yesus Kristus',
+    '2027-03-26' => 'Wafat Yesus Kristus',
+    '2027-03-28' => 'Kebangkitan Yesus Kristus (Paskah)',
+    '2027-05-01' => 'Hari Buruh Internasional',
+    '2027-05-06' => 'Kenaikan Yesus Kristus',
+    '2027-05-17' => 'Idul Adha 1448 H',
+    '2027-05-18' => 'Cuti Bersama Idul Adha',
+    '2027-05-19' => 'Cuti Bersama Hari Raya Waisak',
+    '2027-05-20' => 'Hari Raya Waisak 2571 BE',
+    '2027-06-01' => 'Hari Lahir Pancasila',
+    '2027-06-06' => 'Tahun Baru Islam 1449 H',
+    '2027-08-15' => 'Maulid Nabi Muhammad SAW',
+    '2027-08-17' => 'Proklamasi Kemerdekaan RI',
+    '2027-12-24' => 'Cuti Bersama Natal',
+    '2027-12-25' => 'Hari Raya Natal',
+    '2027-12-26' => 'Isra Mikraj Nabi Muhammad SAW'
+];
+
+function holidayClassForDate($date, $holidayDates) {
+    $ts = strtotime($date);
+    $isWeekend = $ts !== false && (int)date('N', $ts) >= 6;
+    return ($isWeekend || isset($holidayDates[$date])) ? 'holiday-col' : '';
 }
 
-$query = mysqli_query($konek, "SELECT * FROM $table WHERE $where ORDER BY seksi_pemilik ASC, $date_col ASC");
-$data_grouped = [];
-while($r = mysqli_fetch_assoc($query)) {
-    $data_grouped[$r['seksi_pemilik']][] = $r;
+function holidayTitleForDate($date, $holidayDates) {
+    if (isset($holidayDates[$date])) return $holidayDates[$date];
+    $ts = strtotime($date);
+    if ($ts !== false) {
+        $n = (int)date('N', $ts);
+        if ($n === 6) return 'Sabtu';
+        if ($n === 7) return 'Minggu';
+    }
+    return '';
 }
 
-// Persiapan Array Unified untuk Cetak (Biar tidak pisah halaman per seksi mubazir)
-$print_rows = [];
-$no_urut_print = 1;
-foreach($data_grouped as $seksi => $items) {
-    // Masukkan Header Seksi
-    $print_rows[] = ['type' => 'header', 'text' => 'SEKSI PEMILIK: ' . strtoupper($seksi)];
-    // Masukkan Data
-    foreach($items as $r) {
-        $print_rows[] = ['type' => 'data', 'row' => $r, 'no' => $no_urut_print];
-        $no_urut_print++;
+$statusOptions = ['ALL'=>'Semua Kondisi','OK'=>'OK (Aktif)','NOT GOOD'=>'NOT GOOD','RUSAK'=>'RUSAK','DISCONTINUE'=>'DISCONTINUE','DITARIK MECHANICAL'=>'DITARIK MECHANICAL','MENUNGGU VALIDASI'=>'Menunggu Validasi','DITOLAK VALIDASI'=>'Ditolak Validasi'];
+
+$q_seksi = mysqli_query($konek, "SELECT nama_seksi FROM qa_seksi_master ORDER BY nama_seksi ASC");
+$seksiOptions = [];
+if ($q_seksi) while ($s = mysqli_fetch_assoc($q_seksi)) $seksiOptions[] = $s['nama_seksi'];
+
+/* ------------------------ MASTER ALAT ------------------------
+ * Satu sumber daftar alat: qa_part + empat tabel arsip.
+ * Petugas diambil dari user yang melakukan registrasi awal
+ * (riwayat nomor QA-REG-...), karena qa_part tidak menyimpan created_by.
+ */
+$masterRows = [];
+$tables = ['qa_part','qa_alat_ng','qa_alat_rusak','qa_alat_discontinue','qa_alat_ditarik'];
+foreach ($tables as $t) {
+    $status = finalStatusFromTable($t);
+    $sql = "SELECT p.*,
+            (SELECT q0.created_by FROM qa_pengecekan q0
+             WHERE q0.no_part = p.no_part AND q0.nomor_pengecekan LIKE 'QA-REG-%'
+             ORDER BY q0.id ASC LIMIT 1) AS petugas_daftar
+            FROM `$t` p ORDER BY p.seksi_pemilik ASC, p.nama_part ASC, p.no_part ASC";
+    $q = mysqli_query($konek, $sql);
+    if (!$q) continue;
+    while ($r = mysqli_fetch_assoc($q)) {
+        // Untuk arsip, created_by registrasi awal masih berada di histori dengan nomor asli.
+        if (empty($r['petugas_daftar']) && $t !== 'qa_part') {
+            $orig = originalNoPartFromArchive((string)$r['no_part']);
+            $origEsc = esc($konek,$orig);
+            $qReg = mysqli_query($konek, "SELECT created_by FROM qa_pengecekan WHERE no_part='$origEsc' AND nomor_pengecekan LIKE 'QA-REG-%' ORDER BY id ASC LIMIT 1");
+            if ($qReg && ($rr=mysqli_fetch_assoc($qReg))) $r['petugas_daftar']=$rr['created_by'];
+        }
+        $r['_table'] = $t;
+        $r['_final_status'] = $status;
+        $masterRows[] = $r;
     }
 }
 
-// Pagination Kertas Print (Max 20 Baris per kertas)
-$batas_baris = 20;
-if(count($print_rows) == 0) {
-    $chunks = [ [] ]; // Minimal 1 kertas kosong kalau ga ada data
-    $total_hal = 1;
-} else {
-    $chunks = array_chunk($print_rows, $batas_baris);
-    $total_hal = count($chunks);
+/* Latest validation/result per nomor alat. */
+$latestByNo = [];
+$approvedByNo = [];
+$qLatest = mysqli_query($konek, "SELECT q.* FROM qa_pengecekan q
+    INNER JOIN (SELECT no_part, MAX(id) max_id FROM qa_pengecekan GROUP BY no_part) z
+        ON z.no_part=q.no_part AND z.max_id=q.id");
+if ($qLatest) {
+    while ($q = mysqli_fetch_assoc($qLatest)) $latestByNo[$q['no_part']] = $q;
+}
+$qApproved = mysqli_query($konek, "SELECT q.* FROM qa_pengecekan q
+    INNER JOIN (SELECT no_part, MAX(id) max_id FROM qa_pengecekan WHERE status_validasi='final_disetujui' GROUP BY no_part) z
+        ON z.no_part=q.no_part AND z.max_id=q.id");
+if ($qApproved) {
+    while ($q = mysqli_fetch_assoc($qApproved)) $approvedByNo[$q['no_part']] = $q;
 }
 
-// Persiapan Tanggal Cetak Indonesia
-$bulan_indo = array (1 => 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember');
-$tgl_sekarang = date('d') . ' ' . $bulan_indo[(int)date('m')] . ' ' . date('Y');
+function displayMasterStatus($master, $latestByNo) {
+    $no = (string)($master['no_part'] ?? '');
+    $final = (string)($master['_final_status'] ?? '');
+    $latest = $latestByNo[$no] ?? null;
+    if ($latest) {
+        $sv = strtolower((string)($latest['status_validasi'] ?? ''));
+        if ($sv === 'menunggu_pemeriksa' || $sv === 'menunggu_penyetuju') return 'MENUNGGU VALIDASI';
+        if ($sv === 'ditolak_pemeriksa' || $sv === 'ditolak_penyetuju') return 'DITOLAK VALIDASI';
+        if ($sv === 'final_disetujui') return $final !== '' ? $final : 'OK';
+    }
+    return $final !== '' ? $final : 'OK';
+}
+function statusMatches($rowStatus, $filterStatus) {
+    return $filterStatus === 'ALL' || strtoupper($rowStatus) === strtoupper($filterStatus);
+}
+function isNegativeMasterStatus($status) {
+    $s = strtoupper(trim((string)$status));
+    return in_array($s, ['RUSAK','DISCONTINUE','DITARIK MECHANICAL','NOT GOOD'], true);
+}
+function masterColValue($row, $keys, $fallback='') {
+    foreach ((array)$keys as $k) {
+        if (isset($row[$k]) && trim((string)$row[$k]) !== '') return $row[$k];
+    }
+    return $fallback;
+}
+
+$filteredMasters = [];
+foreach ($masterRows as $r) {
+    $r['_display_status'] = displayMasterStatus($r, $latestByNo);
+    if ($filter_seksi !== 'ALL' && strtoupper((string)$r['seksi_pemilik']) !== strtoupper((string)$filter_seksi)) continue;
+    if (!statusMatches($r['_display_status'], $filter_status)) continue;
+    $filteredMasters[] = $r;
+}
+
+/* ------------------------ REPORT EVENT SOURCES ------------------------
+ * Rencana (R): current active schedule + historical schedule date from QA checks.
+ * Aktual (H): only after BOTH validators approve (final_disetujui).
+ * This avoids filling H when an operator has only submitted the result.
+ */
+function buildPlanEvents($konek, $masterByNo, $latestByNo) {
+    $events = [];
+    foreach ($masterByNo as $no => $m) {
+        if (($m['_table'] ?? '') === 'qa_part' && !empty($m['jadwal_kalibrasi'])) {
+            $d = substr((string)$m['jadwal_kalibrasi'],0,10);
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $d)) {
+                $events[$no.'|'.$d] = [
+                    'no_part'=>$no, 'nama_part'=>$m['nama_part'], 'seksi'=>$m['seksi_pemilik'],
+                    'spesifikasi'=>$m['spesifikasi'] ?? ($m['ukuran'] ?? ''), 'resolusi'=>$m['resolusi'] ?? '',
+                    'periode'=>$m['periode_kalibrasi'] ?? '', 'plan_date'=>$d, 'status'=>$m['_final_status'],
+                    'petugas'=>$m['petugas_daftar'] ?? '-'
+                ];
+            }
+        }
+    }
+    $q = mysqli_query($konek, "SELECT q.* FROM qa_pengecekan q WHERE q.tanggal_jadwal_saat_pengecekan IS NOT NULL AND q.tanggal_jadwal_saat_pengecekan <> '' ORDER BY q.id ASC");
+    if ($q) {
+        while ($x = mysqli_fetch_assoc($q)) {
+            $d = substr((string)$x['tanggal_jadwal_saat_pengecekan'],0,10);
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $d)) continue;
+            $no = $x['no_part'] ?? '';
+            if (!isset($masterByNo[$no])) continue;
+            $m = $masterByNo[$no];
+            $events[$no.'|'.$d] = [
+                'no_part'=>$no, 'nama_part'=>$m['nama_part'], 'seksi'=>$m['seksi_pemilik'],
+                'spesifikasi'=>$m['spesifikasi'] ?? ($m['ukuran'] ?? ''), 'resolusi'=>$m['resolusi'] ?? '',
+                'periode'=>$m['periode_kalibrasi'] ?? '', 'plan_date'=>$d, 'status'=>$m['_final_status'],
+                'petugas'=>$m['petugas_daftar'] ?? '-'
+            ];
+        }
+    }
+    return array_values($events);
+}
+
+$masterByNo = [];
+foreach ($masterRows as $r) $masterByNo[(string)$r['no_part']] = $r;
+$planEvents = buildPlanEvents($konek, $masterByNo, $latestByNo);
+
+$actualEvents = [];
+$qActual = mysqli_query($konek, "SELECT q.* FROM qa_pengecekan q WHERE COALESCE(q.jenis_transaksi,'update_hasil_kalibrasi') <> 'registrasi_alat' AND (q.nomor_pengecekan IS NULL OR q.nomor_pengecekan NOT LIKE 'QA-REG-%') ORDER BY q.tanggal_pengecekan ASC, q.id ASC");
+if ($qActual) {
+    while ($q = mysqli_fetch_assoc($qActual)) {
+        $no = (string)($q['no_part'] ?? '');
+        if (!isset($masterByNo[$no])) continue;
+        $m = $masterByNo[$no];
+        $actualEvents[] = [
+            'no_part'=>$no,
+            'nama_part'=>$m['nama_part'], 'seksi'=>$m['seksi_pemilik'],
+            'spesifikasi'=>$m['spesifikasi'] ?? ($m['ukuran'] ?? ''), 'resolusi'=>$m['resolusi'] ?? '',
+            'periode'=>$m['periode_kalibrasi'] ?? '',
+            'plan_date'=>substr((string)$q['tanggal_jadwal_saat_pengecekan'],0,10),
+            'actual_date'=>substr((string)$q['tanggal_pengecekan'],0,10),
+            'status'=>$m['_final_status'],
+            'petugas'=>$m['petugas_daftar'] ?? '-',
+            'hasil'=>$m['_final_status'],
+            'next_date'=>$q['periode_berikutnya'] ?? ($m['jadwal_kalibrasi'] ?? '')
+        ];
+    }
+}
+
+/* Current period report validation state. */
+function getReportState($konek, $jenis, $periodeKey) {
+    $jenis = mysqli_real_escape_string($konek, $jenis);
+    $periodeKey = mysqli_real_escape_string($konek, $periodeKey);
+    $q = mysqli_query($konek, "SELECT * FROM qa_laporan_transaksi WHERE jenis_transaksi='$jenis' AND periode_key='$periodeKey' LIMIT 1");
+    return $q ? (mysqli_fetch_assoc($q) ?: null) : null;
+}
+
+$reportRows = [];
+$reportMeta = null;
+
+if ($filter_waktu === 'harian') {
+    $daily = [];
+    foreach ($planEvents as $e) {
+        if ($e['plan_date'] !== $val_harian) continue;
+        if ($filter_seksi !== 'ALL' && strtoupper($e['seksi']) !== strtoupper($filter_seksi)) continue;
+        if (!statusMatches(displayMasterStatus($masterByNo[$e['no_part']] ?? ['_final_status'=>$e['status']], $latestByNo), $filter_status)) continue;
+        $daily[$e['no_part']] = [
+            'no_part'=>$e['no_part'], 'nama_part'=>$e['nama_part'], 'spesifikasi'=>$e['spesifikasi'], 'resolusi'=>$e['resolusi'],
+            'seksi'=>$e['seksi'], 'periode'=>$e['periode'], 'rencana'=>$e['plan_date'], 'aktual'=>'', 'hasil'=>'', 'next'=>'', 'petugas'=>$e['petugas'], 'status'=>$e['status']
+        ];
+    }
+    foreach ($actualEvents as $e) {
+        if ($e['actual_date'] !== $val_harian) continue;
+        if ($filter_seksi !== 'ALL' && strtoupper($e['seksi']) !== strtoupper($filter_seksi)) continue;
+        if (!statusMatches($e['status'], $filter_status)) continue;
+        if (!isset($daily[$e['no_part']])) {
+            $daily[$e['no_part']] = [
+                'no_part'=>$e['no_part'], 'nama_part'=>$e['nama_part'], 'spesifikasi'=>$e['spesifikasi'], 'resolusi'=>$e['resolusi'],
+                'seksi'=>$e['seksi'], 'periode'=>$e['periode'], 'rencana'=>$e['plan_date'], 'aktual'=>'', 'hasil'=>'', 'next'=>'', 'petugas'=>$e['petugas'], 'status'=>$e['status']
+            ];
+        }
+        $daily[$e['no_part']]['aktual']=$e['actual_date'];
+        $daily[$e['no_part']]['hasil']=$e['hasil'];
+        $daily[$e['no_part']]['next']=$e['next_date'];
+    }
+    $reportRows = array_values($daily);
+    usort($reportRows, fn($a,$b)=>strtoupper($a['seksi'].$a['nama_part'].$a['no_part']) <=> strtoupper($b['seksi'].$b['nama_part'].$b['no_part']));
+    $reportMeta = ['jenis'=>'laporan_harian','periode_key'=>$val_harian,'periode_label'=>'Harian '.$val_harian];
+} elseif ($filter_waktu === 'bulanan') {
+    $groups = [];
+    $keySeenR = [];
+    foreach ($planEvents as $e) {
+        if (substr($e['plan_date'],0,7) !== $val_bulanan) continue;
+        if ($filter_seksi !== 'ALL' && strtoupper($e['seksi']) !== strtoupper($filter_seksi)) continue;
+        $display = displayMasterStatus($masterByNo[$e['no_part']] ?? ['_final_status'=>$e['status']], $latestByNo);
+        if (!statusMatches($display, $filter_status)) continue;
+        $gk = strtoupper(trim($e['seksi'])).'|'.strtoupper(trim($e['nama_part']));
+        $key = $gk.'|'.$e['no_part'].'|'.$e['plan_date'];
+        if (isset($keySeenR[$key])) continue;
+        $keySeenR[$key]=true;
+        if (!isset($groups[$gk])) $groups[$gk]=['seksi'=>$e['seksi'],'nama_part'=>$e['nama_part'],'petugas'=>[],'R'=>array_fill(1,$daysInMonth,0),'H'=>array_fill(1,$daysInMonth,0)];
+        $d=(int)substr($e['plan_date'],8,2); if($d>=1&&$d<=$daysInMonth) $groups[$gk]['R'][$d]++;
+        if (($e['petugas'] ?? '-') !== '-') $groups[$gk]['petugas'][]=$e['petugas'];
+    }
+    foreach ($actualEvents as $e) {
+        if (substr($e['actual_date'],0,7) !== $val_bulanan) continue;
+        if ($filter_seksi !== 'ALL' && strtoupper($e['seksi']) !== strtoupper($filter_seksi)) continue;
+        if (!statusMatches($e['status'], $filter_status)) continue;
+        $gk = strtoupper(trim($e['seksi'])).'|'.strtoupper(trim($e['nama_part']));
+        if (!isset($groups[$gk])) $groups[$gk]=['seksi'=>$e['seksi'],'nama_part'=>$e['nama_part'],'petugas'=>[],'R'=>array_fill(1,$daysInMonth,0),'H'=>array_fill(1,$daysInMonth,0)];
+        $d=(int)substr($e['actual_date'],8,2); if($d>=1&&$d<=$daysInMonth) $groups[$gk]['H'][$d]++;
+        if (($e['petugas'] ?? '-') !== '-') $groups[$gk]['petugas'][]=$e['petugas'];
+    }
+    foreach ($groups as &$g) {
+        $g['totalR']=array_sum($g['R']); $g['totalH']=array_sum($g['H']); $g['petugas']=implode(', ',array_values(array_unique(array_filter($g['petugas']))));
+    }
+    unset($g);
+    uasort($groups, fn($a,$b)=>strtoupper($a['seksi'].$a['nama_part']) <=> strtoupper($b['seksi'].$b['nama_part']));
+    $reportRows=$groups;
+    $reportMeta=['jenis'=>'laporan_bulanan','periode_key'=>$val_bulanan,'periode_label'=>'Bulanan '.date('F Y',strtotime($val_bulanan.'-01'))];
+} elseif ($filter_waktu === 'tahunan') {
+    $year=(int)$val_tahunan;
+    $groups=[]; $rSeen=[];
+    foreach ($planEvents as $e) {
+        if ((int)substr($e['plan_date'],0,4)!==$year) continue;
+        if ($filter_seksi !== 'ALL' && strtoupper($e['seksi']) !== strtoupper($filter_seksi)) continue;
+        $display=displayMasterStatus($masterByNo[$e['no_part']] ?? ['_final_status'=>$e['status']], $latestByNo);
+        if (!statusMatches($display,$filter_status)) continue;
+        $gk=strtoupper(trim($e['seksi'])).'|'.strtoupper(trim($e['nama_part']));
+        $key=$gk.'|'.$e['no_part'].'|'.$e['plan_date']; if(isset($rSeen[$key])) continue; $rSeen[$key]=true;
+        if(!isset($groups[$gk])) $groups[$gk]=['seksi'=>$e['seksi'],'nama_part'=>$e['nama_part'],'R'=>array_fill(1,12,0),'H'=>array_fill(1,12,0),'petugas'=>[]];
+        $m=(int)substr($e['plan_date'],5,2); if($m>=1&&$m<=12)$groups[$gk]['R'][$m]++;
+        if(($e['petugas']??'-')!=='-')$groups[$gk]['petugas'][]=$e['petugas'];
+    }
+    foreach($actualEvents as $e){
+        if((int)substr($e['actual_date'],0,4)!==$year)continue;
+        if($filter_seksi!=='ALL'&&strtoupper($e['seksi'])!==strtoupper($filter_seksi))continue;
+        if(!statusMatches($e['status'],$filter_status))continue;
+        $gk=strtoupper(trim($e['seksi'])).'|'.strtoupper(trim($e['nama_part']));
+        if(!isset($groups[$gk]))$groups[$gk]=['seksi'=>$e['seksi'],'nama_part'=>$e['nama_part'],'R'=>array_fill(1,12,0),'H'=>array_fill(1,12,0),'petugas'=>[]];
+        $m=(int)substr($e['actual_date'],5,2);if($m>=1&&$m<=12)$groups[$gk]['H'][$m]++;
+        if(($e['petugas']??'-')!=='-')$groups[$gk]['petugas'][]=$e['petugas'];
+    }
+    foreach($groups as &$g){$g['B']=array_fill(1,12,0);for($m=1;$m<=12;$m++)$g['B'][$m]=max(0,(int)$g['R'][$m]-(int)$g['H'][$m]);$g['totalR']=array_sum($g['R']);$g['totalH']=array_sum($g['H']);$g['totalB']=array_sum($g['B']);$g['petugas']=implode(', ',array_values(array_unique(array_filter($g['petugas']))));}
+    unset($g);
+    uasort($groups,fn($a,$b)=>strtoupper($a['seksi'].$a['nama_part'])<=>strtoupper($b['seksi'].$b['nama_part']));
+    $reportRows=$groups;
+    $reportMeta=['jenis'=>'laporan_tahunan','periode_key'=>(string)$year,'periode_label'=>'Tahunan '.$year];
+}
+
+// Normalisasi data untuk daftar default.
+$masterRows = array_values(array_filter($filteredMasters, function($r){ return trim((string)($r['no_part'] ?? '')) !== ''; }));
+usort($masterRows, function($a,$b){return strtoupper(($a['seksi_pemilik']??'').($a['nama_part']??'').($a['no_part']??''))<=>strtoupper(($b['seksi_pemilik']??'').($b['nama_part']??'').($b['no_part']??''));});
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
-    <meta charset="utf-8">
-    <title>Master Data | QA System</title>
-    <link rel="icon" type="image/png" href="../../images/LogoTOTO.png?v=<?= time(); ?>"/>
-    <link href="../../css/bootstrap.min.css" rel="stylesheet">
-    <link href="../../font-awesome-4.3.0/css/font-awesome.min.css" rel="stylesheet">
-    <style>
-        body { padding-top: 80px; background-color: #ffffff; }
-        
-        .filter-box { background: #fff; border: 1px solid #ddd; border-radius: 4px; padding: 20px; margin-bottom: 25px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .card-plain { background: #fff; border: 1px solid #ccc; margin-bottom: 30px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        
-        .table-jadwal { width: 100%; border-collapse: collapse; border: 1px solid #aaa; font-family: Arial, sans-serif; font-size: 13px;}
-        .table-jadwal th { border: 1px solid #aaa !important; padding: 12px; text-align: center; vertical-align: middle !important; background-color: #e2e6ea; color: #000; font-weight: bold; }
-        .table-jadwal td { border: 1px solid #aaa !important; padding: 10px; vertical-align: middle !important; text-align: center; color: #000;}
-        
-        .tr-seksi { background-color: #d6d8db; font-weight: bold; border-top: 2px solid #555 !important; border-bottom: 2px solid #555 !important;}
-        .text-left { text-align: left !important; }
-
-        /* CSS HACK UNTUK UBAH TAMPILAN DATE KE DD/MM/YYYY */
-        .custom-date { position: relative; color: transparent !important; }
-        .custom-date::before { position: absolute; top: 6px; left: 12px; content: attr(data-date); color: #555; }
-        .custom-date:focus { color: #555 !important; }
-        .custom-date:focus::before { display: none !important; }
-
-        /* Link No Alat */
-        .link-history { color: #0056b3; cursor: pointer; text-decoration: underline; font-weight: bold; }
-        .link-history:hover { color: #ff9800; }
-
-        /* KEBUTUHAN CETAK NATIVE SATU TAB - FIXED OFFSIDE & PUMPING SHEET */
-        #print-area { display: none; }
-        @media print {
-            @page { size: A4 landscape; margin: 8mm 10mm; } 
-            body { padding: 0 !important; background-color: #fff !important; margin: 0 !important; }
-            .no-print { display: none !important; }
-            #print-area { display: block !important; }
-            
-            .a4-landscape { width: 100%; padding: 0; page-break-after: always; position: relative; font-family: Arial, sans-serif; color: #000; box-sizing: border-box; }
-            .a4-landscape:last-child { page-break-after: auto; }
-            
-            table.print-table { width: 100%; border-collapse: collapse; border: 2px solid #000; font-size: 11px; margin-bottom: 5px; table-layout: fixed;}
-            table.print-table th, table.print-table td { border: 1px solid #000 !important; padding: 3px; text-align: center; vertical-align: middle; color: #000 !important; overflow: hidden; word-wrap: break-word;}
-            table.print-table th { font-weight: bold; background-color: #fff; }
-            table.print-table td.text-left { text-align: left !important; padding-left: 5px !important; }
-            
-            .ttd-box { border-collapse: collapse; border: 2px solid #000; width: 260px; text-align: center; font-size: 10px; float: right; }
-            .ttd-box th, .ttd-box td { border: 1px solid #000 !important; padding: 2px; color: #000 !important; }
-            .ttd-box td.ttd-space { height: 40px; }
-        }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Master Data | QA System</title>
+<link rel="icon" type="image/png" href="../../images/LogoTOTO.png?v=<?=time()?>"/>
+<link href="../../css/bootstrap.min.css" rel="stylesheet">
+<link href="../../font-awesome-4.3.0/css/font-awesome.min.css" rel="stylesheet">
+<style>
+body{padding-top:80px;background:#fff}.filter-box{background:#fff;border:1px solid #ddd;border-radius:4px;padding:20px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.table-wrap{overflow:auto}.table-jadwal{width:100%;border-collapse:collapse;border:1px solid #aaa;font-family:Arial,sans-serif;font-size:12px}.table-jadwal th{border:1px solid #aaa;padding:7px;text-align:center;vertical-align:middle;background:#e2e6ea;color:#000;font-weight:bold;white-space:nowrap}.table-jadwal td{border:1px solid #aaa;padding:6px;vertical-align:middle;text-align:center;color:#000}.text-left{text-align:left!important}.tr-seksi{background:#d6d8db;font-weight:bold;border-top:2px solid #555}.r-row{background:#fff9e6}.h-row{background:#eef8ee}.b-row{background:#fdecec}.negative-row td{background:#f4cccc!important;color:#990000!important;font-weight:600}.holiday-col,.table-jadwal th.holiday-col,.table-jadwal td.holiday-col{background:#4b4f54!important;color:#fff!important}.mini-badge{font-size:10px;padding:3px 6px;border-radius:3px;display:inline-block}.btn-validate-report{margin-left:8px}.report-status{font-size:12px;font-weight:bold}.sticky-first{position:sticky;left:0;background:#fff;z-index:2}.sticky-second{position:sticky;left:42px;background:#fff;z-index:2}@media print{.no-print{display:none!important}.print-area{display:block!important}.table-jadwal{font-size:9px}.table-jadwal th,.table-jadwal td{padding:3px}}
+.print-area{display:none}
+</style>
 </head>
 <body>
-    
-    <!-- SEMUA UI WEBSITE DIBUNGKUS DALAM NO-PRINT -->
-    <div class="no-print">
-        <nav class="navbar navbar-default navbar-fixed-top">
-            <div class="container-fluid">
-                <div class="navbar-header"><a class="navbar-brand" href="../../media.php"><img class="img-responsive" src="../../images/toto.png" style="height: 25px; margin-top: -3px;"></a></div>
-                <ul class="nav navbar-nav navbar-left"><li><a href="cek_alat.php"><i class="fa fa-arrow-left"></i> Kembali ke Cek Alat</a></li></ul>
-                <ul class="nav navbar-nav navbar-right">
-                    <li><a href="#"><span style='color: #1469EA; font-weight: bold;'><i class="fa fa-user"></i> <?php echo $nama_petugas; ?></span></a></li>
-                </ul>
-            </div>
-        </nav>
-        
-        <div class="container-fluid" style="padding: 0 30px;">
-            
-            <div class="filter-box">
-                <h4 style="margin-top:0; font-weight:bold; margin-bottom: 20px; color:#333;"><i class="fa fa-filter"></i> Filter Master Data</h4>
-                <form class="form-inline" method="GET" action="" id="formFilter">
-                    
-                    <div class="form-group" style="margin-right: 15px;">
-                        <label style="margin-right: 5px; color:#555;">Seksi:</label>
-                        <select class="form-control" name="seksi" style="border-radius:0;">
-                            <option value="ALL">Semua Seksi</option>
-                            <?php 
-                            mysqli_data_seek($q_seksi, 0);
-                            while($rs = mysqli_fetch_assoc($q_seksi)) {
-                                $sel = ($filter_seksi == $rs['nama_seksi']) ? 'selected' : '';
-                                echo "<option value='{$rs['nama_seksi']}' $sel>{$rs['nama_seksi']}</option>";
-                            }
-                            ?>
-                        </select>
-                    </div>
+<div class="no-print">
+<nav class="navbar navbar-default navbar-fixed-top"><div class="container-fluid">
+<div class="navbar-header"><a class="navbar-brand" href="../../media.php"><img src="../../images/toto.png" style="height:25px;margin-top:-3px"></a></div>
+<ul class="nav navbar-nav navbar-left"><li><a href="cek_alat.php"><i class="fa fa-arrow-left"></i> Kembali ke Cek Alat</a></li></ul>
+<ul class="nav navbar-nav navbar-right"><li><a href="#"><i class="fa fa-user"></i> <?=h($nama_petugas)?></a></li></ul>
+</div></nav>
+<div class="container-fluid" style="padding:0 25px">
+<div class="filter-box">
+<h4 style="margin-top:0;font-weight:bold"><i class="fa fa-filter"></i> Filter Master Data</h4>
+<form method="GET" class="form-inline" id="formFilter">
+<div class="form-group" style="margin-right:12px"><label style="margin-right:5px">Seksi:</label><select class="form-control" name="seksi"><option value="ALL">Semua Seksi</option><?php foreach($seksiOptions as $s):?><option value="<?=h($s)?>" <?=$filter_seksi===$s?'selected':''?>><?=h($s)?></option><?php endforeach;?></select></div>
+<div class="form-group" style="margin-right:12px"><label style="margin-right:5px">Status:</label><select class="form-control" name="status"><?php foreach($statusOptions as $k=>$v):?><option value="<?=h($k)?>" <?=$filter_status===$k?'selected':''?>><?=h($v)?></option><?php endforeach;?></select></div>
+<div class="form-group" style="margin-right:12px"><label style="margin-right:5px">Tampilan:</label><select class="form-control" name="waktu" id="filter_waktu"><option value="daftar" <?=$filter_waktu==='daftar'?'selected':''?>>Daftar No. Alat Ukur</option><option value="harian" <?=$filter_waktu==='harian'?'selected':''?>>Jadwal Kalibrasi Harian</option><option value="bulanan" <?=$filter_waktu==='bulanan'?'selected':''?>>Jadwal Kalibrasi Bulanan</option><option value="tahunan" <?=$filter_waktu==='tahunan'?'selected':''?>>Jadwal Kalibrasi Tahunan</option></select></div>
+<div class="form-group view-date" data-view="harian" style="margin-right:12px;display:none"><input type="date" class="form-control" name="tgl_harian" value="<?=h($val_harian)?>"></div>
+<div class="form-group view-date" data-view="bulanan" style="margin-right:12px;display:none"><input type="month" class="form-control" name="tgl_bulanan" value="<?=h($val_bulanan)?>"></div>
+<div class="form-group view-date" data-view="tahunan" style="margin-right:12px;display:none"><select class="form-control" name="tgl_tahunan"><?php for($y=(int)date('Y')-5;$y<=(int)date('Y')+2;$y++):?><option value="<?=$y?>" <?=$val_tahunan==(string)$y?'selected':''?>><?=$y?></option><?php endfor;?></select></div>
+<button class="btn btn-primary" type="submit"><i class="fa fa-search"></i> Tampilkan</button>
+</form>
+</div>
 
-                    <div class="form-group" style="margin-right: 15px;">
-                        <label style="margin-right: 5px; color:#555;">Status:</label>
-                        <select class="form-control" name="status" style="border-radius:0;">
-                            <option value="aktif" <?php echo $filter_status == 'aktif' ? 'selected' : ''; ?>>Barang OK (Aktif)</option>
-                            <option value="rusak" <?php echo $filter_status == 'rusak' ? 'selected' : ''; ?>>Barang BURUK (Rusak)</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group" style="margin-right: 15px;">
-                        <label style="margin-right: 5px; color:#555;">Filter Waktu:</label>
-                        <select class="form-control" name="waktu" id="filter_waktu" style="border-radius:0;">
-                            <option value="harian" <?php echo $filter_waktu == 'harian' ? 'selected' : ''; ?>>Harian</option>
-                            <option value="mingguan" <?php echo $filter_waktu == 'mingguan' ? 'selected' : ''; ?>>Mingguan</option>
-                            <option value="bulanan" <?php echo $filter_waktu == 'bulanan' ? 'selected' : ''; ?>>Bulanan</option>
-                            <option value="tahunan" <?php echo $filter_waktu == 'tahunan' ? 'selected' : ''; ?>>Tahunan</option>
-                            <option value="semua" <?php echo $filter_waktu == 'semua' ? 'selected' : ''; ?>>Semua Waktu</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group" style="margin-right: 15px;">
-                        <div class="input-group wrapper-waktu" id="wrapper_harian" style="display:none;">
-                            <input type="text" class="form-control" id="text_harian" placeholder="DD/MM/YYYY" maxlength="10" style="border-radius:0; width: 120px;" value="<?php echo date('d/m/Y', strtotime($val_harian)); ?>">
-                            <div class="input-group-addon" style="position: relative; overflow: hidden; cursor: pointer; padding:0; width: 40px; background-color:#e9ecef;">
-                                <i class="fa fa-calendar" style="line-height: 32px; color:#333;"></i>
-                                <input type="date" class="input-waktu" name="tgl_harian" id="input_harian" value="<?php echo $val_harian; ?>" style="position: absolute; right: 0; top: 0; bottom: 0; opacity: 0; cursor: pointer; height:100%; width:100%;">
-                            </div>
-                        </div>
+<?php if($filter_waktu==='daftar'): ?>
+<div class="table-wrap"><table class="table-jadwal"><thead><tr><th>NO</th><th>NAMA ALAT</th><th>SPESIFIKASI</th><th>NO ALAT</th><th>RES /KLS</th><th>NO ASSET</th><th>FUNGSI</th><th>STATUS</th><th>KALIBRATOR</th><th>KETERANGAN</th></tr></thead><tbody>
+<?php $lastSection='';$no=0;foreach($masterRows as $r):$no++;$sec=(string)($r['seksi_pemilik']??'');if($sec!==$lastSection){$lastSection=$sec;echo '<tr class="tr-seksi"><td colspan="10" class="text-left">SEKSI: '.h(strtoupper($sec)).'</td></tr>';}$negative=isNegativeMasterStatus($r['_display_status']??'');$noAsset=masterColValue($r,['no_asset','no_aset'],'');$fungsi=masterColValue($r,['fungsi'],'');$kalibrator=masterColValue($r,['kalibrator','petugas_daftar'],'-');$ket=masterColValue($r,['keterangan'],''); ?>
+<tr class="<?=$negative?'negative-row':''?>"><td><?=$no?></td><td class="text-left"><?=h($r['nama_part'])?></td><td class="text-left"><?=h($r['spesifikasi']??($r['ukuran']??''))?></td><td class="text-left"><b><?=h($r['no_part'])?></b></td><td><?=h(($r['resolusi']??'').(($r['kls']??'')?' / '.$r['kls']:''))?></td><td><?=h($noAsset)?></td><td class="text-left"><?=h($fungsi)?></td><td><span class="label <?=$negative?'label-danger':'label-default'?>"><?=h($r['_display_status'])?></span></td><td><?=h($kalibrator)?></td><td class="text-left"><?=h($ket)?></td></tr>
+<?php endforeach;if($no===0):?><tr><td colspan="10" class="text-center">Tidak ada data.</td></tr><?php endif;?></tbody></table></div>
 
-                        <div class="wrapper-waktu" id="wrapper_mingguan" style="display:none;">
-                            <input type="week" class="form-control input-waktu" name="tgl_mingguan" id="input_mingguan" value="<?php echo $val_mingguan; ?>" style="border-radius:0;">
-                        </div>
-                        
-                        <div class="wrapper-waktu" id="wrapper_bulanan" style="display:none;">
-                            <input type="month" class="form-control input-waktu" name="tgl_bulanan" id="input_bulanan" value="<?php echo $val_bulanan; ?>" style="border-radius:0;">
-                        </div>
-                        
-                        <div class="wrapper-waktu" id="wrapper_tahunan" style="display:none;">
-                            <select class="form-control input-waktu" name="tgl_tahunan" id="input_tahunan" style="border-radius:0;">
-                                <?php 
-                                $thn_skr = date('Y');
-                                for($i = $thn_skr - 5; $i <= $thn_skr + 5; $i++) {
-                                    $sel = ($i == $val_tahunan) ? 'selected' : '';
-                                    echo "<option value='$i' $sel>$i</option>";
-                                }
-                                ?>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <button type="submit" class="btn btn-primary" style="font-weight:bold; border-radius:0;"><i class="fa fa-search"></i> Tampilkan</button>
-                    <!-- TOMBOL CETAK NATIVE STAY 1 TAB -->
-                    <button type="button" class="btn btn-default" style="font-weight:bold; border-radius:0; margin-left:10px; border: 1px solid #999;" onclick="window.print()"><i class="fa fa-print"></i> Cetak Data</button>
-                </form>
-            </div>
+<?php elseif($filter_waktu==='harian'): ?>
+<div class="filter-box"><b>JADWAL KALIBRASI HARIAN <?=h($val_harian)?></b></div>
+<div class="table-wrap"><table class="table-jadwal"><thead><tr><th>NO</th><th>NAMA ALAT</th><th>SPESIFIKASI</th><th>NO. ALAT</th><th>RESOLUSI</th><th>PERIODE KALIBRASI</th><th>RENCANA KALIBRASI</th><th>AKTUAL KALIBRASI</th><th>HASIL</th><th>KALIBRASI BERIKUTNYA</th><th>PETUGAS</th></tr></thead><tbody>
+<?php $last='';$n=0;foreach($reportRows as $r):$n++;if($r['seksi']!==$last){$last=$r['seksi'];echo '<tr class="tr-seksi"><td colspan="11" class="text-left">SEKSI: '.h(strtoupper($last)).'</td></tr>';}$actualBadge=$r['aktual']!==''?$r['aktual']:'-';$hasil=$r['hasil']!==''?$r['hasil']:'-';$dailyStatus=$r['status']??($hasil!=='-'?$hasil:'');$negative=isNegativeMasterStatus($dailyStatus);?><tr class="<?=$negative?'negative-row':''?>"><td><?=$n?></td><td class="text-left"><?=h($r['nama_part'])?></td><td class="text-left"><?=h($r['spesifikasi'])?></td><td><b><?=h($r['no_part'])?></b></td><td><?=h($r['resolusi'])?></td><td><?=h($r['periode'])?></td><td><?=h($r['rencana'])?></td><td><?=h($actualBadge)?></td><td><?=h($hasil)?></td><td><?=h($r['next'])?></td><td><?=h($r['petugas'])?></td></tr><?php endforeach;if($n===0):?><tr><td colspan="11" class="text-center">Tidak ada data jadwal untuk tanggal ini.</td></tr><?php endif;?></tbody></table></div>
 
-            <?php if(count($data_grouped) > 0): ?>
-                <div class="card-plain table-responsive">
-                    <table class="table-jadwal">
-                        <thead>
-                            <tr>
-                                <th width="3%">NO</th>
-                                <th width="15%">NAMA ALAT</th>
-                                <th width="20%">SPESIFIKASI</th>
-                                <th width="12%">NO. ALAT</th>
-                                <th width="6%">RESOLUSI</th>
-                                <th width="8%">PERIODE<br>KALIBRASI</th>
-                                <th width="9%"><?php echo $filter_status == 'aktif' ? 'RENCANA<br>KALIBRASI' : 'TGL DIVONIS<br>RUSAK'; ?></th>
-                                <th width="9%">AKTUAL<br>KALIBRASI</th>
-                                <th width="6%">HASIL</th>
-                                <th width="12%">KALIBRASI<br>BERIKUTNYA</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php 
-                            $no = 1;
-                            foreach($data_grouped as $seksi => $items): 
-                            ?>
-                                <tr class="tr-seksi">
-                                    <td colspan="10" class="text-left" style="padding-left:15px !important;">SEKSI PEMILIK: <?php echo strtoupper($seksi); ?></td>
-                                </tr>
-                                <?php 
-                                foreach($items as $r) {
-                                    $periode_txt = $r['periode_kalibrasi'] == 365 ? '1 Tahun' : ($r['periode_kalibrasi'] == 180 ? '6 Bulan' : $r['periode_kalibrasi'].' Hari');
-                                    // Tanggal di UI
-                                    $tgl_display = ($filter_status == 'aktif') ? date('d - m - Y', strtotime($r['jadwal_kalibrasi'])) : date('d - m - Y', strtotime($r['updated_at']));
-                                    $res = !empty($r['resolusi']) ? $r['resolusi'] : '~';
+<?php elseif($filter_waktu==='bulanan'): ?>
+<div class="filter-box"><b>JADWAL KALIBRASI BULANAN <?=h(strtoupper(date('F Y',strtotime($val_bulanan.'-01'))))?></b></div>
+<div class="table-wrap"><table class="table-jadwal"><thead><tr><th rowspan="2">NO</th><th rowspan="2">NAMA ALAT</th><th rowspan="2">SEKSI</th><th rowspan="2">JENIS</th><?php for($d=1;$d<=$daysInMonth;$d++):$monthDate=sprintf('%04d-%02d-%02d',$selectedYear,$selectedMonth,$d);$offClass=holidayClassForDate($monthDate,$holidayDates);$offTitle=holidayTitleForDate($monthDate,$holidayDates);?><th class="<?=h($offClass)?>" title="<?=h($offTitle)?>"><?=$d?></th><?php endfor;?><th rowspan="2">TOTAL</th><th rowspan="2">PETUGAS</th></tr><tr><?php for($d=1;$d<=$daysInMonth;$d++):$monthDate=sprintf('%04d-%02d-%02d',$selectedYear,$selectedMonth,$d);$offClass=holidayClassForDate($monthDate,$holidayDates);$offTitle=holidayTitleForDate($monthDate,$holidayDates);?><th class="<?=h($offClass)?>" style="font-size:10px" title="<?=h($offTitle)?>">TGL</th><?php endfor;?></tr></thead><tbody>
+<?php $n=0;$last='';foreach($reportRows as $g):$n++;if($g['seksi']!==$last){$last=$g['seksi'];echo '<tr class="tr-seksi"><td colspan="'.($daysInMonth+6).'" class="text-left">SEKSI: '.h(strtoupper($last)).'</td></tr>';}$r=$g['R'];$hh=$g['H'];?><tr class="r-row"><td rowspan="2"><?=$n?></td><td rowspan="2" class="text-left"><?=h($g['nama_part'])?></td><td rowspan="2"><?=h($g['seksi'])?></td><td><b>R</b></td><?php for($d=1;$d<=$daysInMonth;$d++):$monthDate=sprintf('%04d-%02d-%02d',$selectedYear,$selectedMonth,$d);$offClass=holidayClassForDate($monthDate,$holidayDates);?><td class="<?=h($offClass)?>"><?=((int)($r[$d]??0))?:''?></td><?php endfor;?><td><b><?=$g['totalR']?></b></td><td rowspan="2"><?=h($g['petugas']?:'-')?></td></tr><tr class="h-row"><td><b>H</b></td><?php for($d=1;$d<=$daysInMonth;$d++):$monthDate=sprintf('%04d-%02d-%02d',$selectedYear,$selectedMonth,$d);$offClass=holidayClassForDate($monthDate,$holidayDates);?><td class="<?=h($offClass)?>"><?=((int)($hh[$d]??0))?:''?></td><?php endfor;?><td><b><?=$g['totalH']?></b></td></tr><?php endforeach;if($n===0):?><tr><td colspan="<?=($daysInMonth+6)?>" class="text-center">Tidak ada data jadwal bulanan.</td></tr><?php endif;?></tbody></table></div>
+<div style="margin-top:8px;font-size:12px;color:#666"><span style="display:inline-block;width:14px;height:14px;background:#4b4f54;vertical-align:-2px;margin-right:4px"></span> = Sabtu/Minggu dan tanggal merah/cuti bersama. <b>R</b> = Rencana kalibrasi pada tanggal tersebut. <b>H</b> = Aktual kalibrasi yang sudah dilakukan melalui Update Hasil Kalibrasi, tanpa menunggu validasi.</div>
 
-                                    echo "<tr>
-                                        <td>{$no}</td>
-                                        <td class='text-left' style='padding-left:15px !important;'>{$r['nama_part']}</td>
-                                        <td class='text-left'>{$r['spesifikasi']}</td>
-                                        <td class='text-left'><a class='link-history' data-no='{$r['no_part']}' title='Klik untuk melihat riwayat alat ini'>{$r['no_part']}</a></td>
-                                        <td>{$res}</td>
-                                        <td>{$periode_txt}</td>
-                                        <td>{$tgl_display}</td>
-                                        <td></td>
-                                        <td></td>
-                                        <td></td>
-                                    </tr>";
-                                    $no++;
-                                }
-                                ?>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            <?php else: ?>
-                <div class="card-plain text-center" style="padding: 50px;">
-                    <h4 class="text-muted"><i class="fa fa-inbox fa-3x" style="color:#ddd; margin-bottom:15px; display:block;"></i> Tidak ada data alat yang ditemukan pada filter ini.</h4>
-                </div>
-            <?php endif; ?>
+<?php elseif($filter_waktu==='tahunan'): ?>
+<div class="filter-box"><b>JADWAL KALIBRASI TAHUNAN <?=h($val_tahunan)?></b></div>
+<div class="table-wrap"><table class="table-jadwal"><thead><tr><th rowspan="2">NO</th><th rowspan="2">NAMA ALAT</th><th rowspan="2">SEKSI</th><th rowspan="2">JENIS</th><?php for($m=1;$m<=12;$m++):?><th><?=date('M',mktime(0,0,0,$m,1))?></th><?php endfor;?><th rowspan="2">TOTAL</th><th rowspan="2">PETUGAS</th></tr></thead><tbody>
+<?php $n=0;$last='';foreach($reportRows as $g):$n++;if($g['seksi']!==$last){$last=$g['seksi'];echo '<tr class="tr-seksi"><td colspan="17" class="text-left">SEKSI: '.h(strtoupper($last)).'</td></tr>';}$codes=['R'=>$g['R'],'H'=>$g['H'],'B'=>$g['B']];$totals=['R'=>$g['totalR'],'H'=>$g['totalH'],'B'=>$g['totalB']];foreach($codes as $code=>$arr):?><tr class="<?=strtolower($code)?>-row"><td><?=($code==='R'?$n:'')?></td><td><?=($code==='R'?h($g['nama_part']):'')?></td><td><?=($code==='R'?h($g['seksi']):'')?></td><td><b><?=$code?></b></td><?php for($m=1;$m<=12;$m++):?><td><?=((int)($arr[$m]??0))?:''?></td><?php endfor;?><td><b><?=$totals[$code]?></b></td><td><?=($code==='R'?h($g['petugas']?:'-'):'')?></td></tr><?php endforeach;endforeach;if($n===0):?><tr><td colspan="17" class="text-center">Tidak ada data jadwal tahunan.</td></tr><?php endif;?></tbody></table></div>
+<div style="margin-top:8px;font-size:12px;color:#666"><b>R</b> = Rencana. <b>H</b> = Aktual hasil Update Hasil Kalibrasi. <b>B</b> = Beda/terlewat = max(R-H, 0) pada bulan tersebut.</div>
+<?php endif; ?>
+</div>
+</div>
 
-        </div>
-    </div> <!-- END NO PRINT UI -->
+<script src="../../js/jquery.js"></script><script src="../../js/bootstrap.min.js"></script>
+<script>
+(function(){
+    function toggleDate(){var v=$('#filter_waktu').val();$('.view-date').hide();$('.view-date[data-view="'+v+'"]').show();}
+    toggleDate(); $('#filter_waktu').on('change',function(){toggleDate();});
 
-    <!-- WADAH KHUSUS PRINT NATIVE - FIX OFFSIDE DENGAN 20 BARIS / HALAMAN -->
-    <div id="print-area">
-        <?php 
-        foreach($chunks as $idx => $chunk) {
-            $hal_ke = $idx + 1;
-            ?>
-            <div class="a4-landscape">
-                
-                <div style="font-weight:bold; text-align:center; font-size:13px; margin-bottom:0px;">PT SURYA TOTO INDONESIA Tbk.</div>
-                
-                <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
-                    <div style="flex:1; text-align:center; padding-top:25px;">
-                        <h2 style="margin:0; font-weight:bold; letter-spacing:1px; font-size:24px;">JADWAL KALIBRASI HARIAN</h2>
-                    </div>
-                    <div style="width:260px;">
-                        <div style="text-align:left; font-size:12px; font-weight:bold; margin-bottom:2px;">Tanggal , <?php echo $tgl_sekarang; ?></div>
-                        <table class="ttd-box">
-                            <tr><th width="33%">DIBUAT</th><th width="33%">DIPERIKSA</th><th width="33%">DISETUJUI</th></tr>
-                            <tr><td class="ttd-space"></td><td class="ttd-space"></td><td class="ttd-space"></td></tr>
-                            <tr><td>Petugas</td><td>SUPERVISOR</td><td>MANAGER</td></tr>
-                        </table>
-                        <div style="text-align:right; font-size:12px; font-weight:bold; margin-top:2px;">HAL : <?php echo $hal_ke; ?> / <?php echo $total_hal; ?></div>
-                    </div>
-                </div>
-
-                <div style="font-weight:bold; font-size:13px; margin-bottom:4px; text-transform:uppercase;">
-                    SEKSI : <?php echo ($filter_seksi == 'ALL') ? 'SEMUA SEKSI' : strtoupper($filter_seksi); ?>
-                </div>
-                
-                <table class="print-table">
-                    <colgroup>
-                        <col style="width: 3%;">
-                        <col style="width: 15%;">
-                        <col style="width: 20%;">
-                        <col style="width: 12%;">
-                        <col style="width: 6%;">
-                        <col style="width: 8%;">
-                        <col style="width: 9%;">
-                        <col style="width: 9%;">
-                        <col style="width: 6%;">
-                        <col style="width: 12%;">
-                    </colgroup>
-                    <thead>
-                        <tr>
-                            <th>NO</th>
-                            <th>NAMA ALAT</th>
-                            <th>SPESIFIKASI</th>
-                            <th>NO. ALAT</th>
-                            <th>RESOLUSI</th>
-                            <th>PERIODE<br>KALIBRASI</th>
-                            <th><?php echo $filter_status == 'aktif' ? 'RENCANA<br>KALIBRASI' : 'TGL DIVONIS<br>RUSAK'; ?></th>
-                            <th>AKTUAL<br>KALIBRASI</th>
-                            <th>HASIL</th>
-                            <th>KALIBRASI<br>BERIKUTNYA</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php 
-                        $baris_terisi = 0;
-                        foreach($chunk as $item) {
-                            if($item['type'] == 'header') {
-                                echo "<tr style='height: 25px; background-color:#f0f0f0; font-weight:bold;'><td colspan='10' class='text-left' style='padding-left:15px !important;'>{$item['text']}</td></tr>";
-                            } else {
-                                $row = $item['row'];
-                                $n = $item['no'];
-                                $periode_txt = $row['periode_kalibrasi'] == 365 ? '1 Tahun' : ($row['periode_kalibrasi'] == 180 ? '6 Bulan' : $row['periode_kalibrasi'].' Hari');
-                                // Tgl Print pakai format dd - mm - yyyy
-                                $tgl_ren = ($filter_status == 'aktif') ? date('d - m - Y', strtotime($row['jadwal_kalibrasi'])) : date('d - m - Y', strtotime($row['updated_at']));
-                                $res_print = !empty($row['resolusi']) ? $row['resolusi'] : '~';
-
-                                echo "<tr style='height: 25px;'>
-                                    <td>{$n}</td>
-                                    <td class='text-left'>{$row['nama_part']}</td>
-                                    <td class='text-left'>{$row['spesifikasi']}</td>
-                                    <td class='text-left'>{$row['no_part']}</td>
-                                    <td>{$res_print}</td>
-                                    <td>{$periode_txt}</td>
-                                    <td>{$tgl_ren}</td>
-                                    <td>&nbsp;</td>
-                                    <td>&nbsp;</td>
-                                    <td>&nbsp;</td>
-                                </tr>";
-                            }
-                            $baris_terisi++;
-                        }
-                        
-                        // JIKA DATA KURANG DARI 1 HALAMAN (20 BARIS), TAMBAH BARIS KOSONG BIAR TETAP FULL 1 HALAMAN
-                        $sisa = $batas_baris - $baris_terisi;
-                        for($i=0; $i<$sisa; $i++) {
-                            echo "<tr style='height: 25px;'><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>";
-                        }
-                        ?>
-                    </tbody>
-                </table>
-                <div style="text-align: right; font-size: 11px; margin-top: 3px; font-weight: bold;">STIS-CMFG4-04/R3</div>
-            </div>
-            <?php
-        }
-        ?>
-    </div>
-
-    <!-- MODAL POPUP HISTORY KALIBRASI -->
-    <div class="modal fade no-print" id="modalHistory" tabindex="-1" role="dialog" aria-labelledby="myModalLabel">
-        <div class="modal-dialog modal-lg" role="document">
-            <div class="modal-content" style="border-radius: 8px;">
-                <div class="modal-header" style="background-color: #1E3F66; color: #fff; border-top-left-radius: 8px; border-top-right-radius: 8px;">
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close" style="color: #fff; opacity: 1;"><span aria-hidden="true">&times;</span></button>
-                    <h4 class="modal-title" id="myModalLabel"><i class="fa fa-history"></i> Riwayat Kalibrasi Alat</h4>
-                </div>
-                <div class="modal-body">
-                    <div class="row" style="margin-bottom: 15px;">
-                        <div class="col-md-6">
-                            <table style="width: 100%; font-size: 13px;">
-                                <tr><td width="30%"><b>No Alat</b></td><td width="5%">:</td><td id="det_no_alat">-</td></tr>
-                                <tr><td><b>Nama Alat</b></td><td>:</td><td id="det_nama_alat">-</td></tr>
-                            </table>
-                        </div>
-                        <div class="col-md-6">
-                            <table style="width: 100%; font-size: 13px;">
-                                <tr><td width="30%"><b>Seksi</b></td><td width="5%">:</td><td id="det_seksi">-</td></tr>
-                                <tr><td><b>Spesifikasi</b></td><td>:</td><td id="det_spek">-</td></tr>
-                            </table>
-                        </div>
-                    </div>
-                    
-                    <div class="table-responsive">
-                        <table class="table table-bordered table-striped" style="font-size: 13px;">
-                            <thead style="background-color: #f4f6f9;">
-                                <tr>
-                                    <th width="5%" class="text-center">NO</th>
-                                    <th width="20%" class="text-center">TGL KALIBRASI</th>
-                                    <th width="15%" class="text-center">HASIL</th>
-                                    <th width="25%" class="text-center">PETUGAS</th>
-                                    <th width="35%" class="text-center">KETERANGAN</th>
-                                </tr>
-                            </thead>
-                            <tbody id="body_history">
-                                <!-- Data AJAX Masuk Sini -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-default" data-dismiss="modal" style="font-weight:bold;">Tutup</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script src="../../js/jquery.js"></script>
-    <script src="../../js/bootstrap.min.js"></script>
-    <script>
-        $(document).ready(function(){
-            
-            // LOGIKA DYNAMIC FILTER WAKTU
-            $('#filter_waktu').change(function(){
-                $('.wrapper-waktu').hide(); 
-                $('.input-waktu').prop('disabled', true); 
-                var val = $(this).val();
-                if(val !== 'semua') {
-                    $('#wrapper_' + val).show(); 
-                    $('#input_' + val).prop('disabled', false); 
-                }
-            }).trigger('change');
-
-            // JS HACK UNTUK UBAH TAMPILAN DATE KE DD/MM/YYYY
-            $('#input_harian').on('change', function() {
-                if(this.value) {
-                    var p = this.value.split('-');
-                    $('#text_harian').val(p[2] + '/' + p[1] + '/' + p[0]);
-                } else {
-                    $('#text_harian').val('');
-                }
-            });
-
-            $('#text_harian').on('input', function(e) {
-                var val = $(this).val().replace(/[^0-9]/g, '');
-                var newVal = '';
-                if (val.length > 0) newVal += val.slice(0, 2);
-                if (val.length > 2) newVal += '/' + val.slice(2, 4);
-                if (val.length > 4) newVal += '/' + val.slice(4, 8);
-                $(this).val(newVal);
-                
-                if (newVal.length === 10) {
-                    var p = newVal.split('/');
-                    if (p.length === 3) {
-                        $('#input_harian').val(p[2] + '-' + p[1] + '-' + p[0]);
-                    }
-                }
-            });
-
-            // LOGIKA KLIK NO ALAT -> TAMPILKAN MODAL HISTORY
-            $('.link-history').click(function() {
-                var noAlat = $(this).data('no');
-                $('#det_no_alat').html('<i class="fa fa-spinner fa-spin"></i> Loading...');
-                $('#det_nama_alat, #det_seksi, #det_spek').text('-');
-                $('#body_history').html('<tr><td colspan="5" class="text-center"><i class="fa fa-spinner fa-spin"></i> Mengambil data riwayat...</td></tr>');
-                
-                $('#modalHistory').modal('show');
-
-                $.ajax({
-                    url: 'proses_qa.php?action=get_bbrau', 
-                    type: 'POST', 
-                    dataType: 'json', 
-                    data: { no_part: noAlat },
-                    success: function(res) {
-                        if(res.status === 'success') {
-                            var alat = res.alat;
-                            var history = res.history;
-
-                            $('#det_no_alat').html('<strong>' + alat.no_part + '</strong>');
-                            $('#det_nama_alat').text(alat.nama_part);
-                            $('#det_seksi').text(alat.seksi_pemilik);
-                            $('#det_spek').text(alat.spesifikasi);
-
-                            var tbody = '';
-                            if(history.length > 0) {
-                                var no = 1;
-                                history.forEach(function(h) {
-                                    var p = h.tanggal_pengecekan.split('-');
-                                    var tglIndo = p[2] + '/' + p[1] + '/' + p[0];
-                                    
-                                    var statusLabel = '';
-                                    if(h.status_kalibrasi === 'Good' || h.status_kalibrasi === 'OK') {
-                                        statusLabel = '<span class="label label-success">OK</span>';
-                                    } else if (h.status_kalibrasi === 'Bad' || h.status_kalibrasi === 'BURUK') {
-                                        statusLabel = '<span class="label label-danger">BURUK</span>';
-                                    } else {
-                                        statusLabel = '<span class="label label-default">'+h.status_kalibrasi+'</span>';
-                                    }
-
-                                    tbody += '<tr>';
-                                    tbody += '<td class="text-center">' + no + '</td>';
-                                    tbody += '<td class="text-center"><strong>' + tglIndo + '</strong></td>';
-                                    tbody += '<td class="text-center">' + statusLabel + '</td>';
-                                    tbody += '<td class="text-center">' + (h.created_by || '-') + '</td>';
-                                    tbody += '<td>' + (h.keterangan || '-') + '</td>';
-                                    tbody += '</tr>';
-                                    no++;
-                                });
-                            } else {
-                                tbody = '<tr><td colspan="5" class="text-center text-muted">Tidak ada riwayat pengecekan untuk alat ini.</td></tr>';
-                            }
-                            $('#body_history').html(tbody);
-                        } else {
-                            $('#body_history').html('<tr><td colspan="5" class="text-center text-danger">Gagal mengambil data. ' + res.message + '</td></tr>');
-                        }
-                    }, 
-                    error: function() { 
-                        $('#body_history').html('<tr><td colspan="5" class="text-center text-danger">Koneksi Error! Gagal mengambil data.</td></tr>'); 
-                    }
-                });
-            });
-
-        });
-    </script>
+})();
+</script>
 </body>
 </html>

@@ -19,6 +19,15 @@ $sapaan = isset($_SESSION['sapaan']) ? $_SESSION['sapaan'] : 'Bpk/Ibu';
 $status_admin = isset($_SESSION['admin']) ? $_SESSION['admin'] : 'N';
 $is_admin = ($status_admin == 'Y' || $status_admin == '1' || strtolower($role) == 'admin');
 
+$can_pembuat=$can_pemeriksa=$can_penyetuju=false;
+$stmtRole=$konek->prepare("SELECT pembuat,pemeriksa,penyetuju FROM `user` WHERE uid=? LIMIT 1");
+if($stmtRole){$stmtRole->bind_param('s',$id_pemakai);$stmtRole->execute();$rf=$stmtRole->get_result()->fetch_assoc();$stmtRole->close();}
+if(empty($rf) && $nama_pemakai!==''){ $stmtRole=$konek->prepare("SELECT pembuat,pemeriksa,penyetuju FROM `user` WHERE uname=? LIMIT 1"); if($stmtRole){$stmtRole->bind_param('s',$nama_pemakai);$stmtRole->execute();$rf=$stmtRole->get_result()->fetch_assoc();$stmtRole->close();} }
+$rf=$rf?:['pembuat'=>'N','pemeriksa'=>'N','penyetuju'=>'N'];
+$can_pembuat=$is_admin || strtoupper($rf['pembuat'])==='Y';
+$can_pemeriksa=$is_admin || strtoupper($rf['pemeriksa'])==='Y';
+$can_penyetuju=$is_admin || strtoupper($rf['penyetuju'])==='Y';
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -137,14 +146,14 @@ $is_admin = ($status_admin == 'Y' || $status_admin == '1' || strtolower($role) =
 					
                     <?php } ?>
 
-                    <li><a href="#">QA (Kalibrasi Alat)</a>
+                    <?php if ($can_pembuat || $can_pemeriksa || $can_penyetuju) { ?><li><a href="#">QA (Kalibrasi Alat)</a>
                         <ul class="dropdown-menu">
-                            <li><a href="modul/qa/cek_alat.php">Check / Update QA Alat</a></li>
-                            <li><a href="modul/qa/daftar_kalibrasi.php">Daftar Kalibrasi Terdekat</a></li>
+                            <?php if ($can_pembuat || $can_pemeriksa || $can_penyetuju) { ?><li><a href="modul/qa/cek_alat.php">Check / Update QA Alat</a></li><?php } ?>
+                            <?php if ($can_pemeriksa || $can_penyetuju) { ?><li><a href="modul/qa/transaksi_kalibrasi.php">Transaksi Kalibrasi</a></li><?php } ?>
                         </ul>
-                    </li>
+                    </li><?php } ?>
                     
-                    <?php if ($is_admin) { ?>
+                    <?php if ($is_admin || $can_pembuat || $can_pemeriksa || $can_penyetuju) { ?>
                     <li><a href="#">Alat Bantu</a>
                         <ul class="dropdown-menu">
                             <li><a href="modul/tabel/resetpwd_user.php">Reset Password</a></li>

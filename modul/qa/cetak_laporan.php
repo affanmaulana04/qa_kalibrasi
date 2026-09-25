@@ -11,6 +11,10 @@ session_start();
     size: A4 portrait;
     margin: 0;
 }
+@page landscapeA4 {
+    size: A4 landscape;
+    margin: 0;
+}
 * { box-sizing: border-box; }
 html, body {
     margin: 0;
@@ -118,6 +122,24 @@ html, body {
 .main-table th {
     font-weight: bold;
 }
+ .report td, .report th,
+ .report-b td, .report-b th,
+ .report-c td, .report-c th,
+ .report-d td, .report-d th,
+ .report-h td, .report-h th,
+ .report-i td, .report-i th,
+ .report-j td, .report-j th,
+ .report-k td, .report-k th,
+ .report-l td, .report-l th,
+ .report-m td, .report-m th,
+ .report-o td, .report-o th,
+ .report-p td, .report-p th,
+ .report-q td, .report-q th {
+     white-space: normal !important;
+     word-wrap: break-word !important;
+     overflow-wrap: break-word !important;
+ }
+
 .left {
     text-align: left !important;
 }
@@ -460,6 +482,70 @@ html, body {
 }
 
 @media screen { .report-c, .report-b, .report-d, .report-h, .report-i, .report-j, .report-k, .report-l, .report-m, .report-o, .report-p, .report-q { max-width:100%; } }
+
+.sign-operator-name { font-weight: bold; min-height: 14px; margin-bottom: 2px; }
+.sign-role-label { font-weight: bold; }
+
+/* ================================================================
+ * STANDARD UKURAN KOTAK VALIDASI
+ * Mengikuti ukuran kotak validasi Format C.
+ * Hanya area validasi/tanda tangan yang distandarkan; layout laporan
+ * lainnya tidak diubah.
+ * ================================================================ */
+.sign-b, .sign-d, .sign-j, .sign-k, .sign-l, .sign-m {
+    width: 96mm !important;
+    margin: 0 15mm 0 auto !important;
+    table-layout: fixed !important;
+}
+.sign-b th, .sign-c th, .sign-d th, .sign-j th, .sign-k th, .sign-l th, .sign-m th {
+    height: 5mm !important;
+}
+.sign-b .sign-space-b td,
+.sign-c .sign-space-c td,
+.sign-d .sign-space-d td,
+.sign-j .sign-space-j td,
+.sign-k .sign-space-k td,
+.sign-l .sign-space-l td,
+.sign-m .sign-space-m td {
+    height: 28mm !important;
+    vertical-align: bottom !important;
+    font-size: 8pt !important;
+}
+.sign-b .roles-b td,
+.sign-c .roles-c td,
+.sign-d .roles-d td,
+.sign-j .role-j td,
+.sign-k .role-k td,
+.sign-l .role-l td,
+.sign-m .role-m td {
+    height: 10mm !important;
+}
+/* Box validasi yang berada di header tetap memakai tinggi yang sama seperti Format C,
+   tanpa mengubah lebar/layout header masing-masing format. */
+.sign-h-table tr:nth-child(2) td,
+.sign-head-i tr:nth-child(2) td,
+.datebox-p table tr:nth-child(2) td,
+.datebox-o table tr:nth-child(2) td,
+.datebox-q table tr:nth-child(2) td {
+    height: 28mm !important;
+    vertical-align: bottom !important;
+    font-size: 8pt !important;
+}
+.sign-h-table tr:nth-child(1) td,
+.sign-head-i tr:nth-child(1) td,
+.datebox-p table tr:nth-child(1) td,
+.datebox-o table tr:nth-child(1) td,
+.datebox-q table tr:nth-child(1) td {
+    height: 5mm !important;
+}
+.sign-h-table tr:nth-child(3) td,
+.sign-head-i tr:nth-child(3) td,
+.datebox-p table tr:nth-child(3) td,
+.datebox-o table tr:nth-child(3) td,
+.datebox-q table tr:nth-child(3) td {
+    height: 10mm !important;
+}
+
 @media print {
     .no-print { display: none !important; }
     body {
@@ -495,14 +581,24 @@ html, body {
 
         .page-info { position: absolute; top: 10mm; right: 15mm; font-size: 11px; font-weight: bold; }
 
-        @media print { 
-            @page { size: A4 portrait; margin: 0; } 
-            body { background: #fff; padding: 0; margin: 0; } 
-            .a4-page { box-shadow: none; margin: 0; padding: 10mm 15mm; border: none; } 
-            .no-print { display: none !important; } 
+        @media print {
+            @page { size: A4 portrait; margin: 0; }
+            @page landscapeA4 { size: A4 landscape; margin: 0; }
+            body { background: #fff; padding: 0; margin: 0; }
+            body.print-landscape { page: landscapeA4; }
+            body.print-landscape .report,
+            body.print-landscape .report-h,
+            body.print-landscape .report-o,
+            body.print-landscape .report-p,
+            body.print-landscape .report-q {
+                width: 293mm !important;
+                min-height: 206mm !important;
+                margin: 2mm auto !important;
+            }
+            .a4-page { box-shadow: none; margin: 0; padding: 10mm 15mm; border: none; }
+            .no-print { display: none !important; }
         }
     </style>
-</style>
 </head>
 <body>
 
@@ -524,8 +620,44 @@ html, body {
     }
 
     let data;
+    const qaEscText = (v) => String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+    const qaSignatureName = (v) => { if (v === null || v === undefined) return ''; const s = String(v).trim(); if (!s || s === '///') return ''; return qaEscText(s); };
+    const qaApprovalDate = (role) => {
+        let value = '';
+        if (role === 'pembuat') {
+            value = data.tanggal_periksa || data.tanggal_pengecekan || data.tanggal || '';
+        } else if (role === 'pemeriksa') {
+            value = data.tanggal_validasi_pemeriksa || data.validasi_pemeriksa_at || '';
+        } else if (role === 'penyetuju') {
+            value = data.tanggal_validasi_penyetuju || data.validasi_penyetuju_at || '';
+        }
+        if (!value && Array.isArray(data.audit)) {
+            const tahap = role === 'pemeriksa' ? 'pemeriksa' : (role === 'penyetuju' ? 'penyetuju' : '');
+            if (tahap) {
+                for (const a of data.audit) {
+                    if (String(a?.tahap || '').toLowerCase() === tahap && String(a?.keputusan || '').toLowerCase() === 'setuju' && a?.created_at) {
+                        value = a.created_at;
+                    }
+                }
+            }
+        }
+        if (!value || String(value).trim() === '///') return '';
+        const s = String(value).trim();
+        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (!m) return qaEscText(s);
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        return `${m[3]}-${months[parseInt(m[2],10)-1] || m[2]}-${m[1].slice(-2)}`;
+    };
     try {
         data = JSON.parse(raw);
+        data.signature_pembuat = data.signature_pembuat !== false;
+        data.signature_pemeriksa = !!data.signature_pemeriksa;
+        data.signature_penyetuju = !!data.signature_penyetuju;
+        data.operator = data.operator || data.petugas || '';
+        data.pemeriksa = data.pemeriksa || data.foreman || '';
+        data.penyetuju = data.penyetuju || data.supervisor || '';
+        data.foreman = data.pemeriksa;
+        data.supervisor = data.penyetuju;
     } catch (e) {
         document.getElementById('report').innerHTML =
             '<div style="padding:20px;font-weight:bold;">Data cetak tidak valid.</div>';
@@ -533,7 +665,446 @@ html, body {
     }
 
 
-    // ================= FORM Q (SERATION / PLUG GAUGE) =================
+
+    /* ================================================================
+     * NORMALISASI DATA CETAK
+     * ---------------------------------------------------------------
+     * Semua format A-R boleh datang dari versi payload yang berbeda
+     * (master, riwayat lama, atau hasil_json snapshot). Sebelum masuk
+     * renderer, satukan nama field agar template Excel tidak pernah
+     * menerima literal "undefined".
+     * ================================================================ */
+    data = (data && typeof data === 'object') ? data : {};
+
+    const isBlank = (v) => v === undefined || v === null || String(v).trim() === '';
+    const pick = (...vals) => {
+        for (const v of vals) if (!isBlank(v)) return v;
+        return '';
+    };
+    const toArray = (v) => {
+        if (Array.isArray(v)) return v;
+        if (typeof v === 'string' && v.trim() !== '') {
+            try {
+                const parsed = JSON.parse(v);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (_) {}
+        }
+        return [];
+    };
+    const safeObj = (v) => (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+    const parseJsonValue = (v, fallback) => {
+        if (v && typeof v === 'object') return v;
+        if (typeof v === 'string' && v.trim() !== '') {
+            try { return JSON.parse(v); } catch (_) {}
+        }
+        return fallback;
+    };
+
+    const htmlCell = (v) => {
+        if (isBlank(v)) return '';
+        return String(v)
+            .replace(/&/g,'&amp;')
+            .replace(/</g,'&lt;')
+            .replace(/>/g,'&gt;')
+            .replace(/"/g,'&quot;')
+            .replace(/'/g,'&#039;');
+    };
+
+    /* Payload history/snapshot kadang menyimpan field di header/footer. */
+    const snapshot = safeObj(data.snapshot);
+    const headerSnap = safeObj(data.header || snapshot.header);
+    const envSnap = safeObj(data.environment || snapshot.environment);
+    const footerSnap = safeObj(data.footer || snapshot.footer);
+
+    data.format = String(pick(
+        data.format, data.format_laporan,
+        headerSnap.format, snapshot.format
+    ) || 'A').toUpperCase();
+    data.format_laporan = data.format;
+
+    // Format A, H, O, P, Q dicetak pada kertas A4 landscape.
+    document.body.classList.toggle('print-landscape', ['A','H','O','P','Q'].includes(data.format));
+    if (new URLSearchParams(window.location.search).get('embed') === '1') { const np=document.querySelector('.no-print'); if(np) np.style.display='none'; }
+
+    data.no_part = pick(data.no_part, data.no_alat, headerSnap.no_part, headerSnap.no_alat);
+    data.no_alat = pick(data.no_alat, data.no_part, headerSnap.no_alat, headerSnap.no_part);
+    data.nama_part = pick(data.nama_part, data.nama_alat, headerSnap.nama_part, headerSnap.nama_alat);
+    data.nama_alat = pick(data.nama_alat, data.nama_part, headerSnap.nama_alat, headerSnap.nama_part);
+
+    data.spesifikasi = pick(data.spesifikasi, headerSnap.spesifikasi);
+    data.resolusi = pick(data.resolusi, headerSnap.resolusi);
+    data.ukuran = pick(data.ukuran, headerSnap.ukuran);
+    data.type = pick(data.type, headerSnap.type);
+    data.seksi_pemilik = pick(data.seksi_pemilik, data.seksi, headerSnap.seksi_pemilik, headerSnap.seksi);
+    data.seksi = pick(data.seksi, data.seksi_pemilik, headerSnap.seksi, headerSnap.seksi_pemilik);
+
+    data.metode = pick(data.metode, data.metode_uji, headerSnap.metode, headerSnap.metode_uji);
+    data.metode_uji = pick(data.metode_uji, data.metode, headerSnap.metode_uji, headerSnap.metode);
+    data.standar_uji = pick(data.standar_uji, headerSnap.standar_uji);
+    data.traceability = pick(data.traceability, headerSnap.traceability);
+    data.satuan = pick(data.satuan, headerSnap.satuan);
+    data.toleransi_global = pick(data.toleransi_global, headerSnap.toleransi_global);
+    data.toleransi = pick(data.toleransi, data.toleransi_global, headerSnap.toleransi, headerSnap.toleransi_global);
+
+    data.suhu = pick(data.suhu, envSnap.suhu, headerSnap.suhu);
+    data.kelembapan = pick(data.kelembapan, envSnap.kelembapan, headerSnap.kelembapan);
+    data.ketidakpastian = pick(data.ketidakpastian, footerSnap.ketidakpastian, headerSnap.ketidakpastian);
+    data.confidence_level = pick(
+        data.confidence_level, data.confidence,
+        footerSnap.confidence_level, headerSnap.confidence_level
+    );
+    data.confidence = pick(data.confidence, data.confidence_level);
+
+    data.status_final = pick(data.status_final, data.keputusan, headerSnap.status_final, headerSnap.keputusan);
+    data.keputusan = pick(data.keputusan, data.status_final);
+    data.tanggal_periksa = pick(
+        data.tanggal_periksa, data.tanggal, data.tanggal_pengecekan,
+        headerSnap.tanggal_periksa, snapshot.tanggal_periksa
+    );
+    data.jadwal_berikutnya = pick(
+        data.jadwal_berikutnya, data.periksa_berikut,
+        data.periode_berikutnya, footerSnap.jadwal_berikutnya
+    );
+    data.operator = pick(data.operator, data.petugas, data.created_by, headerSnap.operator, headerSnap.petugas);
+    data.petugas = data.operator || data.petugas || '';
+    data.keterangan = pick(data.keterangan, footerSnap.keterangan);
+    data.no_laporan = pick(data.no_laporan, data.nomor_pengecekan, snapshot.no_laporan);
+    data.foreman = pick(data.foreman, footerSnap.foreman, headerSnap.foreman);
+    data.supervisor = pick(data.supervisor, footerSnap.supervisor, headerSnap.supervisor);
+
+    data.hasil_array = toArray(data.hasil_array);
+    if (!data.hasil_array.length) data.hasil_array = toArray(data.rows);
+    data.rows = data.hasil_array;
+
+    /* Standard point tersimpan sebagai JSON saat registrasi. */
+    const stdRaw = pick(
+        data.titik_standar_json,
+        data.titik_standar,
+        data.standard_points,
+        headerSnap.titik_standar_json,
+        snapshot.titik_standar_json
+    );
+    data.titik_standar_json = stdRaw || '';
+    data.standard_points = toArray(parseJsonValue(stdRaw, []));
+    if (!Array.isArray(data.standard_points)) data.standard_points = [];
+    const firstStandardPoint = (data.standard_points[0] && typeof data.standard_points[0] === 'object') ? data.standard_points[0] : {standar:data.standard_points[0]};
+    data.toleransi = pick(data.toleransi, firstStandardPoint.toleransi, firstStandardPoint.tol, firstStandardPoint.toleransi_persen, data.toleransi_global);
+
+    const findStd = (predicate) => data.standard_points.find((x) => {
+        try { return predicate(safeObj(x)); } catch (_) { return false; }
+    }) || {};
+
+    /* A / H: lengkapi nilai standar dari JSON master bila snapshot hasil
+       hanya menyimpan actual-nya. */
+    if (data.format === 'A' && data.hasil_array.length) {
+        const r0 = safeObj(data.hasil_array[0]);
+        const goStd = findStd(x => String(pick(x.posisi, x.label)).toUpperCase() === 'GO');
+        const ngStd = findStd(x => String(pick(x.posisi, x.label)).toUpperCase().replace(/\s+/g,' ') === 'NOT GO');
+        const out = safeObj(r0.out), pitch = safeObj(r0.pitch);
+        const mergeStd = (target, src) => ({
+            ...target,
+            // Prioritas: hasil snapshot saat kalibrasi -> master registration JSON.
+            // Alias lama tetap didukung agar data existing tidak hilang.
+            std_spesifikasi: pick(
+                target.std_spesifikasi, target.spesifikasi,
+                src.std_spesifikasi, src.spesifikasi, src.std_spek, src.spek
+            ),
+            std_no_alat: pick(
+                target.std_no_alat, target.no_alat,
+                src.std_no_alat, src.no_alat, src.nomor_alat, src.no_part
+            ),
+            std_out: pick(target.std_out, src.std_out, src.out_std, src.standar_out),
+            tol_out: pick(target.tol_out, src.tol_out, src.toleransi_out),
+            range_out: pick(target.range_out, src.range_out, src.range_out_diameter),
+            std_pitch: pick(target.std_pitch, src.std_pitch, src.pitch_std, src.standar_pitch),
+            tol_pitch: pick(target.tol_pitch, src.tol_pitch, src.toleransi_pitch),
+            range_pitch: pick(target.range_pitch, src.range_pitch, src.range_pitch_diameter)
+        });
+        data.hasil_array[0] = {
+            ...r0,
+            out: mergeStd(out, goStd),
+            pitch: mergeStd(pitch, goStd)
+        };
+        if (!data.hasil_array[0].notgo && Object.keys(ngStd).length) {
+            data.hasil_array[0].notgo = mergeStd({}, ngStd);
+        } else if (data.hasil_array[0].not_go == null && Object.keys(ngStd).length) {
+            data.hasil_array[0].not_go = mergeStd({}, ngStd);
+        }
+        // Jika hasil lama memakai key not_go, tetap sinkronkan agar renderer mengambil master.
+        if (data.hasil_array[0].not_go) {
+            data.hasil_array[0].not_go = mergeStd(data.hasil_array[0].not_go, ngStd);
+        }
+    }
+
+    if (data.format === 'H' && data.hasil_array.length) {
+        data.hasil_array = data.hasil_array.map((r, i) => {
+            const row = safeObj(r);
+            const std = data.standard_points.find(x =>
+                String(pick(x.posisi_ukur, x.posisi, x.label)).toUpperCase() ===
+                String(pick(row.posisi, row.posisi_ukur, i === 0 ? 'GO' : 'NOT GO')).toUpperCase()
+            ) || data.standard_points[i] || {};
+            return {
+                ...row,
+                std_spesifikasi: pick(row.std_spesifikasi, std.std_spesifikasi),
+                std_no_alat: pick(row.std_no_alat, std.std_no_alat),
+                std_out: pick(row.std_out, std.std_out),
+                tol_out: pick(row.tol_out, std.tol_out),
+                range_out: pick(row.range_out, std.range_out),
+                std_pitch: pick(row.std_pitch, std.std_pitch),
+                tol_pitch: pick(row.tol_pitch, std.tol_pitch),
+                range_pitch: pick(row.range_pitch, std.range_pitch)
+            };
+        });
+    }
+
+    /* M: toleransi AXIS/ANGLE tidak selalu ikut tersimpan di row actual. */
+    /* N: standar dan toleransi adalah master registration points.
+       Pastikan row hasil lama yang hanya menyimpan actual/koreksi tetap
+       mendapatkan nilai STANDAR persis dari qa_part.titik_standar_json. */
+    if (data.format === 'N' && data.hasil_array.length) {
+        data.hasil_array = data.hasil_array.map((rawRow, i) => {
+            const row = safeObj(rawRow);
+            const std = data.standard_points[i] || {};
+            return {
+                ...row,
+                standar: pick(row.standar, row.standard, row.nilai_standar, row.std, std.standar, std.standard, std.nilai_standar, std.std),
+                toleransi: pick(row.toleransi, row.tol, row.toleransi_global, std.toleransi, std.tol, std.toleransi_global)
+            };
+        });
+    }
+
+    /* N: posisi/bagian dinamis yang ditambahkan petugas saat update.
+       Tetap dukung histori lama yang hanya memiliki field hasil tunggal. */
+    if (data.format === 'N') {
+        let nCols = Array.isArray(data.posisi_kolom) ? data.posisi_kolom : [];
+        if (!nCols.length && data.hasil_array.length) {
+            const firstN = safeObj(data.hasil_array[0]);
+            const fromRow = Array.isArray(firstN.posisi_kolom) ? firstN.posisi_kolom : (Array.isArray(firstN.posisi_hasil) ? firstN.posisi_hasil : []);
+            nCols = fromRow.map((x, i) => ({ label: pick(x && x.label, x && x.posisi, 'Posisi '+(i+1)), posisi: pick(x && x.posisi, x && x.label, 'Posisi '+(i+1)) }));
+        }
+        if (!nCols.length) nCols = [{ label: 'Hasil', posisi: 'Hasil' }];
+        data.posisi_kolom = nCols.map((x,i) => ({ label: pick(x && x.label, x && x.posisi, 'Posisi '+(i+1)), posisi: pick(x && x.posisi, x && x.label, 'Posisi '+(i+1)) }));
+        data.hasil_array = data.hasil_array.map(function(rawRow){
+            const row = safeObj(rawRow);
+            let pos = Array.isArray(row.posisi_hasil) ? row.posisi_hasil : (Array.isArray(row.posisi_kolom) ? row.posisi_kolom : []);
+            if (!pos.length) pos = data.posisi_kolom.map(function(col){ return { posisi: col.posisi, label: col.label, hasil: row.hasil || '', koreksi: row.koreksi || '' }; });
+            return { ...row, posisi_hasil: pos };
+        });
+    }
+
+    /* =================================================================
+     * UNIVERSAL MASTER-STANDARD MERGE A-R
+     * ---------------------------------------------------------------
+     * hasil_json menyimpan nilai actual/editable. Nilai standar yang readonly
+     * tetap bersumber dari qa_part.titik_standar_json ketika field tersebut
+     * belum ada di histori lama. Ini membuat semua format A-R konsisten.
+     * ================================================================= */
+    const standardKeysByFormat = {
+        B:['std_min','std_max'],
+        C:['toleransi'],
+        D:['standar'],
+        E:['standar','toleransi'],
+        G:['standar','toleransi'],
+        H:['posisi_ukur','std_spesifikasi','std_no_alat','std_out','tol_out','range_out','std_pitch','tol_pitch','range_pitch'],
+        I:['std_spesifikasi','std_no_alat'],
+        J:[],
+        K:['nilai_ditentukan','toleransi_persen'],
+        L:['toleransi'],
+        M:['jenis','std_mm','toleransi_axis','std_degree','toleransi_sudut'],
+        N:['standar','toleransi'],
+        O:['spesifikasi','tol_plus','tol_minus','go_std','go_tol_near','go_tol_far','go_min','go_max','notgo_std','notgo_tol','notgo_min','notgo_max'],
+        P:['std_label','min','max','actual_count','alat_nama','alat_no'],
+        Q:['subtype','std_spesifikasi','std_no_alat','std','tol_plus','tol_minus','min','max'],
+        R:['bagian','standar','toleransi']
+    };
+    const stdAt = (idx) => {
+        const rawStd = data.standard_points[idx];
+        return (rawStd && typeof rawStd === 'object' && !Array.isArray(rawStd)) ? rawStd : {standar: rawStd};
+    };
+    const rowSafetyKeys = {
+        B:['tekanan','handle','baut','std_min','std_max','std1','std2','std3','uji1','uji2','uji3','hasil','rata','status'],
+        C:['setting','actual','alat_std','selisih','status'],
+        D:['unit','mode','setting','standar','hasil','koreksi','status'],
+        E:['standar','toleransi','t1_hasil','t1_koreksi','t2_hasil','t2_koreksi','status'],
+        G:['standar','toleransi','hasil','hasil_2','status'],
+        H:['posisi_ukur','std_spesifikasi','std_no_alat','std_out','tol_out','range_out','std_pitch','tol_pitch','range_pitch','kode_warna','putusan','status'],
+        I:['std_spesifikasi','std_no_alat','hasil_atas','hasil_bawah','kode_warna','putusan','status'],
+        J:['no_part','spesifikasi','alat_verifikasi','hasil_verifikasi','status'],
+        K:['nilai_ditentukan','toleransi_persen','nilai_pengukuran','selisih','status'],
+        L:['arah','applied_value','indicated_value','toleransi','correction','koreksi','status'],
+        M:['jenis','std_mm','toleransi_axis','x_left','x_left_correction','x_right','x_right_correction','y_front','y_front_correction','y_back','y_back_correction','std_degree','toleransi_sudut','hasil_degree','hasil_minute','hasil_second','correction','status'],
+        N:['bagian','standar','toleransi','hasil','koreksi','status'],
+        O:['spesifikasi','tol_plus','tol_minus','go_std','go_tol_near','go_tol_far','go_min','go_max','go_hasil_min','go_hasil_max','notgo_std','notgo_tol','notgo_min','notgo_max','notgo_hasil_min','notgo_hasil_max','kode_warna','keputusan','no_gambar','status'],
+        P:['no_alat','type','ukuran','upart','alat_nama','alat_no','std_label','min','max','actual_count','actual1','actual2','aktual1','aktual2','status','keputusan','no_gambar'],
+        Q:['subtype','std_spesifikasi','std_no_alat','std','tol_plus','tol_minus','min','max','actual1','actual2','actual3','actual4','kode_warna','keputusan','no_gambar','status'],
+        R:['bagian','standar','toleransi','depan','tengah','belakang','status']
+    };
+
+    if (!['A','F'].includes(data.format) && data.hasil_array.length) {
+        const keys = standardKeysByFormat[data.format] || [];
+        data.hasil_array = data.hasil_array.map(function(rawRow, idx) {
+            const row = safeObj(rawRow);
+            const master = stdAt(idx);
+            const merged = { ...master, ...row };
+            keys.forEach(function(key) {
+                if (isBlank(row[key]) && !isBlank(master[key])) merged[key] = master[key];
+                if (!(key in merged)) merged[key] = '';
+            });
+            (rowSafetyKeys[data.format] || []).forEach(function(key) {
+                if (merged[key] === undefined || merged[key] === null) merged[key] = '';
+            });
+            if (data.format === 'H') {
+                merged.out = {dep:'',ten:'',bel:'', ...safeObj(row.out)};
+                merged.pitch = {dep:'',ten:'',bel:'', ...safeObj(row.pitch)};
+            }
+            return merged;
+        });
+    }
+
+    if (data.format === 'F' && data.hasil_array.length) {
+        const f = safeObj(data.hasil_array[0]);
+        f.sec1 = {standar:'',hasil:'',deviasi:'', ...safeObj(f.sec1)};
+        f.sec2 = toArray(f.sec2).map(function(r,i){ return {standar:pick(r.standar, stdAt(i).standar), hasil:pick(r.hasil,r.actual,r.actual1), koreksi:pick(r.koreksi,r.correction)}; });
+        f.sec3 = {tengah:'',belakang:'',kanan:'',depan:'',kiri:'',perbedaan:'', ...safeObj(f.sec3)};
+        data.hasil_array = [f];
+    }
+
+    if (data.format === 'M') {
+        const mAxis = findStd(x => String(pick(x.jenis, x.posisi, x.label)).toUpperCase().indexOf('AXIS') >= 0);
+        const mAngle = findStd(x => String(pick(x.jenis, x.posisi, x.label)).toUpperCase().indexOf('ANGLE') >= 0);
+        data.toleransi_axis = pick(data.toleransi_axis, mAxis.toleransi_axis, mAxis.toleransi);
+        data.toleransi_sudut = pick(data.toleransi_sudut, mAngle.toleransi_sudut, mAngle.toleransi);
+        if (isBlank(data.toleransi_axis)) {
+            const a = findStd(x => !isBlank(x.std_mm));
+            data.toleransi_axis = pick(a.toleransi_axis, a.toleransi);
+        }
+        if (isBlank(data.toleransi_sudut)) {
+            const a = findStd(x => !isBlank(x.std_degree));
+            data.toleransi_sudut = pick(a.toleransi_sudut, a.toleransi);
+        }
+    }
+
+    /* P: UI menyimpan row flat, sedangkan template Excel membutuhkan
+       item -> measurements[]. Bentuk ulang tanpa mengubah urutan data. */
+    const normalizePItems = (rows) => {
+        if (!Array.isArray(rows) || !rows.length) return [];
+        if (rows.some(r => Array.isArray(safeObj(r).measurements))) {
+            return rows.map(r => ({
+                ...safeObj(r),
+                measurements: toArray(r.measurements)
+            }));
+        }
+
+        const items = [];
+        const map = new Map();
+        rows.forEach((rawRow, idx) => {
+            const r = safeObj(rawRow);
+            const keyParts = [r.no_alat, r.type, r.ukuran, r.upart];
+            const hasIdentity = keyParts.some(v => !isBlank(v));
+            const key = hasIdentity
+                ? keyParts.map(v => String(v ?? '').trim()).join('||')
+                : '__ROW__' + idx;
+
+            let item = map.get(key);
+            if (!item) {
+                item = {
+                    no_alat: pick(r.no_alat, r.no_part),
+                    type: pick(r.type),
+                    ukuran: pick(r.ukuran),
+                    upart: pick(r.upart),
+                    keputusan: pick(r.keputusan, r.status, data.keputusan),
+                    no_gambar: pick(r.no_gambar, data.no_gambar),
+                    measurements: []
+                };
+                map.set(key, item);
+                items.push(item);
+            }
+            item.measurements.push({
+                alat_nama: pick(r.alat_nama, r.nama_standar, r.standar_nama),
+                alat_no: pick(r.alat_no, r.std_no_alat, r.no_standar),
+                std_label: pick(r.std_label, r.standar, r.posisi),
+                min: pick(r.min, r.min_range),
+                max: pick(r.max, r.max_range),
+                actual_count: pick(r.actual_count, r.jumlah_actual, '2'),
+                actual1: pick(r.actual1, r.aktual1, r.hasil, r.actual),
+                actual2: pick(r.actual2, r.aktual2, r.hasil2, r.actual_2)
+            });
+        });
+        return items;
+    };
+    if (data.format === 'P') data.hasil_array = normalizePItems(data.hasil_array);
+
+    /* F selalu aman walaupun sec1/sec2/sec3 belum ada karena payload lama. */
+    const normalizeFData = (raw) => {
+        const root = safeObj(raw);
+        let sec2 = toArray(root.sec2);
+        if (!sec2.length) {
+            sec2 = data.hasil_array
+                .filter((x, i) => i > 0 || !root.sec1)
+                .map(x => ({
+                    posisi: pick(x.posisi, x.label),
+                    standar: pick(x.standar, x.std, x.standard),
+                    hasil: pick(x.hasil, x.actual, x.actual1),
+                    koreksi: pick(x.koreksi, x.correction)
+                }));
+        }
+        const sec1 = safeObj(root.sec1);
+        const sec3 = safeObj(root.sec3);
+        return {
+            ...root,
+            sec1: {
+                ...sec1,
+                standar: pick(sec1.standar, sec1.std, sec1.standard),
+                hasil: pick(sec1.hasil, sec1.actual)
+            },
+            sec2,
+            sec3: {
+                ...sec3,
+                standar: pick(sec3.standar, sec3.std, sec3.standard),
+                hasil: pick(sec3.hasil, sec3.actual)
+            }
+        };
+    };
+    if (data.format === 'F') {
+        data.hasil_array = [normalizeFData(data.hasil_array[0] || {})];
+    }
+
+    // Q memakai struktur nested untuk SERATION/PLUG. Pastikan semua field ada
+    // supaya template tidak pernah mencetak literal "undefined" pada data lama.
+    if (data.format === 'Q' && data.hasil_array.length) {
+        data.hasil_array = data.hasil_array.map(function(rawRow, idx) {
+            const row = { ...safeObj(rawRow) };
+            const subtype = String(pick(row.subtype, stdAt(idx).subtype, 'SERATION')).toUpperCase();
+            row.subtype = subtype;
+            row.kode_warna = pick(row.kode_warna, data.kode_warna);
+            row.keputusan = pick(row.keputusan, data.keputusan);
+            row.no_gambar = pick(row.no_gambar, data.no_gambar);
+            if (subtype === 'SERATION') {
+                row.out = {
+                    std_spesifikasi:'', std_no_alat:'', std:'', tol_plus:'', tol_minus:'', min:'', max:'', actual:[],
+                    ...safeObj(row.out)
+                };
+                row.pitch = {
+                    std_spesifikasi:'', std_no_alat:'', std:'', tol_plus:'', tol_minus:'', min:'', max:'', actual:[],
+                    ...safeObj(row.pitch)
+                };
+                row.out.actual = Array.isArray(row.out.actual) ? row.out.actual : [];
+                row.pitch.actual = Array.isArray(row.pitch.actual) ? row.pitch.actual : [];
+                while (row.out.actual.length < 3) row.out.actual.push('');
+                while (row.pitch.actual.length < 3) row.pitch.actual.push('');
+            } else {
+                row.std_spesifikasi = pick(row.std_spesifikasi, stdAt(idx).std_spesifikasi);
+                row.std_no_alat = pick(row.std_no_alat, stdAt(idx).std_no_alat);
+                row.go = { std:'', tol_plus:'', tol_minus:'', min:'', max:'', actual:{front1:'',front2:'',back1:'',back2:''}, ...safeObj(row.go) };
+                row.notgo = { std:'', tol_plus:'', tol_minus:'', min:'', max:'', actual:{front1:'',front2:'',back1:'',back2:''}, ...safeObj(row.notgo) };
+                row.go.actual = {front1:'',front2:'',back1:'',back2:'', ...safeObj(row.go.actual)};
+                row.notgo.actual = {front1:'',front2:'',back1:'',back2:'', ...safeObj(row.notgo.actual)};
+            }
+            return row;
+        });
+    }
+
+// ================= FORM Q (SERATION / PLUG GAUGE) =================
     if (String(data.format || '').toUpperCase() === 'Q') {
         const esc = (v) => {
             if (v === null || v === undefined || String(v).trim() === '') return '///';
@@ -560,7 +1131,7 @@ html, body {
                 <div class="datebox-q"><table>
                     <tr><td colspan="3">TANGGAL : ${dateLong(data.tanggal_periksa)}</td></tr>
                     <tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr>
-                    <tr style="height:15mm;"><td style="vertical-align:bottom;text-align:center;">${esc(data.petugas)}</td><td style="vertical-align:bottom;text-align:center;">${esc(data.foreman)}</td><td style="vertical-align:bottom;text-align:center;">${esc(data.supervisor)}</td></tr>
+                    <tr style="height:15mm;"><td style="vertical-align:bottom;text-align:center;">${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td><td style="vertical-align:bottom;text-align:center;">${qaSignatureName(data.pemeriksa || data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td><td style="vertical-align:bottom;text-align:center;">${qaSignatureName(data.penyetuju || data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td></tr>
                     <tr><td style="text-align:center;">PETUGAS</td><td style="text-align:center;">FOREMAN</td><td style="text-align:center;">SUPERVISOR</td></tr>
                 </table></div>
             </div>
@@ -607,7 +1178,7 @@ html, body {
         return;
     }
 
-    // ================= FORM P (SK GAUGE) =================
+// ================= FORM P (SK GAUGE) =================
     if (String(data.format || '').toUpperCase() === 'P') {
         const esc = (v) => {
             if (v === null || v === undefined || String(v).trim() === '') return '///';
@@ -648,7 +1219,7 @@ html, body {
                 k = end;
             }
             
-            let dbStr = (data.jadwal_berikutnya && data.jadwal_berikutnya !== 'null' && data.jadwal_berikutnya !== '-') ? formatTanggalReversed(data.jadwal_berikutnya) : '<b>Memerlukan Kalibrasi</b>';
+            let dbStr = (data.jadwal_berikutnya && data.jadwal_berikutnya !== 'null' && data.jadwal_berikutnya !== '-') ? dateShort(data.jadwal_berikutnya) : '<b>Memerlukan Kalibrasi</b>';
 
             return ms.map((m, j) => {
                 const first = j === 0;
@@ -698,9 +1269,9 @@ html, body {
                         <tr><td colspan="3">TANGGAL : ${dateLong(data.tanggal_periksa)}</td></tr>
                         <tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr>
                         <tr style="height:15mm;">
-                            <td style="vertical-align:bottom;text-align:center;">${esc(data.petugas)}</td>
-                            <td style="vertical-align:bottom;text-align:center;">${esc(data.foreman)}</td>
-                            <td style="vertical-align:bottom;text-align:center;">${esc(data.supervisor)}</td>
+                            <td style="vertical-align:bottom;text-align:center;">${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td>
+                            <td style="vertical-align:bottom;text-align:center;">${qaSignatureName(data.pemeriksa || data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td>
+                            <td style="vertical-align:bottom;text-align:center;">${qaSignatureName(data.penyetuju || data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td>
                         </tr>
                         <tr><td style="text-align:center;">PETUGAS</td><td style="text-align:center;">FOREMAN</td><td style="text-align:center;">SUPERVISOR</td></tr>
                     </table>
@@ -748,7 +1319,7 @@ html, body {
         return;
     }
 
-    // ================= FORM O (SNAP GAUGE) =================
+// ================= FORM O (SNAP GAUGE) =================
     if (String(data.format || '').toUpperCase() === 'O') {
         const esc = (v) => {
             if (v === null || v === undefined || String(v).trim() === '') return '///';
@@ -806,7 +1377,7 @@ html, body {
                     <table>
                         <tr><td colspan="3">TANGGAL : ${dateLong(data.tanggal_periksa)}</td></tr>
                         <tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr>
-                        <tr style="height:16mm;"><td style="vertical-align:bottom;text-align:center;">${esc(data.petugas)}</td><td style="vertical-align:bottom;text-align:center;">${esc(data.foreman)}</td><td style="vertical-align:bottom;text-align:center;">${esc(data.supervisor)}</td></tr>
+                        <tr style="height:16mm;"><td style="vertical-align:bottom;text-align:center;">${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td><td style="vertical-align:bottom;text-align:center;">${qaSignatureName(data.pemeriksa || data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td><td style="vertical-align:bottom;text-align:center;">${qaSignatureName(data.penyetuju || data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td></tr>
                         <tr><td style="text-align:center;">PETUGAS</td><td style="text-align:center;">FOREMAN</td><td style="text-align:center;">SUPERVISOR</td></tr>
                     </table>
                 </div>
@@ -855,7 +1426,7 @@ html, body {
         return;
     }
 
-    // ================= FORM M (PROFILE PROJECTOR) =================
+// ================= FORM M (PROFILE PROJECTOR) =================
     if (String(data.format || '').toUpperCase() === 'M') {
         const esc = (v) => {
             if (v === null || v === undefined || String(v).trim() === '') return '///';
@@ -913,7 +1484,7 @@ html, body {
         const keputusanRaw = String(data.keputusan || '').toUpperCase();
         const keputusan = (keputusanRaw === 'GOOD' || keputusanRaw === 'OK')
             ? 'OK'
-            : ((keputusanRaw === 'BAD' || keputusanRaw === 'BURUK') ? 'BURUK' : esc(data.keputusan));
+            : ((keputusanRaw === 'NOT GOOD' || keputusanRaw === 'NOT GOOD') ? 'NOT GOOD' : esc(data.keputusan));
 
         const tolSudutMenit = parseFloat(data.toleransi_sudut);
         const tolSudutDetik = Number.isFinite(tolSudutMenit)
@@ -935,7 +1506,7 @@ html, body {
                 </tr>
                 <tr>
                     <td>NAMA ALAT</td><td>${esc(data.nama_part || data.nama_alat)}</td>
-                    <td>PETUGAS KALIBRASI</td><td>${esc(data.petugas)}</td>
+                    <td>PETUGAS KALIBRASI</td><td>${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td>
                 </tr>
                 <tr>
                     <td>NOMOR ALAT</td><td>${esc(data.no_part || data.no_alat)}</td>
@@ -1033,12 +1604,12 @@ html, body {
             <table class="sign-m">
                 <tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr>
                 <tr class="sign-space-m">
-                    <td>${esc(data.petugas)}</td>
-                    <td>${esc(data.foreman)}</td>
-                    <td>${esc(data.supervisor)}</td>
+                    <td>${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td>
+                    <td>${qaSignatureName(data.pemeriksa || data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td>
+                    <td>${qaSignatureName(data.penyetuju || data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td>
                 </tr>
                 <tr class="role-m">
-                    <td>PETUGAS</td><td>FOREMAN</td><td>SUPERVISOR</td>
+                    <td>PETUGAS</td><td>PEMERIKSA</td><td>PENYETUJU</td>
                 </tr>
             </table>
 
@@ -1048,7 +1619,7 @@ html, body {
         return;
     }
 
-    // ================= FORM L (PRESSURE GAUGE) =================
+// ================= FORM L (PRESSURE GAUGE) =================
     if(String(data.format||'').toUpperCase()==='L'){
         const e=v=>(v===null||v===undefined||String(v).trim()===''?'///':String(v).trim().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'));
         const raw=v=>(v===null||v===undefined?'':String(v).trim());
@@ -1060,14 +1631,14 @@ html, body {
         const mk=(arr,w)=>arr.map((r,i)=>`<tr><td style="font-weight:bold">${i<w.length?w.charAt(i):''}</td><td>${e(r.applied_value)}</td><td>${e(r.indicated_value)}</td><td>${e(r.correction)}</td></tr>`).join('');
         const body=mk(naik,'NAIK')+mk(turun,'TURUN');
         const kr=String(data.keputusan||'').toUpperCase();
-        const kep=(kr==='GOOD'||kr==='OK')?'OK':((kr==='BAD'||kr==='BURUK')?'BURUK':e(data.keputusan));
+        const kep=(kr==='GOOD'||kr==='OK')?'OK':((kr==='NOT GOOD'||kr==='NOT GOOD')?'NOT GOOD':e(data.keputusan));
 
         document.getElementById('report').innerHTML=`<div class="report report-l">
             <div class="company-l">PT.SURYA TOTO INDONESIA Tbk.</div>
             <div class="title-l">LAPORAN KALIBRASI</div>
             <table class="info-l">
                 <tr><td>NO. LAPORAN</td><td>${e(data.no_laporan)}</td><td>SEKSI</td><td>${e(data.seksi_pemilik||data.seksi)}</td></tr>
-                <tr><td>NAMA ALAT</td><td>${e(data.nama_part||data.nama_alat)}</td><td>PETUGAS KALIBRASI</td><td>${e(data.petugas)}</td></tr>
+                <tr><td>NAMA ALAT</td><td>${e(data.nama_part||data.nama_alat)}</td><td>PETUGAS KALIBRASI</td><td>${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td></tr>
                 <tr><td>NOMOR ALAT</td><td>${e(data.no_part||data.no_alat)}</td><td></td><td></td></tr>
                 <tr><td>SPESIFIKASI</td><td>${e(data.spesifikasi)}</td><td>TANGGAL KALIBRASI</td><td>${dt(data.tanggal_periksa)}</td></tr>
                 <tr><td>RESOLUSI</td><td>${e(data.resolusi)}</td><td></td><td></td></tr>
@@ -1083,15 +1654,15 @@ html, body {
                 <tr><td colspan="4" class="ket-l"><b>KETERANGAN :</b><br>${e(data.keterangan)}</td></tr>
             </table>
             <div class="city-date-l">TANGERANG, ${dl(data.tanggal_periksa)}</div>
-            <table class="sign-l"><tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr><tr class="sign-space-l"><td>${e(data.petugas)}</td><td>${e(data.foreman)}</td><td>${e(data.supervisor)}</td></tr><tr class="role-l"><td>PETUGAS</td><td>FOREMAN</td><td>SUPERVISOR</td></tr></table>
+            <table class="sign-l"><tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr><tr class="sign-space-l"><td>${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td><td>${qaSignatureName(data.pemeriksa || data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td><td>${qaSignatureName(data.penyetuju || data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td></tr><tr class="role-l"><td>PETUGAS</td><td>PEMERIKSA</td><td>PENYETUJU</td></tr></table>
             <div class="doc-code-l">STIS-CMFG4-03/R4</div>
         </div>`;return;
     }
 
-    // ================= FORM K (VOLTAGE ULTRASONIC) =================
-    if(String(data.format||'').toUpperCase()==='K'){const e=v=>(v===null||v===undefined||String(v).trim()===''?'///':String(v).trim().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;')),raw=v=>(v===null||v===undefined?'':String(v).trim()),dt=v=>{if(!v)return'///';const m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?m[3]+'-'+m[2]+'-'+m[1]:e(v)},dl=v=>{if(!v)return'///';const m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!m)return e(v);const b=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];return m[3]+' '+b[parseInt(m[2],10)-1]+' '+m[1]},rows=Array.isArray(data.hasil_array)?data.hasil_array:[],body=rows.map((r,i)=>`<tr><td>${i+1}</td><td>${e(r.nilai_ditentukan)}</td><td>${e(r.nilai_pengukuran)}</td><td>${e(r.selisih)}</td><td>${e(r.status)}</td></tr>`).join(''),kr=String(data.keputusan||'').toUpperCase(),kep=(kr==='GOOD'||kr==='OK')?'OK':((kr==='BAD'||kr==='BURUK')?'BURUK':e(data.keputusan));document.getElementById('report').innerHTML=`<div class="report report-k"><div class="company-k">PT. SURYA TOTO INDONESIA Tbk.</div><div class="title-k">LAPORAN PEMERIKSAAN</div><table class="info-k"><tr><td>NO LAPORAN</td><td>${e(data.no_laporan)}</td><td>SEKSI</td><td style="font-weight:bold;text-align:center">${e(data.seksi_pemilik||data.seksi)}</td></tr><tr><td>NAMA ALAT</td><td>${e(data.nama_part||data.nama_alat)}</td><td>PETUGAS PERIKSA</td><td style="text-align:center">${e(data.petugas)}</td></tr><tr><td>NOMOR MESIN</td><td>${e(data.no_part||data.no_alat)}</td><td>TANGGAL PERIKSA</td><td style="text-align:center">${dt(data.tanggal_periksa)}</td></tr><tr><td>SPESIFIKASI</td><td>${e(data.spesifikasi)}</td><td></td><td></td></tr><tr><td>RESOLUSI</td><td>${e(data.resolusi)}</td><td></td><td></td></tr></table><div class="hasil-title-k">HASIL PEMERIKSAAN</div><table class="hasil-k"><thead><tr><th>NO</th><th>NILAI YG DITENTUKAN</th><th>NILAI PENGUKURAN</th><th>SELISIH</th><th>PERTIMBANGAN KELULUSAN</th></tr></thead><tbody>${body||'<tr><td colspan="5">Tidak ada data.</td></tr>'}<tr class="blank-k"><td></td><td></td><td></td><td></td><td></td></tr></tbody></table><table class="detail-k"><tr><td>METODE</td><td>${e(data.metode)}</td><td>KELEMBABAN RUANGAN</td><td>${raw(data.kelembapan)?e(data.kelembapan)+' %':'///'}</td></tr><tr><td>STANDAR UJI</td><td>${e(data.standar_uji)}</td><td>STANDAR TOLERANSI</td><td style="text-align:center">${raw(data.toleransi)?'± '+e(data.toleransi)+' %':'///'}</td></tr><tr><td>TRACEABILITY</td><td>${e(data.traceability)}</td><td>KEPUTUSAN</td><td style="font-weight:bold;text-align:center">${kep}</td></tr><tr><td>SUHU RUANGAN</td><td>${raw(data.suhu)?e(data.suhu)+' °C':'///'}</td><td>TGL PERIKSA BERIKUTNYA</td><td style="text-align:center">${dt(data.jadwal_berikutnya||data.periksa_berikut)}</td></tr><tr><td colspan="4" class="ket-k"><b>KETERANGAN :</b><br>${e(data.keterangan)}</td></tr></table><div class="city-date-k">TANGERANG, ${dl(data.tanggal_periksa)}</div><table class="sign-k"><tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr><tr class="sign-space-k"><td>${e(data.petugas)}</td><td>${e(data.foreman)}</td><td>${e(data.supervisor)}</td></tr><tr class="role-k"><td>PETUGAS</td><td>FOREMAN</td><td>SUPERVISOR</td></tr></table><div class="doc-code-k">STIS-CMFG4-05/R3</div></div>`;return;}
+// ================= FORM K (VOLTAGE ULTRASONIC) =================
+    if(String(data.format||'').toUpperCase()==='K'){const e=v=>(v===null||v===undefined||String(v).trim()===''?'///':String(v).trim().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;')),raw=v=>(v===null||v===undefined?'':String(v).trim()),dt=v=>{if(!v)return'///';const m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?m[3]+'-'+m[2]+'-'+m[1]:e(v)},dl=v=>{if(!v)return'///';const m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!m)return e(v);const b=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];return m[3]+' '+b[parseInt(m[2],10)-1]+' '+m[1]},rows=Array.isArray(data.hasil_array)?data.hasil_array:[],body=rows.map((r,i)=>`<tr><td>${i+1}</td><td>${e(r.nilai_ditentukan)}</td><td>${e(r.nilai_pengukuran)}</td><td>${e(r.selisih)}</td><td>${e(r.status)}</td></tr>`).join(''),kr=String(data.keputusan||'').toUpperCase(),kep=(kr==='GOOD'||kr==='OK')?'OK':((kr==='NOT GOOD'||kr==='NOT GOOD')?'NOT GOOD':e(data.keputusan));document.getElementById('report').innerHTML=`<div class="report report-k"><div class="company-k">PT. SURYA TOTO INDONESIA Tbk.</div><div class="title-k">LAPORAN PEMERIKSAAN</div><table class="info-k"><tr><td>NO LAPORAN</td><td>${e(data.no_laporan)}</td><td>SEKSI</td><td style="font-weight:bold;text-align:center">${e(data.seksi_pemilik||data.seksi)}</td></tr><tr><td>NAMA ALAT</td><td>${e(data.nama_part||data.nama_alat)}</td><td>PETUGAS PERIKSA</td><td style="text-align:center">${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td></tr><tr><td>NOMOR MESIN</td><td>${e(data.no_part||data.no_alat)}</td><td>TANGGAL PERIKSA</td><td style="text-align:center">${dt(data.tanggal_periksa)}</td></tr><tr><td>SPESIFIKASI</td><td>${e(data.spesifikasi)}</td><td></td><td></td></tr><tr><td>RESOLUSI</td><td>${e(data.resolusi)}</td><td></td><td></td></tr></table><div class="hasil-title-k">HASIL PEMERIKSAAN</div><table class="hasil-k"><thead><tr><th>NO</th><th>NILAI YG DITENTUKAN</th><th>NILAI PENGUKURAN</th><th>SELISIH</th><th>PERTIMBANGAN KELULUSAN</th></tr></thead><tbody>${body||'<tr><td colspan="5">Tidak ada data.</td></tr>'}<tr class="blank-k"><td></td><td></td><td></td><td></td><td></td></tr></tbody></table><table class="detail-k"><tr><td>METODE</td><td>${e(data.metode)}</td><td>KELEMBABAN RUANGAN</td><td>${raw(data.kelembapan)?e(data.kelembapan)+' %':'///'}</td></tr><tr><td>STANDAR UJI</td><td>${e(data.standar_uji)}</td><td>STANDAR TOLERANSI</td><td style="text-align:center">${raw(data.toleransi)?'± '+e(data.toleransi)+' %':'///'}</td></tr><tr><td>TRACEABILITY</td><td>${e(data.traceability)}</td><td>KEPUTUSAN</td><td style="font-weight:bold;text-align:center">${kep}</td></tr><tr><td>SUHU RUANGAN</td><td>${raw(data.suhu)?e(data.suhu)+' °C':'///'}</td><td>TGL PERIKSA BERIKUTNYA</td><td style="text-align:center">${dt(data.jadwal_berikutnya||data.periksa_berikut)}</td></tr><tr><td colspan="4" class="ket-k"><b>KETERANGAN :</b><br>${e(data.keterangan)}</td></tr></table><div class="city-date-k">TANGERANG, ${dl(data.tanggal_periksa)}</div><table class="sign-k"><tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr><tr class="sign-space-k"><td>${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td><td>${qaSignatureName(data.pemeriksa || data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td><td>${qaSignatureName(data.penyetuju || data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td></tr><tr class="role-k"><td>PETUGAS</td><td>PEMERIKSA</td><td>PENYETUJU</td></tr></table><div class="doc-code-k">STIS-CMFG4-05/R3</div></div>`;return;}
 
-    // ================= FORM J (VERIFIKASI RADIUS GAUGE) =================
+// ================= FORM J (VERIFIKASI RADIUS GAUGE) =================
     if (String(data.format || '').toUpperCase() === 'J') {
         const escJ = (v) => {
             if (v === null || v === undefined || String(v).trim() === '') return '///';
@@ -1152,7 +1723,7 @@ html, body {
                     <td class="label-j">NAMA ALAT</td>
                     <td class="value-j">${escJ(data.nama_part || data.nama_alat)}</td>
                     <td class="label2-j">PETUGAS</td>
-                    <td class="value2-j" style="text-align:center;">${escJ(data.petugas)}</td>
+                    <td class="value2-j" style="text-align:center;">${escJ((data.operator || data.petugas))}</td>
                 </tr>
                 <tr>
                     <td class="label-j">METODE</td>
@@ -1212,11 +1783,11 @@ html, body {
             <table class="sign-j">
                 <tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr>
                 <tr class="sign-space-j">
-                    <td>${escJ(data.petugas)}</td>
-                    <td>${escJ(data.foreman)}</td>
-                    <td>${escJ(data.supervisor)}</td>
+                    <td>${escJ((data.operator || data.petugas))}</td>
+                    <td>${qaSignatureName(data.pemeriksa || data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td>
+                    <td>${qaSignatureName(data.penyetuju || data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td>
                 </tr>
-                <tr class="role-j"><td>PETUGAS</td><td>FOREMAN</td><td>SUPERVISOR</td></tr>
+                <tr class="role-j"><td>PETUGAS</td><td>PEMERIKSA</td><td>PENYETUJU</td></tr>
             </table>
 
             <div class="doc-code-j">STIS-CMFG4-39/R3</div>
@@ -1224,7 +1795,7 @@ html, body {
         return;
     }
 
-    // ================= FORM H (THREAD PLUG GAUGE) =================
+// ================= FORM H (THREAD PLUG GAUGE) =================
     if (String(data.format || '').toUpperCase() === 'H') {
         const rowsH = Array.isArray(data.hasil_array) ? data.hasil_array : [];
         const escH = (v) => {
@@ -1252,7 +1823,7 @@ html, body {
         };
         const firstH = rowsH[0] || {};
         const kodeWarnaH = firstH.kode_warna || '';
-        const putusanH = firstH.putusan || ((String(data.keputusan || '').toUpperCase()==='GOOD') ? 'OK' : 'BAD');
+        const putusanH = firstH.putusan || ((String(data.keputusan || '').toUpperCase()==='GOOD') ? 'OK' : 'NOT GOOD');
         const rowspanH = Math.max(rowsH.length, 1);
 
         const bodyH = rowsH.map((r, idx) => {
@@ -1298,8 +1869,8 @@ html, body {
                         <div style="text-align:center;margin-bottom:1mm;">TANGGAL : ${dateLongH(data.tanggal_periksa)}</div>
                         <table class="sign-h-table">
                             <tr><td>DIBUAT</td><td>DIPERIKSA</td><td>DISETUJUI</td></tr>
-                            <tr class="space-h"><td>${escH(data.petugas)}</td><td>${escH(data.foreman)}</td><td>${escH(data.supervisor)}</td></tr>
-                            <tr><td>PETUGAS</td><td>FOREMAN</td><td>SUPERVISOR</td></tr>
+                            <tr class="space-h"><td>${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td><td>${qaSignatureName(data.pemeriksa || data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td><td>${qaSignatureName(data.penyetuju || data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td></tr>
+                            <tr><td>PETUGAS</td><td>PEMERIKSA</td><td>PENYETUJU</td></tr>
                         </table>
                     </td>
                 </tr>
@@ -1355,7 +1926,7 @@ html, body {
         return;
     }
 
-    // ================= FORM I (PEMERIKSAAN GAUGE) =================
+// ================= FORM I (PEMERIKSAAN GAUGE) =================
     if (String(data.format || '').toUpperCase() === 'I') {
         const rowsI = Array.isArray(data.hasil_array) ? data.hasil_array : [];
         const escI = (v) => {
@@ -1423,8 +1994,8 @@ html, body {
                         <div style="text-align:center;margin-bottom:1mm;">Tanggal : ${dateLongI(data.tanggal_periksa)}</div>
                         <table class="sign-head-i">
                             <tr><td>DIBUAT</td><td>DIPERIKSA</td><td>DISETUJUI</td></tr>
-                            <tr class="space-i"><td>${escI(data.petugas)}</td><td>${escI(data.foreman)}</td><td>${escI(data.supervisor)}</td></tr>
-                            <tr><td>PETUGAS</td><td>FOREMAN</td><td>SUPERVISOR</td></tr>
+                            <tr class="space-i"><td>${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td><td>${qaSignatureName(data.pemeriksa || data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td><td>${qaSignatureName(data.penyetuju || data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td></tr>
+                            <tr><td>PETUGAS</td><td>PEMERIKSA</td><td>PENYETUJU</td></tr>
                         </table>
                     </td>
                 </tr>
@@ -1470,7 +2041,7 @@ html, body {
         return;
     }
 
-    // ================= FORM D (PEMERIKSAAN MULTIMETER) =================
+// ================= FORM D (PEMERIKSAAN MULTIMETER) =================
 
     if (String(data.format || '').toUpperCase() === 'D') {
         const rowsD = Array.isArray(data.hasil_array) ? data.hasil_array : [];
@@ -1486,7 +2057,7 @@ html, body {
             return m[3]+'-'+m[2]+'-'+m[1];
         };
         const statusD = String(data.keputusan || data.status_final || '').toUpperCase();
-        const keputusanD = (statusD === 'GOOD' || statusD === 'OK') ? 'OK' : ((statusD === 'BAD' || statusD === 'BURUK' || statusD === 'NG') ? 'NG' : escD(data.keputusan || data.status_final));
+        const keputusanD = (statusD === 'GOOD' || statusD === 'OK') ? 'OK' : ((statusD === 'NOT GOOD' || statusD === 'NOT GOOD' || statusD === 'NG') ? 'NG' : escD(data.keputusan || data.status_final));
 
         let lastUnit = null;
         let noInUnit = 0;
@@ -1518,7 +2089,7 @@ html, body {
             <table class="info-d">
                 <colgroup><col class="d-label"><col class="d-value"><col class="d-label-r"><col class="d-value-r"></colgroup>
                 <tr><td>NO. LAPORAN</td><td>${escD(data.no_laporan)}</td><td>SEKSI</td><td><b>${escD(data.seksi_pemilik || data.seksi)}</b></td></tr>
-                <tr><td>NAMA ALAT</td><td>${escD(data.nama_part || data.nama_alat)}</td><td rowspan="2">PETUGAS PERIKSA</td><td rowspan="2">${escD(data.petugas)}</td></tr>
+                <tr><td>NAMA ALAT</td><td>${escD(data.nama_part || data.nama_alat)}</td><td rowspan="2">PETUGAS PERIKSA</td><td rowspan="2">${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td></tr>
                 <tr><td>NO. ALAT</td><td>${escD(data.no_part || data.no_alat)}</td></tr>
                 <tr><td>SPESIFIKASI</td><td>${escD(data.spesifikasi)}</td><td>TANGGAL PERIKSA</td><td>${dateD(data.tanggal_periksa)}</td></tr>
                 <tr><td>RESOLUSI</td><td>${escD(data.resolusi)}</td><td></td><td></td></tr>
@@ -1546,15 +2117,15 @@ html, body {
             <div class="city-date-d">TANGERANG, ${dateD(data.tanggal_periksa)}</div>
             <table class="sign-d">
                 <tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr>
-                <tr class="sign-space-d"><td>${escD(data.petugas)}</td><td>${escD(data.foreman)}</td><td>${escD(data.supervisor)}</td></tr>
-                <tr class="roles-d"><td>PETUGAS</td><td>FOREMAN</td><td>SUPERVISOR</td></tr>
+                <tr class="sign-space-d"><td>${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td><td>${qaSignatureName(data.pemeriksa || data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td><td>${qaSignatureName(data.penyetuju || data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td></tr>
+                <tr class="roles-d"><td>PETUGAS</td><td>PEMERIKSA</td><td>PENYETUJU</td></tr>
             </table>
             <div class="doc-code-d">STIS-CMFG4-05/R4</div>
         </div>`;
         return;
     }
 
-    // ================= FORM C (PEMERIKSAAN TEMPERATUR) =================
+// ================= FORM C (PEMERIKSAAN TEMPERATUR) =================
     if (String(data.format || '').toUpperCase() === 'C') {
         const rowsC = Array.isArray(data.hasil_array) ? data.hasil_array : [];
 
@@ -1580,7 +2151,7 @@ html, body {
         const statusFinalC = String(data.keputusan || data.status_final || '').toUpperCase();
         const keputusanC = (statusFinalC === 'GOOD' || statusFinalC === 'OK')
             ? 'OK'
-            : ((statusFinalC === 'BAD' || statusFinalC === 'BURUK' || statusFinalC === 'NG') ? 'NG' : escC(data.keputusan || data.status_final));
+            : ((statusFinalC === 'NOT GOOD' || statusFinalC === 'NOT GOOD' || statusFinalC === 'NG') ? 'NG' : escC(data.keputusan || data.status_final));
 
         const bodyC = rowsC.map((r, i) => {
             const st = String(r.status || '').toUpperCase();
@@ -1610,7 +2181,7 @@ html, body {
             <table class="info-c">
                 <colgroup><col class="c-label"><col class="c-value"><col class="c-label-r"><col class="c-value-r"></colgroup>
                 <tr><td>NO LAPORAN</td><td>${escC(data.no_laporan)}</td><td>SEKSI</td><td>${escC(data.seksi_pemilik || data.seksi)}</td></tr>
-                <tr><td>NAMA ALAT</td><td>${escC(data.nama_part || data.nama_alat)}</td><td rowspan="2">PETUGAS PERIKSA</td><td rowspan="2">${escC(data.petugas)}</td></tr>
+                <tr><td>NAMA ALAT</td><td>${escC(data.nama_part || data.nama_alat)}</td><td rowspan="2">PETUGAS PERIKSA</td><td rowspan="2">${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td></tr>
                 <tr><td>NOMOR ALAT</td><td>${escC(data.no_part || data.no_alat)}</td></tr>
                 <tr><td>SPESIFIKASI</td><td>${escC(data.spesifikasi)}</td><td>TANGGAL PERIKSA</td><td>${dateC(data.tanggal_periksa)}</td></tr>
                 <tr class="row-tall"><td>RESOLUSI</td><td>${escC(data.resolusi)}</td><td></td><td></td></tr>
@@ -1644,14 +2215,14 @@ html, body {
             <div class="city-date-c">TANGERANG, ${dateC(data.tanggal_periksa)}</div>
             <table class="sign-c">
                 <tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr>
-                <tr class="sign-space-c"><td>${escC(data.petugas)}</td><td>${escC(data.foreman)}</td><td>${escC(data.supervisor)}</td></tr>
-                <tr class="roles-c"><td>PETUGAS</td><td>FOREMAN</td><td>SUPERVISOR</td></tr>
+                <tr class="sign-space-c"><td>${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td><td>${qaSignatureName(data.pemeriksa || data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td><td>${qaSignatureName(data.penyetuju || data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td></tr>
+                <tr class="roles-c"><td>PETUGAS</td><td>PEMERIKSA</td><td>PENYETUJU</td></tr>
             </table>
         </div>`;
         return;
     }
 
-    // ================= FORM B (AIR DRIVER) =================
+// ================= FORM B (AIR DRIVER) =================
     // Layout mengikuti format laporan Air Driver referensi:
     // A4 portrait, 6 kolom utama, 3 hasil uji per titik + rata-rata.
     if (String(data.format || '').toUpperCase() === 'B') {
@@ -1680,14 +2251,14 @@ html, body {
         };
         const first = rows[0] || {};
         const statusFinal = String(data.keputusan || data.status_final || '').toUpperCase();
-        const keputusan = (statusFinal === 'GOOD' || statusFinal === 'OK') ? 'OK' : (statusFinal === 'BAD' || statusFinal === 'BURUK' ? 'NG' : escB(data.keputusan || data.status_final));
+        const keputusan = (statusFinal === 'GOOD' || statusFinal === 'OK') ? 'OK' : (statusFinal === 'NOT GOOD' || statusFinal === 'NOT GOOD' ? 'NG' : escB(data.keputusan || data.status_final));
         const keputusanClass = keputusan === 'OK' ? 'ok-b' : 'bad-b';
 
         // Data yang tersedia dari Form B. Fallback ke field lama jika ada.
         const metode = data.metode || '';
         const standarUji = data.standar_uji || '';
         const traceability = data.traceability || '';
-        const petugas = data.petugas || '';
+        const petugas = (data.operator || data.petugas) || '';
         const seksi = data.seksi_pemilik || data.seksi || '';
         const tanggal = data.tanggal_periksa || data.tanggal || '';
         const jadwal = data.jadwal_berikutnya || data.periksa_berikut || '';
@@ -1732,7 +2303,7 @@ html, body {
             <table class="info-b">
                 <colgroup><col class="w-no"><col class="w-data"><col class="w-label2"><col class="w-data2"></colgroup>
                 <tr><td>NO. LAPORAN</td><td>${escB(data.no_laporan)}</td><td>SEKSI</td><td class="b-bold b-center">${escB(seksi)}</td></tr>
-                <tr><td>NAMA ALAT</td><td>${escB(data.nama_part)}</td><td rowspan="2">PETUGAS PERIKSA</td><td rowspan="2">${escB(petugas)}</td></tr>
+                <tr><td>NAMA ALAT</td><td>${escB(data.nama_part)}</td><td rowspan="2">PETUGAS PERIKSA</td><td rowspan="2">${qaSignatureName(petugas)}<br>${qaApprovalDate('pembuat')}</td></tr>
                 <tr><td>NO. ALAT</td><td>${escB(data.no_part)}</td></tr>
                 <tr><td>SPESIFIKASI</td><td>${escB(data.spesifikasi)}</td><td>TANGGAL PERIKSA</td><td>${dateB(tanggal)}</td></tr>
                 <tr class="type-row"><td>TYPE</td><td>${escB(data.type || '')}</td><td></td><td></td></tr>
@@ -1772,8 +2343,8 @@ html, body {
             <div class="city-date-b">TANGERANG, ${dateB(tanggal)}</div>
             <table class="sign-b">
                 <tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr>
-                <tr class="sign-space-b"><td>${escB(petugas)}</td><td>${escB(data.foreman || '')}</td><td>${escB(data.supervisor || '')}</td></tr>
-                <tr class="roles-b"><td>PETUGAS</td><td>FOREMAN</td><td>SUPERVISOR</td></tr>
+                <tr class="sign-space-b"><td>${qaSignatureName(petugas)}<br>${qaApprovalDate('pembuat')}</td><td>${qaSignatureName(data.pemeriksa || data.foreman || '')}<br>${qaApprovalDate('pemeriksa')}</td><td>${qaSignatureName(data.penyetuju || data.supervisor || '')}<br>${qaApprovalDate('penyetuju')}</td></tr>
+                <tr class="roles-b"><td>PETUGAS</td><td>PEMERIKSA</td><td>PENYETUJU</td></tr>
             </table>
             <div class="doc-code-b">STIS-CMFG4-05/R4</div>
         </div>`;
@@ -1925,12 +2496,12 @@ html, body {
                         <td><b>DIKET</b></td>
                     </tr>
                     <tr class="sign-space">
-                        <td></td><td></td><td></td>
+                        <td><span class="sign-operator-name">${qaSignatureName(data.operator || data.petugas)}</span></td><td></td><td></td>
                     </tr>
                     <tr>
                         <td><b>PETUGAS</b></td>
-                        <td><b>FOREMAN</b></td>
-                        <td><b>SPV</b></td>
+                        <td><b>PEMERIKSA</b></td>
+                        <td><b>PENYETUJU</b></td>
                     </tr>
                 </table>
             </td>
@@ -2076,9 +2647,9 @@ html, body {
 
     <table class="sign-table">
         <tr>
-            <td><b>DIBUAT</b><br><br><br>${val(data.petugas)}</td>
-            <td><b>DIPERIKSA</b><br><br><br>FOREMAN</td>
-            <td><b>DIKETAHUI</b><br><br><br>SPV</td>
+            <td><b>DIBUAT</b><br><br><br>${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td>
+            <td><b>DIPERIKSA</b><br><br><br>${qaSignatureName(data.pemeriksa || data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td>
+            <td><b>DIKETAHUI</b><br><br><br>${qaSignatureName(data.penyetuju || data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td>
         </tr>
     </table>
 
@@ -2086,15 +2657,336 @@ html, body {
 </div>
 `;
 
+    // ================= FORM A (GAUGE) - EXCEL PRINT =================
+    if (String(data.format || '').toUpperCase() === 'A') {
+    const hasil = Array.isArray(data.hasil_array)
+        ? (data.hasil_array[0] || {})
+        : (data.hasil_array || data.form_a || {});
+
+    const go = hasil.go || {};
+    const notGo = hasil.not_go || {};
+    const alatStandar = hasil.alat_standar || data.alat_standar || {};
+    const alatStandarGo = {
+        ...(go.alat_standar || {}),
+        ...(alatStandar.go || {}),
+        no_alat: pick(go.std_no_alat, go.no_alat, go.alat_standar && go.alat_standar.no_alat, alatStandar.go && alatStandar.go.no_alat, alatStandar.no_alat),
+        spesifikasi: pick(go.std_spesifikasi, go.spesifikasi, go.alat_standar && go.alat_standar.spesifikasi, alatStandar.go && alatStandar.go.spesifikasi, alatStandar.spesifikasi)
+    };
+    const alatStandarNotGo = {
+        ...(notGo.alat_standar || {}),
+        ...(alatStandar.not_go || {}),
+        no_alat: pick(notGo.std_no_alat, notGo.no_alat, notGo.alat_standar && notGo.alat_standar.no_alat, alatStandar.not_go && alatStandar.not_go.no_alat, alatStandar.no_alat),
+        spesifikasi: pick(notGo.std_spesifikasi, notGo.spesifikasi, notGo.alat_standar && notGo.alat_standar.spesifikasi, alatStandar.not_go && alatStandar.not_go.spesifikasi, alatStandar.spesifikasi)
+    };
+
+    function esc(value) {
+        if (value === null || value === undefined) return '';
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function val(value) {
+        if (value === null || value === undefined || String(value).trim() === '') {
+            return '///';
+        }
+        return esc(String(value).trim());
+    }
+
+    function indoDate(value) {
+        if (!value || String(value).trim() === '') return '///';
+
+        const s = String(value).trim();
+
+        if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(s)) {
+            return esc(s);
+        }
+
+        const parts = s.split('-');
+        const months = [
+            'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+            'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+        ];
+
+        return parts[2] + ' ' + months[parseInt(parts[1], 10) - 1] + ' ' + parts[0];
+    }
+
+    function hasilUkuran(block, jenis) {
+        block = block || {};
+        const out = block.out || {};
+        const pitch = block.pitch || {};
+
+        return {
+            stdOut: val(block.std_out),
+            tolOut: val(block.tol_out),
+            rangeOut: val(block.range_out),
+            stdPitch: val(block.std_pitch),
+            tolPitch: val(block.tol_pitch),
+            rangePitch: val(block.range_pitch),
+            outDep: val(out.dep),
+            outTen: val(out.ten),
+            outBel: val(out.bel),
+            pitchDep: val(pitch.dep),
+            pitchTen: val(pitch.ten),
+            pitchBel: val(pitch.bel),
+            jenis: jenis
+        };
+    }
+
+    const G = hasilUkuran(go, 'GO');
+    const NG = hasilUkuran(notGo, 'NOT GO');
+
+    const noAlat = data.no_part || data.no_alat || '';
+    const namaAlat = data.nama_part || data.nama_alat || '';
+    const spesifikasi = data.spesifikasi || '';
+    const seksi = data.seksi_pemilik || data.seksi || '';
+    const tanggalPeriksa = data.tanggal_periksa || data.tanggal || '';
+    const periksaBerikut =
+        hasil.periksa_berikut ||
+        data.periksa_berikut ||
+        data.jadwal_berikutnya ||
+        '';
+
+    // Ambil kode varian/keterangan dari hasil JSON Form A.
+    const kodeVarian = hasil.kode_varian || data.kode_varian || '';
+    const warna = hasil.warna || data.warna || '';
+    const kep = hasil.kep || data.kep || '';
+    const keterangan = hasil.keterangan || data.keterangan || '';
+
+    document.getElementById('report').innerHTML = `
+<div class="report">
+
+    <div class="company">PT. SURYA TOTO INDONESIA Tbk.</div>
+    <div class="top-line"></div>
+
+    <table style="width:100%;border-collapse:collapse;margin-top:3px;">
+        <tr>
+            <td style="width:68%;text-align:center;font-size:13px;font-weight:bold;">
+                LAPORAN PEMERIKSAAN GAUGE
+            </td>
+            <td class="date-box">
+                TANGGAL : ${indoDate(tanggalPeriksa)}
+                <div style="border-bottom:1px solid #000;margin-top:2px;"></div>
+            </td>
+        </tr>
+    </table>
+
+    <table class="header">
+        <tr>
+            <td style="width:32%;">
+                <table class="info">
+                    <tr><td class="label">NO LAPORAN</td><td>: ${val(data.no_laporan)}</td></tr>
+                    <tr><td class="label">NAMA ALAT</td><td>: ${val(namaAlat)}</td></tr>
+                    <tr><td class="label">METODE</td><td>: ${val(data.metode || hasil.metode)}</td></tr>
+                    <tr><td class="label">SEKSI</td><td>: ${val(seksi)}</td></tr>
+                </table>
+            </td>
+
+            <td style="width:42%;">
+                <table class="info">
+                    <tr>
+                        <td class="label">ALAT STANDAR</td>
+                        <td>: GO ${val(alatStandarGo.no_alat)} - ${val(alatStandarGo.spesifikasi)}<br>NOT GO ${val(alatStandarNotGo.no_alat)} - ${val(alatStandarNotGo.spesifikasi)}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">TRACEABILITY</td>
+                        <td>: ${val(alatStandar.traceability || data.traceability)}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">SUHU/HUMIDITY</td>
+                        <td>: ${val(data.suhu)} °C / ${val(data.kelembapan)} %</td>
+                    </tr>
+                    <tr>
+                        <td class="label">TGL PERIKSA</td>
+                        <td>: ${indoDate(tanggalPeriksa)}</td>
+                    </tr>
+                </table>
+            </td>
+
+            <td class="approval">
+                <table>
+                    <tr>
+                        <td><b>DIBUAT</b></td>
+                        <td><b>DIPERIKSA</b></td>
+                        <td><b>DIKET</b></td>
+                    </tr>
+                    <tr class="sign-space">
+                        <td><span class="sign-operator-name">${qaSignatureName(data.operator || data.petugas)}</span></td><td></td><td></td>
+                    </tr>
+                    <tr>
+                        <td><b>PETUGAS</b></td>
+                        <td><b>PEMERIKSA</b></td>
+                        <td><b>PENYETUJU</b></td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+
+    <div class="page-no">HAL: 1/1</div>
+
+    <table class="main-table">
+        <colgroup>
+            <col style="width:3%;">
+            <col style="width:7%;">
+            <col style="width:12%;">
+            <col style="width:7%;">
+            <col style="width:8%;">
+            <col style="width:6%;">
+            <col style="width:7%;">
+            <col style="width:7%;">
+            <col style="width:6%;">
+            <col style="width:6%;">
+            <col style="width:6%;">
+            <col style="width:6%;">
+            <col style="width:6%;">
+            <col style="width:6%;">
+            <col style="width:6%;">
+            <col style="width:7%;">
+        </colgroup>
+
+        <thead>
+            <tr>
+                <th rowspan="3">NO</th>
+                <th colspan="2">YANG DIPERIKSA</th>
+                <th colspan="2">ALAT STANDAR</th>
+                <th colspan="9">HASIL PERIKSA</th>
+                <th rowspan="3">WARNA</th>
+                <th rowspan="3">KEP</th>
+                <th rowspan="3">PERIKSA<br>BERIKUT</th>
+            </tr>
+
+            <tr>
+                <th rowspan="2">NO ALAT</th>
+                <th rowspan="2">SPEK</th>
+                <th rowspan="2">SPEK</th>
+                <th rowspan="2">NO ALAT</th>
+                <th rowspan="2">POSISI<br>UKUR</th>
+                <th colspan="2">STD UKURAN</th>
+                <th colspan="6">HASIL UKUR</th>
+            </tr>
+
+            <tr>
+                <th>OUT Ø</th>
+                <th>PITCH Ø</th>
+                <th colspan="3">OUT Ø</th>
+                <th colspan="3">PITCH Ø</th>
+            </tr>
+
+            <tr>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th>DEP</th>
+                <th>TEN</th>
+                <th>BEL</th>
+                <th>DEP</th>
+                <th>TEN</th>
+                <th>BEL</th>
+                <th></th>
+                <th></th>
+            </tr>
+        </thead>
+
+        <tbody>
+            <!-- GO -->
+            <tr>
+                <td rowspan="4" class="bold">1</td>
+                <td rowspan="4">${val(noAlat)}</td>
+                <td rowspan="4" class="left">${val(spesifikasi)}</td>
+
+                <td rowspan="2">${G.stdOut}<br><span class="tiny">${G.tolOut}</span></td>
+                <td rowspan="2">${val(alatStandarGo.no_alat)}<br><span class="tiny">${val(alatStandarGo.spesifikasi)}</span></td>
+
+                <td class="bold">GO</td>
+                <td>${G.stdOut}</td>
+                <td>${G.stdPitch}</td>
+                <td>${G.outDep}</td>
+                <td>${G.outTen}</td>
+                <td>${G.outBel}</td>
+                <td>${G.pitchDep}</td>
+                <td>${G.pitchTen}</td>
+                <td>${G.pitchBel}</td>
+
+                <td rowspan="4">${val(warna)}</td>
+                <td rowspan="4">${val(kep)}</td>
+                <td rowspan="4">${indoDate(periksaBerikut)}</td>
+            </tr>
+
+            <tr>
+                <td class="tiny">TOL</td>
+                <td class="tiny">${G.tolOut}<br>${G.rangeOut}</td>
+                <td class="tiny">${G.tolPitch}<br>${G.rangePitch}</td>
+                <td colspan="3" class="tiny">OUT Ø</td>
+                <td colspan="3" class="tiny">PITCH Ø</td>
+            </tr>
+
+            <!-- NOT GO -->
+            <tr>
+                <td rowspan="2">${NG.stdOut}<br><span class="tiny">${NG.tolOut}</span></td>
+                <td rowspan="2">${val(alatStandarNotGo.no_alat)}<br><span class="tiny">${val(alatStandarNotGo.spesifikasi)}</span></td>
+                <td class="bold">NOT GO</td>
+                <td>${NG.stdOut}</td>
+                <td>${NG.stdPitch}</td>
+                <td>${NG.outDep}</td>
+                <td>${NG.outTen}</td>
+                <td>${NG.outBel}</td>
+                <td>${NG.pitchDep}</td>
+                <td>${NG.pitchTen}</td>
+                <td>${NG.pitchBel}</td>
+            </tr>
+
+            <tr>
+                <td class="tiny">TOL</td>
+                <td class="tiny">${NG.tolOut}<br>${NG.rangeOut}</td>
+                <td class="tiny">${NG.tolPitch}<br>${NG.rangePitch}</td>
+                <td colspan="3" class="tiny">OUT Ø</td>
+                <td colspan="3" class="tiny">PITCH Ø</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <table class="footer-table">
+        <tr>
+            <th style="width:14%;">KODE VARIAN</th>
+            <td style="width:25%;">${val(kodeVarian)}</td>
+            <th style="width:14%;">KETERANGAN</th>
+            <td>${val(keterangan)}</td>
+        </tr>
+    </table>
+
+    <table class="sign-table">
+        <tr>
+            <td><b>DIBUAT</b><br><br><br>${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td>
+            <td><b>DIPERIKSA</b><br><br><br>${qaSignatureName(data.pemeriksa || data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td>
+            <td><b>DIKETAHUI</b><br><br><br>${qaSignatureName(data.penyetuju || data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td>
+        </tr>
+    </table>
+
+    <div class="bottom-line" style="margin-top:3px;"></div>
+</div>
+`;
+        return;
+    }
 
     // ================= LEGACY FORMAT E/F/G/N/R + FALLBACK A =================
     // Form B-D/H-Q sudah ditangani di atas oleh renderer teman.
     // Bagian ini mempertahankan renderer lama untuk E/F/G/N/R dan format lain.
     {
                     const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
-                    let d = new Date(data.tanggal_periksa);
-                    let dStr = d.getDate().toString().padStart(2, '0') + ' - ' + (d.getMonth()+1).toString().padStart(2, '0') + ' - ' + d.getFullYear();
-                    let dSignText = d.getDate() + ' ' + monthNames[d.getMonth()] + ' ' + d.getFullYear();
+                    let dRaw = String(data.tanggal_periksa || '').trim();
+                    let d = dRaw ? new Date(dRaw + 'T00:00:00') : null;
+                    let dValid = d && !Number.isNaN(d.getTime());
+                    let dStr = dValid ? d.getDate().toString().padStart(2, '0') + ' - ' + (d.getMonth()+1).toString().padStart(2, '0') + ' - ' + d.getFullYear() : '///';
+                    let dSignText = dValid ? d.getDate() + ' ' + monthNames[d.getMonth()] + ' ' + d.getFullYear() : '///';
             
                     function formatTanggalReversed(tglStr) {
                         if(!tglStr) return '-';
@@ -2119,57 +3011,58 @@ html, body {
                     var rowsDataHtml = []; 
             
                     if (data.format === 'F') {
-                        var fData = data.hasil_array[0]; 
+                        var fData = normalizeFData(data.hasil_array[0] || {});
                         var rowsSec2 = '';
                         fData.sec2.forEach(function(row, idx) {
+                            row = row || {};
                             rowsSec2 += `
                             <tr>
                                 <td style="border-right: 1px solid #000; border-bottom: 1px dotted #000; vertical-align:middle;">${idx+1}</td>
-                                <td colspan="2" style="border-right: 1px solid #000; border-bottom: 1px dotted #000; vertical-align:middle;">${row.standar}</td>
-                                <td colspan="2" style="border-right: 1px solid #000; border-bottom: 1px dotted #000; vertical-align:middle;">${row.hasil !== undefined && row.hasil !== '' ? row.hasil : ''}</td>
-                                <td style="border-bottom: 1px dotted #000; vertical-align:middle;">${row.koreksi !== undefined && row.koreksi !== '' ? row.koreksi : ''}</td>
+                                <td colspan="2" style="border-right: 1px solid #000; border-bottom: 1px dotted #000; vertical-align:middle;">${htmlCell(row.standar)}</td>
+                                <td colspan="2" style="border-right: 1px solid #000; border-bottom: 1px dotted #000; vertical-align:middle;">${htmlCell(row.hasil)}</td>
+                                <td style="border-bottom: 1px dotted #000; vertical-align:middle;">${htmlCell(row.koreksi)}</td>
                             </tr>`;
                         });
-                
+
                         rowsDataHtml.push(`
                             <table style="width:100%; border-collapse: collapse; text-align:center; table-layout:fixed;">
                                 <colgroup><col style="width: 12%;"><col style="width: 17.6%;"><col style="width: 17.6%;"><col style="width: 17.6%;"><col style="width: 17.6%;"><col style="width: 17.6%;"></colgroup>
                                 <tr><td colspan="6" style="border-bottom: 1px solid #000; text-align:left; padding-left:10px;">I. KEMAMPUAN ULANG ( REPEATABILITY OF READING )</td></tr>
                                 <tr>
-                                    <td colspan="2" style="border-right: 1px solid #000; border-bottom: 1px solid #000;">STANDAR<br>( ${data.satuan} )</td>
-                                    <td colspan="2" style="border-right: 1px solid #000; border-bottom: 1px solid #000;">HASIL<br>( ${data.satuan} )</td>
-                                    <td colspan="2" style="border-bottom: 1px solid #000;">DEVIASI<br>( ${data.satuan} )</td>
+                                    <td colspan="2" style="border-right: 1px solid #000; border-bottom: 1px solid #000;">STANDAR<br>( ${htmlCell(data.satuan)} )</td>
+                                    <td colspan="2" style="border-right: 1px solid #000; border-bottom: 1px solid #000;">HASIL<br>( ${htmlCell(data.satuan)} )</td>
+                                    <td colspan="2" style="border-bottom: 1px solid #000;">DEVIASI<br>( ${htmlCell(data.satuan)} )</td>
                                 </tr>
                                 <tr>
-                                    <td colspan="2" style="border-right: 1px solid #000; border-bottom: 1px solid #000; height:25px;">${fData.sec1.standar !== undefined && fData.sec1.standar !== '' ? fData.sec1.standar : ''}</td>
-                                    <td colspan="2" style="border-right: 1px solid #000; border-bottom: 1px solid #000;">${fData.sec1.hasil !== undefined && fData.sec1.hasil !== '' ? fData.sec1.hasil : ''}</td>
-                                    <td colspan="2" style="border-bottom: 1px solid #000;">${fData.sec1.deviasi !== undefined && fData.sec1.deviasi !== '' ? fData.sec1.deviasi : ''}</td>
+                                    <td colspan="2" style="border-right: 1px solid #000; border-bottom: 1px solid #000; height:25px;">${htmlCell(fData.sec1.standar)}</td>
+                                    <td colspan="2" style="border-right: 1px solid #000; border-bottom: 1px solid #000;">${htmlCell(fData.sec1.hasil)}</td>
+                                    <td colspan="2" style="border-bottom: 1px solid #000;">${htmlCell(fData.sec1.deviasi)}</td>
                                 </tr>
                                 <tr><td colspan="6" style="border-bottom: 1px solid #000; text-align:left; padding-left:10px;">II. KEMAMPUAN NILAI SCALA ( SCALA TEST )</td></tr>
                                 <tr>
                                     <td style="border-right: 1px solid #000; border-bottom: 1px solid #000;">NO</td>
-                                    <td colspan="2" style="border-right: 1px solid #000; border-bottom: 1px solid #000;">STANDAR<br>( ${data.satuan} )</td>
-                                    <td colspan="2" style="border-right: 1px solid #000; border-bottom: 1px solid #000;">HASIL<br>( ${data.satuan} )</td>
-                                    <td style="border-bottom: 1px solid #000;">KOREKSI<br>( ${data.satuan} )</td>
+                                    <td colspan="2" style="border-right: 1px solid #000; border-bottom: 1px solid #000;">STANDAR<br>( ${htmlCell(data.satuan)} )</td>
+                                    <td colspan="2" style="border-right: 1px solid #000; border-bottom: 1px solid #000;">HASIL<br>( ${htmlCell(data.satuan)} )</td>
+                                    <td style="border-bottom: 1px solid #000;">KOREKSI<br>( ${htmlCell(data.satuan)} )</td>
                                 </tr>
                                 ${rowsSec2}
                                 <tr><td style="border-right: 1px solid #000; height:15px;"></td><td colspan="2" style="border-right: 1px solid #000;"></td><td colspan="2" style="border-right: 1px solid #000;"></td><td></td></tr>
                                 <tr><td colspan="6" style="border-top: 1px solid #000; border-bottom: 1px solid #000; text-align:left; padding-left:10px;">III. EFECT CENTER LOADING</td></tr>
                                 <tr>
-                                    <td style="border-right: 1px solid #000; border-bottom: 1px solid #000;">TENGAH<br>( ${data.satuan} )</td>
-                                    <td style="border-right: 1px solid #000; border-bottom: 1px solid #000;">BELAKANG<br>( ${data.satuan} )</td>
-                                    <td style="border-right: 1px solid #000; border-bottom: 1px solid #000;">KANAN<br>( ${data.satuan} )</td>
-                                    <td style="border-right: 1px solid #000; border-bottom: 1px solid #000;">DEPAN<br>( ${data.satuan} )</td>
-                                    <td style="border-right: 1px solid #000; border-bottom: 1px solid #000;">KIRI<br>( ${data.satuan} )</td>
-                                    <td style="border-bottom: 1px solid #000;">PERBEDAAN DARI TENGAH<br>( ${data.satuan} )</td>
+                                    <td style="border-right: 1px solid #000; border-bottom: 1px solid #000;">TENGAH<br>( ${htmlCell(data.satuan)} )</td>
+                                    <td style="border-right: 1px solid #000; border-bottom: 1px solid #000;">BELAKANG<br>( ${htmlCell(data.satuan)} )</td>
+                                    <td style="border-right: 1px solid #000; border-bottom: 1px solid #000;">KANAN<br>( ${htmlCell(data.satuan)} )</td>
+                                    <td style="border-right: 1px solid #000; border-bottom: 1px solid #000;">DEPAN<br>( ${htmlCell(data.satuan)} )</td>
+                                    <td style="border-right: 1px solid #000; border-bottom: 1px solid #000;">KIRI<br>( ${htmlCell(data.satuan)} )</td>
+                                    <td style="border-bottom: 1px solid #000;">PERBEDAAN DARI TENGAH<br>( ${htmlCell(data.satuan)} )</td>
                                 </tr>
                                 <tr>
-                                    <td style="border-right: 1px solid #000; border-bottom: none; height:25px;">${fData.sec3.tengah !== undefined && fData.sec3.tengah !== '' ? fData.sec3.tengah : ''}</td>
-                                    <td style="border-right: 1px solid #000; border-bottom: none;">${fData.sec3.belakang !== undefined && fData.sec3.belakang !== '' ? fData.sec3.belakang : ''}</td>
-                                    <td style="border-right: 1px solid #000; border-bottom: none;">${fData.sec3.kanan !== undefined && fData.sec3.kanan !== '' ? fData.sec3.kanan : ''}</td>
-                                    <td style="border-right: 1px solid #000; border-bottom: none;">${fData.sec3.depan !== undefined && fData.sec3.depan !== '' ? fData.sec3.depan : ''}</td>
-                                    <td style="border-right: 1px solid #000; border-bottom: none;">${fData.sec3.kiri !== undefined && fData.sec3.kiri !== '' ? fData.sec3.kiri : ''}</td>
-                                    <td style="border-bottom: none;">${fData.sec3.perbedaan !== undefined && fData.sec3.perbedaan !== '' ? fData.sec3.perbedaan : ''}</td>
+                                    <td style="border-right: 1px solid #000; border-bottom: none; height:25px;">${htmlCell(fData.sec3.tengah)}</td>
+                                    <td style="border-right: 1px solid #000; border-bottom: none;">${htmlCell(fData.sec3.belakang)}</td>
+                                    <td style="border-right: 1px solid #000; border-bottom: none;">${htmlCell(fData.sec3.kanan)}</td>
+                                    <td style="border-right: 1px solid #000; border-bottom: none;">${htmlCell(fData.sec3.depan)}</td>
+                                    <td style="border-right: 1px solid #000; border-bottom: none;">${htmlCell(fData.sec3.kiri)}</td>
+                                    <td style="border-bottom: none;">${htmlCell(fData.sec3.perbedaan)}</td>
                                 </tr>
                             </table>
                         `);
@@ -2180,11 +3073,11 @@ html, body {
                             rowsDataHtml.push(`
                             <tr>
                                 <td style="border-right: 1px solid #000; border-bottom: 1px dotted #000; vertical-align:middle; text-align:center;">${idx+1}</td>
-                                <td style="border-right: 1px solid #000; border-bottom: 1px dotted #000; vertical-align:middle; text-align:center;">${row.standar} <span style="margin-left:5px;">±${row.toleransi}</span></td>
-                                <td style="border-right: 1px solid #000; border-bottom: 1px dotted #000; vertical-align:middle; text-align:center;" class="${clsT1}">${row.t1_hasil || ''}</td>
-                                <td style="border-right: 1px solid #000; border-bottom: 1px dotted #000; vertical-align:middle; text-align:center;" class="${clsT1}">${row.t1_koreksi || ''}</td>
-                                <td style="border-right: 1px solid #000; border-bottom: 1px dotted #000; vertical-align:middle; text-align:center;">${row.t2_hasil || ''}</td>
-                                <td style="border-bottom: 1px dotted #000; vertical-align:middle; text-align:center;">${row.t2_koreksi || ''}</td>
+                                <td style="border-right: 1px solid #000; border-bottom: 1px dotted #000; vertical-align:middle; text-align:center;">${htmlCell(row.standar)} <span style="margin-left:5px;">±${htmlCell(row.toleransi)}</span></td>
+                                <td style="border-right: 1px solid #000; border-bottom: 1px dotted #000; vertical-align:middle; text-align:center;" class="${clsT1}">${htmlCell(row.t1_hasil)}</td>
+                                <td style="border-right: 1px solid #000; border-bottom: 1px dotted #000; vertical-align:middle; text-align:center;" class="${clsT1}">${htmlCell(row.t1_koreksi)}</td>
+                                <td style="border-right: 1px solid #000; border-bottom: 1px dotted #000; vertical-align:middle; text-align:center;">${htmlCell(row.t2_hasil)}</td>
+                                <td style="border-bottom: 1px dotted #000; vertical-align:middle; text-align:center;">${htmlCell(row.t2_koreksi)}</td>
                             </tr>`);
                         });
                     }
@@ -2193,37 +3086,60 @@ html, body {
                             rowsDataHtml.push(`
                             <tr>
                                 <td style="border-right: 1px solid #000; border-bottom: 1px dotted #000; vertical-align:middle;">${idx+1}</td>
-                                <td style="border-right: none; border-bottom: 1px dotted #000; text-align:right; padding-right:15px; vertical-align:middle;">${row.standar}</td>
-                                <td style="border-left: none; border-right: 1px solid #000; border-bottom: 1px dotted #000; text-align:left; padding-left:15px; vertical-align:middle;">±${row.toleransi}</td>
-                                <td style="border-right: 1px solid #000; border-bottom: 1px dotted #000; vertical-align:middle;">${row.hasil !== undefined && row.hasil !== '' ? row.hasil : ''}</td>
-                                <td style="border-bottom: 1px dotted #000; vertical-align:middle;">${row.hasil_2 !== undefined && row.hasil_2 !== '' ? row.hasil_2 : ''}</td>
+                                <td style="border-right: none; border-bottom: 1px dotted #000; text-align:right; padding-right:15px; vertical-align:middle;">${htmlCell(row.standar)}</td>
+                                <td style="border-left: none; border-right: 1px solid #000; border-bottom: 1px dotted #000; text-align:left; padding-left:15px; vertical-align:middle;">±${htmlCell(row.toleransi)}</td>
+                                <td style="border-right: 1px solid #000; border-bottom: 1px dotted #000; vertical-align:middle;">${htmlCell(row.hasil)}</td>
+                                <td style="border-bottom: 1px dotted #000; vertical-align:middle;">${htmlCell(row.hasil_2)}</td>
                             </tr>`);
+                        });
+                    }
+                    else if(data.format === 'N') {
+                        const nCols = Array.isArray(data.posisi_kolom) && data.posisi_kolom.length ? data.posisi_kolom : [{label:'Hasil',posisi:'Hasil'}];
+                        const nColCount = nCols.length;
+                        data.hasil_array.forEach(function(row, idx) {
+                            const positions = Array.isArray(row.posisi_hasil) && row.posisi_hasil.length ? row.posisi_hasil : nCols.map(function(col){ return {posisi:col.posisi,label:col.label,hasil:row.hasil||'',koreksi:row.koreksi||''}; });
+                            var tr = '<tr>';
+                            tr += '<td style="border-right:1px solid #000;border-bottom:1px solid #000;vertical-align:middle;">'+(idx+1)+'</td>';
+                            tr += '<td style="border-right:1px solid #000;border-bottom:1px solid #000;vertical-align:middle;">'+htmlCell(row.standar)+'</td>';
+                            tr += '<td style="border-right:1px solid #000;border-bottom:1px solid #000;vertical-align:middle;">± '+htmlCell(row.toleransi || '-')+'</td>';
+                            nCols.forEach(function(col,j){
+                                const cell = positions[j] || {};
+                                const hasHasil = cell.hasil !== undefined && cell.hasil !== null && String(cell.hasil).trim() !== '';
+                                const hasilText = hasHasil ? htmlCell(cell.hasil) : '///';
+                                const korText = cell.koreksi !== undefined && cell.koreksi !== null && String(cell.koreksi).trim() !== '' ? htmlCell(cell.koreksi) : '';
+                                tr += '<td style="border-right:1px solid #000;border-bottom:1px solid #000;vertical-align:middle;">'+hasilText+(korText?'<br><span style="font-size:9px;">('+korText+')</span>':'')+'</td>';
+                            });
+                            tr += '<td style="border-right:1px solid #000;border-bottom:1px solid #000;vertical-align:middle;">'+htmlCell(row.koreksi || '')+'</td>';
+                            tr += '<td style="font-weight:bold;border-bottom:1px solid #000;vertical-align:middle;">'+htmlCell(row.status || '-')+'</td>';
+                            tr += '</tr>';
+                            rowsDataHtml.push(tr);
                         });
                     }
                     else if(data.format === 'R') {
                         data.hasil_array.forEach(function(row) {
                             var std = parseFloat(row.standar);
                             var tol = parseFloat(row.toleransi);
-                            var minRange = (std - Math.abs(tol)).toFixed(3);
-                            var maxRange = (std + Math.abs(tol)).toFixed(3);
+                            var hasNumericRange = Number.isFinite(std) && Number.isFinite(tol);
+                            var minRange = hasNumericRange ? (std - Math.abs(tol)).toFixed(3) : '///';
+                            var maxRange = hasNumericRange ? (std + Math.abs(tol)).toFixed(3) : '///';
 
                             var trHtml = '<tr>';
                             if(hasBagian) {
-                                trHtml += `<td style="border-right: 1px solid #000; border-bottom: 1px solid #000; vertical-align:middle;">${row.bagian || '-'}</td>`;
+                                trHtml += `<td style="border-right: 1px solid #000; border-bottom: 1px solid #000; vertical-align:middle;">${htmlCell(row.bagian || '-')}</td>`;
                             }
                             trHtml += `
                                 <td style="border-right: 1px solid #000; border-bottom: 1px solid #000; line-height:1.6; padding: 5px 0;">
                                     <table style="width:100%; border:none; margin:0; padding:0; table-layout:fixed;">
                                         <tr>
-                                            <td style="border:none; text-align:center; width:50%; padding:0;">${row.standar}</td>
-                                            <td style="border:none; text-align:center; width:50%; padding:0;">±${row.toleransi}</td>
+                                            <td style="border:none; text-align:center; width:50%; padding:0;">${htmlCell(row.standar)}</td>
+                                            <td style="border:none; text-align:center; width:50%; padding:0;">±${htmlCell(row.toleransi)}</td>
                                         </tr>
                                     </table>
                                     ( ${minRange} ~ ${maxRange} )
                                 </td>
-                                <td style="border-right: 1px solid #000; border-bottom: 1px solid #000; vertical-align:middle;">${row.depan !== undefined && row.depan !== '' ? row.depan : '-'}</td>
-                                <td style="border-right: 1px solid #000; border-bottom: 1px solid #000; vertical-align:middle;">${row.tengah !== undefined && row.tengah !== '' ? row.tengah : '-'}</td>
-                                <td style="border-bottom: 1px solid #000; vertical-align:middle;">${row.belakang !== undefined && row.belakang !== '' ? row.belakang : '-'}</td>
+                                <td style="border-right: 1px solid #000; border-bottom: 1px solid #000; vertical-align:middle;">${htmlCell(row.depan || '-')}</td>
+                                <td style="border-right: 1px solid #000; border-bottom: 1px solid #000; vertical-align:middle;">${htmlCell(row.tengah || '-')}</td>
+                                <td style="border-bottom: 1px solid #000; vertical-align:middle;">${htmlCell(row.belakang || '-')}</td>
                             </tr>`;
                             rowsDataHtml.push(trHtml);
                         });
@@ -2232,12 +3148,12 @@ html, body {
                         data.hasil_array.forEach(function(row, idx) {
                             var tr = '<tr>';
                             tr += `<td style="border-right: 1px solid #000; border-bottom: 1px solid #000;">${idx+1}</td>`;
-                            if(hasBagian) { tr += `<td style="border-right: 1px solid #000; border-bottom: 1px solid #000;">${row.bagian || '-'}</td>`; }
-                            tr += `<td style="border-right: 1px solid #000; border-bottom: 1px solid #000;">${row.standar}</td>`;
-                            if(hasToleransi) { tr += `<td style="border-right: 1px solid #000; border-bottom: 1px solid #000;">± ${row.toleransi || '-'}</td>`; }
-                            tr += `<td style="border-right: 1px solid #000; border-bottom: 1px solid #000;">${row.hasil}</td>`;
-                            tr += `<td style="border-right: 1px solid #000; border-bottom: 1px solid #000;">${row.koreksi}</td>`;
-                            tr += `<td style="font-weight:bold; border-bottom: 1px solid #000;">${row.status || '-'}</td>`;
+                            if(hasBagian) { tr += `<td style="border-right: 1px solid #000; border-bottom: 1px solid #000;">${htmlCell(row.bagian || '-')}</td>`; }
+                            tr += `<td style="border-right: 1px solid #000; border-bottom: 1px solid #000;">${htmlCell(row.standar)}</td>`;
+                            if(hasToleransi) { tr += `<td style="border-right: 1px solid #000; border-bottom: 1px solid #000;">± ${htmlCell(row.toleransi || '-')}</td>`; }
+                            tr += `<td style="border-right: 1px solid #000; border-bottom: 1px solid #000;">${htmlCell(row.hasil)}</td>`;
+                            tr += `<td style="border-right: 1px solid #000; border-bottom: 1px solid #000;">${htmlCell(row.koreksi)}</td>`;
+                            tr += `<td style="font-weight:bold; border-bottom: 1px solid #000;">${htmlCell(row.status || '-')}</td>`;
                             tr += '</tr>';
                             rowsDataHtml.push(tr);
                         });
@@ -2283,17 +3199,17 @@ html, body {
                                 finalHtml += `
                                 <tr>
                                     <td width="20%">NO. LAPORAN</td><td width="30%">-</td>
-                                    <td width="20%">SEKSI</td><td width="30%" class="text-bold text-center">${data.seksi_pemilik}</td>
+                                    <td width="20%">SEKSI</td><td width="30%" class="text-bold text-center">${val(data.seksi_pemilik)}</td>
                                 </tr>
                                 <tr>
                                     <td>${data.format === 'F' ? 'NOMOR ALAT' : 'NAMA ALAT'}</td><td>${data.format === 'F' ? data.no_part : data.nama_part}</td>
-                                    <td rowspan="2">PETUGAS ${data.format === 'R' || data.format === 'F' ? 'KALIBRASI' : 'PERIKSA'}</td><td rowspan="2" class="text-center">${data.petugas}</td>
+                                    <td rowspan="2">PETUGAS ${data.format === 'R' || data.format === 'F' ? 'KALIBRASI' : 'PERIKSA'}</td><td rowspan="2" class="text-center">${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td>
                                 </tr>
                                 <tr>
                                     <td>${data.format === 'F' ? 'NAMA ALAT' : 'NO. ALAT'}</td><td>${data.format === 'F' ? data.nama_part : data.no_part}</td>
                                 </tr>
                                 <tr>
-                                    <td>SPESIFIKASI</td><td>${data.spesifikasi}</td>
+                                    <td>SPESIFIKASI</td><td>${val(data.spesifikasi)}</td>
                                     <td ${data.format === 'G' ? 'rowspan="2"' : ''} style="${data.format === 'R' ? 'border-bottom:none;' : ''}">TANGGAL ${data.format === 'R' || data.format === 'F' ? 'KALIBRASI' : 'PERIKSA'}</td><td ${data.format === 'G' ? 'rowspan="2"' : ''} class="text-center" style="${data.format === 'R' ? 'border-bottom:none;' : ''}">${dStr}</td>
                                 </tr>
                                 <tr>
@@ -2304,21 +3220,21 @@ html, body {
                                 finalHtml += `
                                 <tr>
                                     <td width="15%">NO. LAPORAN</td><td width="35%">-</td>
-                                    <td width="15%">SEKSI</td><td width="35%" class="text-bold text-center">${data.seksi_pemilik}</td>
+                                    <td width="15%">SEKSI</td><td width="35%" class="text-bold text-center">${val(data.seksi_pemilik)}</td>
                                 </tr>
                                 <tr>
-                                    <td>NAMA ALAT</td><td>${data.nama_part}</td>
-                                    <td rowspan="2">PETUGAS PERIKSA</td><td rowspan="2" class="text-center">${data.petugas}</td>
+                                    <td>NAMA ALAT</td><td>${val(data.nama_part)}</td>
+                                    <td rowspan="2">PETUGAS PERIKSA</td><td rowspan="2" class="text-center">${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td>
                                 </tr>
-                                <tr><td>NO. ALAT</td><td>${data.no_part}</td></tr>
+                                <tr><td>NO. ALAT</td><td>${val(data.no_part)}</td></tr>
                                 <tr>
-                                    <td>SPESIFIKASI</td><td>${data.spesifikasi}</td>
+                                    <td>SPESIFIKASI</td><td>${val(data.spesifikasi)}</td>
                                     <td>TANGGAL PERIKSA</td><td class="text-center">${dStr}</td>
                                 </tr>
                                 <tr><td>RESOLUSI</td><td colspan="3">${data.resolusi || '-'}</td></tr>`;
                             }
                         } else {
-                            finalHtml += `<tr><td width="20%">NO. ALAT</td><td width="30%">${data.no_part}</td><td width="20%">NAMA ALAT</td><td width="30%">${data.nama_part}</td></tr>`;
+                            finalHtml += `<tr><td width="20%">NO. ALAT</td><td width="30%">${val(data.no_part)}</td><td width="20%">NAMA ALAT</td><td width="30%">${val(data.nama_part)}</td></tr>`;
                         }
 
                         finalHtml += `<tr><td colspan="4" class="text-center" style="border-top: 1px solid #000; border-bottom: 1px solid #000; padding: 2px 0;">HASIL ${data.format === 'R' || data.format === 'F' ? 'KALIBRASI' : 'PEMERIKSAAN'} ${pageIndex > 0 ? '( Lanjutan )' : ''}</td></tr>`;
@@ -2333,7 +3249,7 @@ html, body {
                                     <colgroup><col style="width: 10%;"><col style="width: 30%;"><col style="width: 15%;"><col style="width: 15%;"><col style="width: 15%;"><col style="width: 15%;"></colgroup>
                                     <tr>
                                         <td rowspan="2" style="border-right: 1px solid #000; border-bottom: 1px solid #000; vertical-align:middle;">NO</td>
-                                        <td rowspan="2" style="border-right: 1px solid #000; border-bottom: 1px solid #000; vertical-align:middle;">STANDAR<br>( ${data.satuan} )</td>
+                                        <td rowspan="2" style="border-right: 1px solid #000; border-bottom: 1px solid #000; vertical-align:middle;">STANDAR<br>( ${val(data.satuan)} )</td>
                                         <td colspan="2" style="border-right: 1px solid #000; border-bottom: 1px solid #000; vertical-align:middle;">T1</td>
                                         <td colspan="2" style="border-bottom: 1px solid #000; vertical-align:middle;">T2</td>
                                     </tr>
@@ -2358,14 +3274,27 @@ html, body {
                                         <td colspan="2" width="50%" style="border-bottom: 1px solid #000; vertical-align:middle;">HASIL</td>
                                     </tr>
                                     <tr>
-                                        <td colspan="2" style="border-right: 1px solid #000; border-bottom: 1px solid #000;">${data.satuan}</td>
-                                        <td width="25%" style="border-right: 1px solid #000; border-bottom: 1px solid #000;">${data.satuan}</td>
-                                        <td width="25%" style="border-bottom: 1px solid #000;">${data.satuan}</td>
+                                        <td colspan="2" style="border-right: 1px solid #000; border-bottom: 1px solid #000;">${val(data.satuan)}</td>
+                                        <td width="25%" style="border-right: 1px solid #000; border-bottom: 1px solid #000;">${val(data.satuan)}</td>
+                                        <td width="25%" style="border-bottom: 1px solid #000;">${val(data.satuan)}</td>
                                     </tr>
                                     ${dataTabelHasil}
                                     <tr><td style="border-right: 1px solid #000; height:15px; border-bottom:none;"></td><td style="border-right: none; border-bottom:none;"></td><td style="border-right: 1px solid #000; border-bottom:none;"></td><td style="border-right: 1px solid #000; border-bottom:none;"></td><td style="border-bottom:none;"></td></tr>
                                 </table>
                             `;
+                        }
+                        else if (data.format === 'N') {
+                            var nColsPrint = Array.isArray(data.posisi_kolom) && data.posisi_kolom.length ? data.posisi_kolom : [{label:'Hasil',posisi:'Hasil'}];
+                            var nCount = nColsPrint.length;
+                            var nTotal = 4 + nCount + 2;
+                            var nBase = 100 / nTotal;
+                            var nColGroup = '<colgroup><col style="width:'+nBase+'%;"><col style="width:'+nBase+'%;"><col style="width:'+nBase+'%;">';
+                            nColsPrint.forEach(function(){ nColGroup += '<col style="width:'+nBase+'%;">'; });
+                            nColGroup += '<col style="width:'+nBase+'%;"><col style="width:'+nBase+'%;"></colgroup>';
+                            var nHeader = '<tr><td style="border-right:1px solid #000;border-bottom:1px solid #000;">NO</td><td style="border-right:1px solid #000;border-bottom:1px solid #000;">STANDAR<br>( '+val(data.satuan)+' )</td><td style="border-right:1px solid #000;border-bottom:1px solid #000;">TOLERANSI (±)</td>';
+                            nColsPrint.forEach(function(col){ nHeader += '<td style="border-right:1px solid #000;border-bottom:1px solid #000;">'+htmlCell(col.label)+'</td>'; });
+                            nHeader += '<td style="border-right:1px solid #000;border-bottom:1px solid #000;">KOREKSI</td><td style="border-bottom:1px solid #000;">STATUS</td></tr>';
+                            finalHtml += '<table style="width:100%;border-collapse:collapse;text-align:center;table-layout:fixed;">'+nColGroup+nHeader+dataTabelHasil+'</table>';
                         }
                         else if (data.format === 'R') {
                             var colHtml = '';
@@ -2409,10 +3338,10 @@ html, body {
                                     <tr>
                                         <td style="width: 5%; border-right: 1px solid #000; border-bottom: 1px solid #000;">NO</td>
                                         ${hasBagian ? `<td style="width: ${colWidth}%; border-right: 1px solid #000; border-bottom: 1px solid #000;">BAGIAN</td>` : ''}
-                                        <td style="width: ${colWidth}%; border-right: 1px solid #000; border-bottom: 1px solid #000;">STANDAR<br>( ${data.satuan} )</td>
+                                        <td style="width: ${colWidth}%; border-right: 1px solid #000; border-bottom: 1px solid #000;">STANDAR<br>( ${val(data.satuan)} )</td>
                                         ${hasToleransi ? `<td style="width: ${colWidth}%; border-right: 1px solid #000; border-bottom: 1px solid #000;">TOLERANSI (±)</td>` : ''}
-                                        <td style="width: ${colWidth}%; border-right: 1px solid #000; border-bottom: 1px solid #000;">HASIL<br>( ${data.satuan} )</td>
-                                        <td style="width: ${colWidth}%; border-right: 1px solid #000; border-bottom: 1px solid #000;">KOREKSI<br>( ${data.satuan} )</td>
+                                        <td style="width: ${colWidth}%; border-right: 1px solid #000; border-bottom: 1px solid #000;">HASIL<br>( ${val(data.satuan)} )</td>
+                                        <td style="width: ${colWidth}%; border-right: 1px solid #000; border-bottom: 1px solid #000;">KOREKSI<br>( ${val(data.satuan)} )</td>
                                         <td style="width: ${colWidth}%; border-bottom: 1px solid #000;">STATUS</td>
                                     </tr>
                                     ${dataTabelHasil}
@@ -2427,7 +3356,7 @@ html, body {
                             if (formatNeedU) {
                                 footerHtml += `
                                 <tr>
-                                    <td width="20%" style="border-top: 1px solid #000;">METODE</td><td width="30%" style="border-top: 1px solid #000;">${data.metode}</td>
+                                    <td width="20%" style="border-top: 1px solid #000;">METODE</td><td width="30%" style="border-top: 1px solid #000;">${val(data.metode)}</td>
                                     <td width="20%" style="border-top: 1px solid #000;">CONFIDENCE LEVEL</td><td width="30%" style="border-top: 1px solid #000;" class="text-center ${crossCL}">${data.confidence_level ? data.confidence_level : ''}</td>
                                 </tr>
                                 <tr>
@@ -2438,8 +3367,8 @@ html, body {
                                     <td style="vertical-align:middle;">STANDAR TOLERANSI</td><td class="text-center" style="vertical-align:middle;">${(data.toleransi_global||'').replace(/\n/g, "<br>")}</td>
                                 </tr>
                                 <tr>
-                                    <td>TRACEABILITY</td><td>${data.traceability}</td>
-                                    <td>KEPUTUSAN</td><td class="text-center text-bold" style="font-size: 16px;">${data.status_final}</td>
+                                    <td>TRACEABILITY</td><td>${val(data.traceability)}</td>
+                                    <td>KEPUTUSAN</td><td class="text-center text-bold" style="font-size: 16px;">${val(data.status_final)}</td>
                                 </tr>
                                 <tr>
                                     <td>SUHU RUANGAN</td><td class="text-center ${crossSuhu}">${data.suhu ? data.suhu : ''}</td>
@@ -2452,7 +3381,7 @@ html, body {
                             } else {
                                 footerHtml += `
                                 <tr>
-                                    <td width="20%" style="border-top: 1px solid #000;">METODE</td><td width="30%" style="border-top: 1px solid #000;">${data.metode}</td>
+                                    <td width="20%" style="border-top: 1px solid #000;">METODE</td><td width="30%" style="border-top: 1px solid #000;">${val(data.metode)}</td>
                                     <td width="20%" style="border-top: 1px solid #000;">KELEMBABAN RUANGAN</td><td width="30%" style="border-top: 1px solid #000;" class="text-center ${crossKelembapan}">${data.kelembapan ? data.kelembapan : ''}</td>
                                 </tr>
                                 <tr>
@@ -2461,8 +3390,8 @@ html, body {
                                 </tr>
                                 <tr></tr>
                                 <tr>
-                                    <td>TRACEABILITY</td><td>${data.traceability}</td>
-                                    <td>KEPUTUSAN</td><td class="text-center text-bold" style="font-size: 16px;">${data.status_final}</td>
+                                    <td>TRACEABILITY</td><td>${val(data.traceability)}</td>
+                                    <td>KEPUTUSAN</td><td class="text-center text-bold" style="font-size: 16px;">${val(data.status_final)}</td>
                                 </tr>
                                 <tr>
                                     <td>SUHU RUANGAN</td><td class="text-center ${crossSuhu}">${data.suhu ? data.suhu : ''}</td>
@@ -2486,9 +3415,9 @@ html, body {
                                         <table class="table-excel" style="width: 100%;">
                                             <tr><td width="33%">DIBUAT</td><td width="33%">DIPERIKSA</td><td width="33%">DISETUJUI</td></tr>
                                             <tr>
-                                                <td style="height: 55px; border-bottom: none;"></td>
-                                                <td style="height: 55px; border-bottom: none;"></td>
-                                                <td style="height: 55px; border-bottom: none;"></td>
+                                                <td style="height: 55px; border-bottom: none; vertical-align:bottom;">${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td>
+                                                <td style="height: 55px; border-bottom: none; vertical-align:bottom;">${qaSignatureName(data.pemeriksa || data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td>
+                                                <td style="height: 55px; border-bottom: none; vertical-align:bottom;">${qaSignatureName(data.penyetuju || data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td>
                                             </tr>
                                             <tr>
                                                 <td style="border-top: none;">PETUGAS</td><td style="border-top: none;">FOREMAN</td><td style="border-top: none;">SUPERVISOR</td>
