@@ -459,7 +459,6 @@ body{padding-top:80px;background:#fff}.filter-box{background:#fff;border:1px sol
 <div class="form-group view-date" data-view="tahunan" style="margin-right:12px;display:none"><select class="form-control" name="tgl_tahunan"><?php for($y=(int)date('Y')-5;$y<=(int)date('Y')+2;$y++):?><option value="<?=$y?>" <?=$val_tahunan==(string)$y?'selected':''?>><?=$y?></option><?php endfor;?></select></div>
 <button class="btn btn-primary" type="submit"><i class="fa fa-search"></i> Tampilkan</button>
 </form>
-<div style="margin-top:10px;color:#666;font-size:12px">Default: <b>Daftar No. Alat Ukur</b>. Harian, Bulanan, dan Tahunan ditampilkan langsung tanpa validasi laporan.</div>
 </div>
 
 <?php if($filter_waktu==='daftar'): ?>
