@@ -6,7 +6,6 @@ if ($_SESSION['login'] == 0) {
 }
 include "../../inc/inc_koneksi.php"; 
 
-$id_pemakai = $_SESSION['userid'];
 $tanggal_hari_ini = date('Y-m-d');
 $sql = "SELECT p.no_part, p.nama_part, COALESCE(sp.kode_pemilik, '-') AS seksi_pemilik, p.jadwal_kalibrasi
         FROM qa_part p
@@ -93,15 +92,9 @@ $total_pages = count($pages);
 
         .row-seksi { background-color: #d9e1f2; font-weight: bold; text-align: left; }
     
-<<<<<<< HEAD
-        .bg-terlewat { background-color: #ffb3b3 !important; font-weight: bold; } 
-        .bg-hari-ini { background-color: #b3ffb3 !important; font-weight: bold; } 
-        .bg-terjadwal { background-color: #b3d9ff !important; font-weight: bold; } 
-=======
         .bg-terlewat { background-color: #ffb3b3 !important; font-weight: bold; color: #842029; } 
         .bg-hari-ini { background-color: #b3ffb3 !important; font-weight: bold; color: #664d03; } 
         .bg-terjadwal { background-color: #b3d9ff !important; font-weight: bold; color: #0f5132; } 
->>>>>>> 0a5ed7ff6ba01531b8284390619185fbc099bef4
         
         .keterangan-wrapper { display: flex; gap: 20px; margin-top: 20px; }
         .keterangan-box { border: 1px solid #777; padding: 10px; font-size: 11px; flex: 1;}

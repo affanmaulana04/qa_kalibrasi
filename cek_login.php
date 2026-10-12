@@ -2,20 +2,48 @@
 include "inc/inc_koneksi.php";
 session_start();
 
+$wantJson = ((string)($_POST['ajax'] ?? '') === '1')
+    || strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
+
+function loginResponse($status, $message = '', $code = '', $redirect = '') {
+    global $wantJson;
+    if ($wantJson) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'status' => $status,
+            'message' => $message,
+            'code' => $code,
+            'redirect' => $redirect
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    if ($status === 'success') {
+        header('Location: media.php');
+        exit;
+    }
+
+    $query = http_build_query(['error' => $code ?: 'login_failed', 'message' => $message]);
+    header('Location: index.php?' . $query);
+    exit;
+}
+
 $_SESSION['jamlogin'] = gmdate("H:i:s", time() + 60 * 60 * 7);
 
 $userid = trim((string)($_POST['userid'] ?? ''));
 $pass   = (string)($_POST['password'] ?? '');
 
 if ($userid === '' || $pass === '') {
-    echo "<center><br><br><br><br><br><br>Username dan Password wajib diisi<br><br><a href='index.php'>Kembali</a></center>";
-    exit;
+    loginResponse('error', 'Username dan password wajib diisi.', 'required');
 }
 
-$pc_name = gethostbyaddr($_SERVER['REMOTE_ADDR']);
+$pc_name = gethostbyaddr($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1');
 $_SESSION['nama_pc'] = $pc_name;
 
 $stmt = mysqli_prepare($konek, "SELECT * FROM `user` WHERE uid=? LIMIT 1");
+if (!$stmt) {
+    loginResponse('error', 'Gagal memeriksa login. Silakan coba lagi.', 'server_error');
+}
 mysqli_stmt_bind_param($stmt, 's', $userid);
 mysqli_stmt_execute($stmt);
 $result = mysqli_stmt_get_result($stmt);
@@ -23,20 +51,15 @@ $r = mysqli_fetch_assoc($result);
 mysqli_stmt_close($stmt);
 
 if (!$r) {
-    echo "<center><br><br><br><br><br><br>User id <b>" . htmlspecialchars($userid, ENT_QUOTES) . "</b> hasn't been registered yet<br><br>";
-    echo "<a href='index.php'>Kembali</a></center>";
-    exit;
+    loginResponse('error', 'User ID belum terdaftar.', 'user_not_found');
 }
 
 if (strtoupper((string)($r['block'] ?? 'N')) === 'Y') {
-    echo "<center><br><br><br><br><br><br>User id <b>" . htmlspecialchars($userid, ENT_QUOTES) . "</b> has been blocked<br><br>";
-    echo "<a href='index.php'>Kembali</a></center>";
-    exit;
+    loginResponse('error', 'User ID ini sedang diblokir.', 'blocked');
 }
 
 if ((string)($r['pword'] ?? '') !== md5($pass)) {
-    echo "<center><br><br><br><br><br><br>Invalid Password<br><br><a href='index.php'>Kembali</a></center>";
-    exit;
+    loginResponse('error', 'Password salah.', 'password');
 }
 
 $_SESSION['userid']         = $r['uid'];
@@ -66,6 +89,5 @@ if (!empty($_POST['remember'])) {
     setcookie('userid', '', time() - 3600, '/');
 }
 
-header('Location: media.php');
-exit;
+loginResponse('success', 'Login berhasil.', '', 'media.php');
 ?>

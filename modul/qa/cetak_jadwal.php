@@ -67,7 +67,6 @@ while($r = mysqli_fetch_assoc($query)) {
         echo "<div class='a4-landscape text-center' style='padding-top:100px;'><h3>Tidak ada jadwal kalibrasi sampai tanggal ".date('d-m-Y', strtotime($filter_tgl))."</h3></div>";
     }
 
-    $tgl_cetak = date('d F Y');
     $bulan = array (1 => 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember');
     $tgl_indo = date('d') . ' ' . $bulan[(int)date('m')] . ' ' . date('Y');
 

@@ -85,7 +85,7 @@ if($q1){while($r=mysqli_fetch_assoc($q1)){
         'no_part'=>$r['no_part'],'nama'=>$r['nama_part'] ?: '-', 'spesifikasi'=>$r['spesifikasi'] ?: '-',
         'seksi'=>$r['seksi_pemilik'] ?: '-', 'operator'=>$r['operator'] ?: '-',
         'created_by'=>$r['created_by'] ?: '-', 'tanggal'=>$r['tanggal_pengecekan'] ?: '-',
-        'hasil'=>$r['status_kalibrasi'] ?: '-', 'status_validasi'=>$r['status_validasi'] ?: '-',
+        'hasil'=>(function($v){$v=strtoupper(trim((string)$v)); return ['GOOD'=>'OK','OK'=>'OK','BAD'=>'NOT GOOD','NOT GOOD'=>'NOT GOOD','BURUK'=>'NOT GOOD','RUSAK'=>'RUSAK','DISCONTINUE'=>'DISCONTINUE','DITARIK'=>'DITARIK TECHNICAL','DITARIK TECHNICAL'=>'DITARIK TECHNICAL'][$v] ?? ($v ?: '-');})($r['status_kalibrasi'] ?? ''), 'status_validasi'=>$r['status_validasi'] ?: '-',
         'keterangan'=>$r['keterangan'] ?: '-'
     ];
 }}
@@ -129,7 +129,7 @@ function statusLabel($s){
 </nav>
 
 <div class="card">
-    <h3 style="margin-top:0"> Transaksi Kalibrasi</h3>
+    <h3 style="margin-top:0"><i class="fa fa-check-square-o"></i> Transaksi Kalibrasi</h3>
 <div class="card">
     <div class="table-wrap">
         <table class="table table-bordered table-striped table-hover" id="tblTransaksi">
@@ -169,7 +169,6 @@ function statusLabel($s){
             </tbody>
         </table>
     </div>
-</div>
 </div>
 
 <div class="modal fade" id="detailModal">
@@ -309,7 +308,7 @@ function statusLabel($s){
             keterangan:keterangan
         },function(res){
             if(res&&res.status==='success'){
-                notif('Berhasil','Validasi '+role+' berhasil disimpan.',type,refresh);
+                notif('Berhasil','Validasi '+role+' berhasil disimpan beserta keterangannya.',type,refresh);
             }else{
                 setDecisionButtons(false);
                 btn.html(oldText);

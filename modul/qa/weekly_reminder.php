@@ -7,13 +7,11 @@
  *
  * Fungsi:
  * - Mengirim reminder jadwal kalibrasi mingguan
- * - 1 email bisa memiliki banyak seksi
- * - Jadwal: hari ini s/d 6 hari ke depan
- * - Jadwal terlewat tetap ditampilkan
- *
+ * - Setiap anggota QA menerima daftar yang sama, satu email per alamat
+ * - Jadwal: Senin s/d Jumat pada minggu berjalan
+ * - Jadwal terlewat tetap ditampilkan jika belum dikalibrasi
  * Test email langsung:
- * php weekly_reminder.php --test
- * php weekly_reminder.php --test --email=ridhoahmadfauzan38@gmail.com
+ * php weekly_reminder.php --test --email=alamat@email.com
  *
  * Production:
  * Waktu pengiriman sepenuhnya diatur oleh Windows Task Scheduler.
@@ -55,6 +53,19 @@ foreach ($argv ?? [] as $arg) {
 
 
 // ============================================================
+// VALIDASI MODE TEST
+// ============================================================
+
+if ($isTest && $testEmail === '') {
+
+    echo "Mode test wajib menggunakan email tujuan.\n";
+    echo "Contoh: php weekly_reminder.php --test --email=nama@email.com\n";
+
+    exit;
+}
+
+
+// ============================================================
 // CEK DATABASE
 // ============================================================
 
@@ -67,14 +78,17 @@ if (!$konek) {
 
 
 // ============================================================
-// TANGGAL
+// PERIODE WEEKDAYS: SENIN - JUMAT
 // ============================================================
 
-$mulai = date('Y-m-d');
+$mulai = date(
+    'Y-m-d',
+    strtotime('monday this week')
+);
 
 $selesai = date(
     'Y-m-d',
-    strtotime('+6 days')
+    strtotime('friday this week')
 );
 
 
@@ -84,6 +98,10 @@ $selesai = date(
 
 $logFile = __DIR__ . '/weekly_reminder.log';
 
+/**
+ * @param mixed $message
+ * @return void
+ */
 function qaWeeklyLog($message)
 {
     global $logFile;
@@ -119,125 +137,45 @@ qaWeeklyLog(
 // ============================================================
 
 $sqlPenerima = "
-    SELECT
-        id,
-        seksi_id,
-        seksi_pemilik_id,
-        user_uid,
-        email,
-        status
-    FROM qa_penerima_email
-    WHERE status = 'aktif'
-      AND email IS NOT NULL
-      AND TRIM(email) <> ''
-    ORDER BY
-        email ASC,
-        id ASC
+    SELECT uid, uname, sapaan, email_pembuat
+    FROM `user`
+    WHERE UPPER(COALESCE(block, 'N')) <> 'Y'
+      AND (
+          UPPER(COALESCE(pembuat, 'N')) = 'Y'
+          OR UPPER(COALESCE(pemeriksa, 'N')) = 'Y'
+          OR UPPER(COALESCE(penyetuju, 'N')) = 'Y'
+      )
+      AND email_pembuat IS NOT NULL
+      AND TRIM(email_pembuat) <> ''
+    ORDER BY uname ASC, uid ASC
 ";
 
-$resultPenerima = $konek->query(
-    $sqlPenerima
-);
-
+$resultPenerima = $konek->query($sqlPenerima);
 
 if (!$resultPenerima) {
-
-    qaWeeklyLog(
-        'ERROR QUERY PENERIMA: ' .
-        $konek->error
-    );
-
-    echo "Gagal mengambil penerima email.\n";
-
+    qaWeeklyLog('ERROR QUERY PENERIMA: ' . $konek->error);
+    echo "Gagal mengambil penerima email.\\n";
     exit;
 }
-
-
-// ============================================================
-// GROUP BERDASARKAN EMAIL
-// ============================================================
 
 $penerimaList = [];
 
 while ($r = $resultPenerima->fetch_assoc()) {
+    $email = strtolower(trim((string)$r['email_pembuat']));
 
-    $email = strtolower(
-        trim($r['email'])
-    );
-
-    if ($email === '') {
+    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         continue;
     }
 
-
     if (!isset($penerimaList[$email])) {
-
         $penerimaList[$email] = [
             'email' => $email,
-            'user_uid' => '',
+            'user_uid' => trim((string)$r['uid']),
+            'nama' => trim((string)$r['uname']),
+            'sapaan' => trim((string)($r['sapaan'] ?? '')),
             'seksi_ids' => [],
             'seksi_pemilik_ids' => []
         ];
-    }
-
-
-    // --------------------------------------------------------
-    // USER UID
-    // --------------------------------------------------------
-
-    if (
-        empty($penerimaList[$email]['user_uid'])
-        &&
-        !empty($r['user_uid'])
-    ) {
-
-        $penerimaList[$email]['user_uid'] =
-            trim($r['user_uid']);
-    }
-
-
-    // --------------------------------------------------------
-    // SEKSI ID
-    // --------------------------------------------------------
-
-    if (
-        isset($r['seksi_id'])
-        &&
-        $r['seksi_id'] !== null
-        &&
-        $r['seksi_id'] !== ''
-    ) {
-
-        $seksiId = (int) $r['seksi_id'];
-
-        if ($seksiId > 0) {
-
-            $penerimaList[$email]['seksi_ids'][$seksiId] =
-                $seksiId;
-        }
-    }
-
-
-    // --------------------------------------------------------
-    // SEKSI PEMILIK ID
-    // --------------------------------------------------------
-
-    if (
-        isset($r['seksi_pemilik_id'])
-        &&
-        $r['seksi_pemilik_id'] !== null
-        &&
-        $r['seksi_pemilik_id'] !== ''
-    ) {
-
-        $pemilikId =
-            (int) $r['seksi_pemilik_id'];
-
-        if ($pemilikId > 0) {
-
-            $penerimaList[$email]['seksi_pemilik_ids'][$pemilikId] =
-                $pemilikId;
-        }
     }
 }
 
@@ -263,15 +201,14 @@ if ($isTest && $testEmail !== '') {
 
         /*
          * Email test tidak terdaftar.
-         *
-         * Dalam kondisi ini kita tetap izinkan test
-         * dengan mengambil semua jadwal.
+         * Dalam kondisi ini tetap izinkan test
+         * dengan mengambil semua jadwal hanya jika --all-sections diberikan.
          */
 
         qaWeeklyLog(
             'EMAIL TEST TIDAK TERDAFTAR: ' .
             $testEmail .
-            ' | mode semua jadwal'
+            ' | pengiriman hanya ke email test'
         );
 
         $penerimaList = [
@@ -284,7 +221,9 @@ if ($isTest && $testEmail !== '') {
 
                 'seksi_ids' => [],
 
-                'seksi_pemilik_ids' => []
+                'seksi_pemilik_ids' => [],
+                'nama' => '',
+                'sapaan' => ''
             ]
         ];
     }
@@ -307,31 +246,17 @@ if (empty($penerimaList)) {
 }
 
 
-// ============================================================
-// PLACEHOLDER
-// ============================================================
-
-function qaMakePlaceholders($count)
-{
-    if ($count <= 0) {
-        return '';
-    }
-
-    return implode(
-        ',',
-        array_fill(
-            0,
-            $count,
-            '?'
-        )
-    );
-}
-
 
 // ============================================================
 // BIND PARAMETER DINAMIS
 // ============================================================
 
+/**
+ * @param mysqli_stmt $stmt
+ * @param string $types
+ * @param array<int,mixed> $params
+ * @return void
+ */
 function qaBindDynamic(
     $stmt,
     $types,
@@ -415,74 +340,16 @@ foreach ($penerimaList as $penerima) {
 
 
     // ========================================================
-    // NAMA + SAPAAN DARI QA_USER
+    // NAMA + SAPAAN PENERIMA
     // ========================================================
 
-    $sapaan = 'Bpk.';
+    $sapaan = 'Bapak/Ibu';
     $uname = '';
 
-    if ($userUid !== '') {
-
-        $stmtUser = $konek->prepare("
-            SELECT
-                nama,
-                jenis_kelamin
-            FROM qa_user
-            WHERE uid = ?
-              AND status = 'aktif'
-            LIMIT 1
-        ");
-
-        if ($stmtUser) {
-
-            $stmtUser->bind_param(
-                's',
-                $userUid
-            );
-
-            if ($stmtUser->execute()) {
-
-                $resUser =
-                    $stmtUser->get_result();
-
-                if ($resUser) {
-
-                    $userData =
-                        $resUser->fetch_assoc();
-
-                    if ($userData) {
-
-                        $uname =
-                            trim(
-                                $userData['nama'] ?? ''
-                            );
-
-                        $jenisKelamin =
-                            strtoupper(
-                                trim(
-                                    $userData['jenis_kelamin'] ?? ''
-                                )
-                            );
-
-                        /*
-                         * L = Bpk.
-                         * P = Ibu
-                         */
-
-                        if ($jenisKelamin === 'P') {
-
-                            $sapaan = 'Ibu';
-
-                        } else {
-
-                            $sapaan = 'Bpk.';
-                        }
-                    }
-                }
-            }
-
-            $stmtUser->close();
-        }
+    $uname = trim((string)($penerima['nama'] ?? ''));
+    $sapaanUser = trim((string)($penerima['sapaan'] ?? ''));
+    if ($sapaanUser !== '') {
+        $sapaan = $sapaanUser;
     }
 
 
@@ -533,91 +400,18 @@ foreach ($penerimaList as $penerima) {
     // ========================================================
 
     $jadwalRows = [];
-
     $terlewatRows = [];
 
 
-    // ========================================================
-    // BUAT KONDISI SEKSI
-    // ========================================================
-
-    $conditions = [];
-
+    $sectionCondition = '1=1';
     $params = [];
-
     $types = '';
 
 
-    // --------------------------------------------------------
-    // SEKSI ID
-    // --------------------------------------------------------
-
-    if (!empty($seksiIds)) {
-
-        $placeholders =
-            qaMakePlaceholders(
-                count($seksiIds)
-            );
-
-        $conditions[] =
-            "p.seksi_id IN ($placeholders)";
-
-        foreach ($seksiIds as $id) {
-
-            $params[] = (int) $id;
-
-            $types .= 'i';
-        }
-    }
-
-
-    // --------------------------------------------------------
-    // SEKSI PEMILIK ID
-    // --------------------------------------------------------
-
-    if (!empty($pemilikIds)) {
-
-        $placeholders =
-            qaMakePlaceholders(
-                count($pemilikIds)
-            );
-
-        $conditions[] =
-            "p.seksi_pemilik_id IN ($placeholders)";
-
-        foreach ($pemilikIds as $id) {
-
-            $params[] = (int) $id;
-
-            $types .= 'i';
-        }
-    }
-
-
     // ========================================================
-    // QUERY JADWAL
+    // QUERY JADWAL MINGGU INI
+    // SENIN - JUMAT
     // ========================================================
-
-    if (!empty($conditions)) {
-
-        $sectionCondition =
-            '(' .
-            implode(
-                ' OR ',
-                $conditions
-            ) .
-            ')';
-
-    } else {
-
-        /*
-         * Email test tanpa mapping seksi.
-         * Ambil semua jadwal.
-         */
-
-        $sectionCondition = '1=1';
-    }
-
 
     $sqlJadwal = "
         SELECT
@@ -632,8 +426,8 @@ foreach ($penerimaList as $penerima) {
             p.seksi_pemilik_id,
 
             COALESCE(
-                sp.kode_pemilik,
-                s.nama_seksi,
+                sm.nama_seksi,
+                NULLIF(TRIM(p.seksi_pemilik), ''),
                 '-'
             ) AS kode_pemilik,
 
@@ -646,28 +440,46 @@ foreach ($penerimaList as $penerima) {
 
         FROM qa_part p
 
-        LEFT JOIN qa_seksi s
-            ON s.id = p.seksi_id
-
-        LEFT JOIN qa_seksi_pemilik sp
-            ON sp.id = p.seksi_pemilik_id
+        LEFT JOIN qa_seksi_master sm
+            ON UPPER(TRIM(sm.nama_seksi)) = UPPER(TRIM(p.seksi_pemilik))
 
         WHERE p.status = 'aktif'
+
 
           AND p.jadwal_kalibrasi IS NOT NULL
 
           AND p.jadwal_kalibrasi <> '0000-00-00'
 
           AND p.jadwal_kalibrasi
-              BETWEEN CURDATE()
-              AND DATE_ADD(
+              BETWEEN DATE_SUB(
                   CURDATE(),
-                  INTERVAL 6 DAY
+                  INTERVAL WEEKDAY(CURDATE()) DAY
               )
+              AND DATE_ADD(
+                  DATE_SUB(
+                      CURDATE(),
+                      INTERVAL WEEKDAY(CURDATE()) DAY
+                  ),
+                  INTERVAL 4 DAY
+              )
+
+          AND NOT EXISTS (
+              SELECT 1
+              FROM qa_pengecekan q
+              WHERE q.alat_id = p.id
+                AND q.tanggal_pengecekan >= p.jadwal_kalibrasi
+                AND LOWER(COALESCE(q.status_validasi, '')) NOT IN
+                    ('ditolak', 'rejected', 'menunggu_pemeriksa', 'menunggu_penyetuju')
+          )
 
           AND $sectionCondition
 
         ORDER BY
+            COALESCE(
+                sm.nama_seksi,
+                NULLIF(TRIM(p.seksi_pemilik), ''),
+                '-'
+            ) ASC,
             p.jadwal_kalibrasi ASC,
             p.no_part ASC
     ";
@@ -687,10 +499,9 @@ foreach ($penerimaList as $penerima) {
 
     if (!$stmtJadwal) {
 
-        qaWeeklyLog(
-            'ERROR PREPARE JADWAL: ' .
-            $konek->error
-        );
+        qaWeeklyLog('ERROR PREPARE JADWAL: ' . $konek->error);
+        echo "ERROR query jadwal: " . $konek->error . "\\n";
+        exit(1);
 
     } else {
 
@@ -706,10 +517,9 @@ foreach ($penerimaList as $penerima) {
 
         if (!$stmtJadwal->execute()) {
 
-            qaWeeklyLog(
-                'ERROR EXECUTE JADWAL: ' .
-                $stmtJadwal->error
-            );
+            qaWeeklyLog('ERROR EXECUTE JADWAL: ' . $stmtJadwal->error);
+            echo "ERROR execute jadwal: " . $stmtJadwal->error . "\\n";
+            exit(1);
 
         } else {
 
@@ -742,6 +552,7 @@ foreach ($penerimaList as $penerima) {
 
     // ========================================================
     // QUERY OVERDUE
+    // SEMUA JADWAL SEBELUM SENIN MINGGU INI
     // ========================================================
 
     $sqlOverdue = "
@@ -757,8 +568,8 @@ foreach ($penerimaList as $penerima) {
             p.seksi_pemilik_id,
 
             COALESCE(
-                sp.kode_pemilik,
-                s.nama_seksi,
+                sm.nama_seksi,
+                NULLIF(TRIM(p.seksi_pemilik), ''),
                 '-'
             ) AS kode_pemilik,
 
@@ -776,23 +587,38 @@ foreach ($penerimaList as $penerima) {
 
         FROM qa_part p
 
-        LEFT JOIN qa_seksi s
-            ON s.id = p.seksi_id
-
-        LEFT JOIN qa_seksi_pemilik sp
-            ON sp.id = p.seksi_pemilik_id
+        LEFT JOIN qa_seksi_master sm
+            ON UPPER(TRIM(sm.nama_seksi)) = UPPER(TRIM(p.seksi_pemilik))
 
         WHERE p.status = 'aktif'
+
 
           AND p.jadwal_kalibrasi IS NOT NULL
 
           AND p.jadwal_kalibrasi <> '0000-00-00'
 
-          AND p.jadwal_kalibrasi < CURDATE()
+          AND p.jadwal_kalibrasi < DATE_SUB(
+              CURDATE(),
+              INTERVAL WEEKDAY(CURDATE()) DAY
+          )
+
+          AND NOT EXISTS (
+              SELECT 1
+              FROM qa_pengecekan q
+              WHERE q.alat_id = p.id
+                AND q.tanggal_pengecekan >= p.jadwal_kalibrasi
+                AND LOWER(COALESCE(q.status_validasi, '')) NOT IN
+                    ('ditolak', 'rejected', 'menunggu_pemeriksa', 'menunggu_penyetuju')
+          )
 
           AND $sectionCondition
 
         ORDER BY
+            COALESCE(
+                sm.nama_seksi,
+                NULLIF(TRIM(p.seksi_pemilik), ''),
+                '-'
+            ) ASC,
             p.jadwal_kalibrasi ASC,
             p.no_part ASC
     ";
@@ -806,37 +632,26 @@ foreach ($penerimaList as $penerima) {
 
     if (!$stmtOverdue) {
 
-        qaWeeklyLog(
-            'ERROR PREPARE OVERDUE: ' .
-            $konek->error
-        );
+        qaWeeklyLog('ERROR PREPARE OVERDUE: ' . $konek->error);
+        echo "ERROR query overdue: " . $konek->error . "\\n";
+        exit(1);
 
     } else {
 
         if (!empty($params)) {
 
             /*
-             * Parameter harus dibuat ulang karena
+             * Parameter dibuat ulang karena
              * bind_param menggunakan reference.
              */
 
             $paramsOverdue = [];
-
             $typesOverdue = '';
 
 
             foreach ($seksiIds as $id) {
 
-                $paramsOverdue[] = (int) $id;
-
-                $typesOverdue .= 'i';
-            }
-
-
-            foreach ($pemilikIds as $id) {
-
-                $paramsOverdue[] = (int) $id;
-
+                $paramsOverdue[] = (int)$id;
                 $typesOverdue .= 'i';
             }
 
@@ -851,10 +666,9 @@ foreach ($penerimaList as $penerima) {
 
         if (!$stmtOverdue->execute()) {
 
-            qaWeeklyLog(
-                'ERROR EXECUTE OVERDUE: ' .
-                $stmtOverdue->error
-            );
+            qaWeeklyLog('ERROR EXECUTE OVERDUE: ' . $stmtOverdue->error);
+            echo "ERROR execute overdue: " . $stmtOverdue->error . "\\n";
+            exit(1);
 
         } else {
 
@@ -974,11 +788,269 @@ foreach ($penerimaList as $penerima) {
     // ========================================================
 
     $intro =
-        'Berikut daftar jadwal kalibrasi alat QA '
-        .
-        'yang perlu diperhatikan selama satu minggu '
-        .
-        'ke depan serta jadwal kalibrasi yang telah terlewat.';
+        'Dengan hormat, berikut kami sampaikan informasi jadwal kalibrasi alat '
+        . 'untuk menjadi perhatian dan tindak lanjut.';
+
+
+    // ========================================================
+    // SNAPSHOT EMAIL
+    // ========================================================
+
+    $seksiSnapshotItems = [];
+
+    foreach (
+        array_merge(
+            $jadwalRows,
+            $terlewatRows
+        ) as $snapshotRow
+    ) {
+
+        $owner = trim(
+            (string)(
+                $snapshotRow['kode_pemilik']
+                ?? '-'
+            )
+        );
+
+        if ($owner === '') {
+            $owner = '-';
+        }
+
+        $ownerKey =
+            strtoupper($owner);
+
+        if (!isset($seksiSnapshotItems[$ownerKey])) {
+
+            $seksiSnapshotItems[$ownerKey] =
+                $owner;
+        }
+    }
+
+
+    $seksiSnapshot =
+        !empty($seksiSnapshotItems)
+        ? implode(
+            ', ',
+            array_values(
+                $seksiSnapshotItems
+            )
+        )
+        : '-';
+
+
+    // ========================================================
+    // PRINT TOKEN
+    // ========================================================
+
+    try {
+
+        $printToken =
+            bin2hex(
+                random_bytes(32)
+            );
+
+    } catch (Throwable $e) {
+
+        $printToken =
+            hash(
+                'sha256',
+                $email .
+                '|' .
+                microtime(true) .
+                '|' .
+                uniqid('', true)
+            );
+    }
+
+
+    // ========================================================
+    // DATA SNAPSHOT
+    // ========================================================
+
+    $snapshotData = [
+
+        'version' =>
+            1,
+
+        'email_date' =>
+            date('Y-m-d'),
+
+        'periode_mulai' =>
+            $mulai,
+
+        'periode_selesai' =>
+            $selesai,
+
+        'user_uid' =>
+            $userUid,
+
+        'email' =>
+            $email,
+
+        'nama_penerima' =>
+            $namaPenerima,
+
+        'seksi' =>
+            array_values(
+                $seksiSnapshotItems
+            ),
+
+        'jadwal' =>
+            $jadwalRows,
+
+        'terlewat' =>
+            $terlewatRows
+    ];
+
+
+    $snapshotJson =
+        json_encode(
+            $snapshotData,
+            JSON_UNESCAPED_UNICODE |
+            JSON_UNESCAPED_SLASHES
+        );
+
+
+    if ($snapshotJson === false) {
+
+        qaWeeklyLog(
+            'GAGAL MEMBUAT SNAPSHOT EMAIL UNTUK ' .
+            $email .
+            ' | ' .
+            json_last_error_msg()
+        );
+
+        continue;
+    }
+
+
+    // ========================================================
+    // SIMPAN SNAPSHOT SEBELUM KIRIM
+    // ========================================================
+
+    $cekLog =
+        $konek->query(
+            "SHOW TABLES LIKE 'qa_email_log'"
+        );
+
+
+    if (
+        !$cekLog
+        ||
+        $cekLog->num_rows <= 0
+    ) {
+
+        qaWeeklyLog(
+            'TABEL qa_email_log TIDAK DITEMUKAN. ' .
+            'EMAIL DIBATALKAN UNTUK ' .
+            $email
+        );
+
+        continue;
+    }
+
+
+    $jumlahJadwal =
+        count($jadwalRows);
+
+    $jumlahTerlewat =
+        count($terlewatRows);
+
+
+    $keteranganAwal =
+        'Jadwal: ' .
+        $jumlahJadwal .
+        ', Terlewat: ' .
+        $jumlahTerlewat .
+        '. Menunggu proses pengiriman email.';
+
+
+    if ($isTest) {
+
+        $keteranganAwal =
+            '[TEST] ' .
+            $keteranganAwal;
+    }
+
+
+    // ========================================================
+    // INSERT LOG
+    // ========================================================
+
+    $stmtLog =
+        $konek->prepare("
+            INSERT INTO qa_email_log
+            (
+                user_uid,
+                email,
+                seksi_snapshot,
+                snapshot_json,
+                print_token,
+                jenis_email,
+                periode_mulai,
+                periode_selesai,
+                tanggal_kirim,
+                status,
+                keterangan
+            )
+            VALUES
+            (
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                'weekly',
+                ?,
+                ?,
+                NOW(),
+                'failed',
+                ?
+            )
+        ");
+
+
+    if (!$stmtLog) {
+
+        qaWeeklyLog(
+            'GAGAL PREPARE SNAPSHOT QA_EMAIL_LOG: ' .
+            $konek->error
+        );
+
+        continue;
+    }
+
+
+    $stmtLog->bind_param(
+        'ssssssss',
+        $userUid,
+        $email,
+        $seksiSnapshot,
+        $snapshotJson,
+        $printToken,
+        $mulai,
+        $selesai,
+        $keteranganAwal
+    );
+
+
+    if (!$stmtLog->execute()) {
+
+        qaWeeklyLog(
+            'GAGAL SIMPAN SNAPSHOT QA_EMAIL_LOG: ' .
+            $stmtLog->error
+        );
+
+        $stmtLog->close();
+
+        continue;
+    }
+
+
+    $emailLogId =
+        (int)$stmtLog->insert_id;
+
+    $stmtLog->close();
 
 
     // ========================================================
@@ -991,7 +1063,10 @@ foreach ($penerimaList as $penerima) {
             $subjek,
             $intro,
             $jadwalRows,
-            $terlewatRows
+            $terlewatRows,
+            $printToken,
+            $mulai,
+            $selesai
         );
 
 
@@ -1027,81 +1102,83 @@ foreach ($penerimaList as $penerima) {
             'EMAIL GAGAL: ' .
             $email .
             ' | ' .
-            ($hasil['message'] ?? 'Unknown error')
+            (
+                $hasil['message']
+                ?? 'Unknown error'
+            )
         );
     }
 
 
     // ========================================================
-    // LOG EMAIL
+    // UPDATE STATUS LOG EMAIL
     // ========================================================
 
-    $cekLog =
-        $konek->query(
-            "SHOW TABLES LIKE 'qa_email_log'"
+    $statusLog =
+        $hasil['success']
+        ? 'sent'
+        : 'failed';
+
+
+    $keteranganLog =
+        'Jadwal: ' .
+        $jumlahJadwal .
+        ', Terlewat: ' .
+        $jumlahTerlewat .
+        '. ' .
+        (
+            $hasil['message']
+            ?? ''
         );
 
 
-    if (
-        $cekLog
-        &&
-        $cekLog->num_rows > 0
-    ) {
+    if ($isTest) {
 
-        $jumlahJadwal =
-            count($jadwalRows);
-
-        $jumlahTerlewat =
-            count($terlewatRows);
-
-        $statusLog =
-            $hasil['success']
-            ? 'berhasil'
-            : 'gagal';
-
-        $pesanLog =
-            'Jadwal: ' .
-            $jumlahJadwal .
-            ', Terlewat: ' .
-            $jumlahTerlewat .
-            '. ' .
-            ($hasil['message'] ?? '');
+        $keteranganLog =
+            '[TEST] ' .
+            $keteranganLog;
+    }
 
 
-        $stmtLog =
-            $konek->prepare("
-                INSERT INTO qa_email_log
-                (
-                    email,
-                    jenis_email,
-                    tanggal_kirim,
-                    status,
-                    pesan
-                )
-                VALUES
-                (
-                    ?,
-                    'weekly_reminder',
-                    NOW(),
-                    ?,
-                    ?
-                )
-            ");
+    $stmtUpdateLog =
+        $konek->prepare("
+            UPDATE qa_email_log
+            SET
+                tanggal_kirim = NOW(),
+                status = ?,
+                keterangan = ?
+            WHERE id = ?
+            LIMIT 1
+        ");
 
 
-        if ($stmtLog) {
+    if ($stmtUpdateLog) {
 
-            $stmtLog->bind_param(
-                'sss',
-                $email,
-                $statusLog,
-                $pesanLog
+        $stmtUpdateLog->bind_param(
+            'ssi',
+            $statusLog,
+            $keteranganLog,
+            $emailLogId
+        );
+
+
+        if (!$stmtUpdateLog->execute()) {
+
+            qaWeeklyLog(
+                'GAGAL UPDATE QA_EMAIL_LOG: ' .
+                $stmtUpdateLog->error
             );
-
-            $stmtLog->execute();
-
-            $stmtLog->close();
         }
+
+
+        $stmtUpdateLog->close();
+
+    } else {
+
+        qaWeeklyLog(
+            'GAGAL PREPARE UPDATE QA_EMAIL_LOG: ' .
+            $konek->error
+        );
     }
 }
 
