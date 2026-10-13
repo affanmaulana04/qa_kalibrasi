@@ -26,7 +26,7 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Pengecekan Alat Kalibrasi | QA System</title>
-    <link rel="shortcut icon" href="../../images/favicon1.ico">
+    <link rel="icon" type="image/png" href="/qa_kalibrasi/images/favicon-toto-qa.png?v=1">
     <link href="../../css/bootstrap.min.css" rel="stylesheet">
     <link href="../../font-awesome-4.3.0/css/font-awesome.min.css" rel="stylesheet">
     <link href="../../css/bootstrap-dialog.css" rel="stylesheet">
@@ -2049,7 +2049,7 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                                 history.forEach(function(row,idx){var rawSt=String(row.display_status||row.status_display||row.status_kalibrasi||row.status||'').toUpperCase();var sv=String(row.status_validasi||'').toLowerCase();var jt=String(row.jenis_transaksi||row.tipe_transaksi||'').toLowerCase();var kt=String(row.keterangan||'').toLowerCase();var isRegist=(jt==='registrasi_alat'||jt.indexOf('registr')!==-1||kt.indexOf('registrasi alat')!==-1);var st=isRegist?'REGISTER':(sv==='menunggu_pemeriksa'?'MENUNGGU VALIDASI (PEMERIKSA)':(sv==='menunggu_penyetuju'?'MENUNGGU VALIDASI (PENYETUJU)':rawSt));if(st==='GOOD'||st==='LULUS')st='OK';if(st==='NG'||st==='BAD')st='NOT GOOD';var label=st==='OK'?'<span class="label label-success">OK</span>':(st==='REGISTER'?'<span class="label label-info">Register</span>':(st==='NOT GOOD'||st==='RUSAK'||st==='DISCONTINUE'||st==='DITARIK TECHNICAL'||st==='DITOLAK PEMERIKSA'||st==='DITOLAK PENYETUJU'?'<span class="label label-danger">'+qaEsc(st)+'</span>':'<span class="label label-warning"><i class="fa fa-clock-o"></i> '+qaEsc(st||'MENUNGGU VALIDASI')+'</span>'));var btnA='<button class="btn btn-xs btn-primary btn-print-hist" data-idx="'+idx+'"><i class="fa fa-print"></i> '+'Cetak'+'</button>';tGabungan.append('<tr><td>'+(idx+2)+'</td><td><strong>'+qaEsc(row.no_part||alat.no_part||'-')+'</strong></td><td>'+qaEsc(alat.nama_part||'-')+'</td><td>'+qaEsc(alat.spesifikasi||'-')+'</td><td>'+qaEsc(alat.seksi_pemilik||'-')+'</td><td>'+qaEsc(alat.lokasi||'-')+'</td><td>'+label+'</td><td><strong>'+formatTanggal(row.tanggal_pengecekan||row.tanggal)+'</strong></td><td>'+qaEsc(row.operator||row.petugas||'-')+'</td><td>'+btnA+'</td></tr>');});
                                 // BBRAU SHORTCUT V1 - NOMOR ALAT TERDAFTAR LANGSUNG BISA BUKA LAPORAN BBRAU
                                 var bbNo=encodeURIComponent(alat.no_part||noAlat);
-                                if(!$('#btn-bbrau-shortcut').length){ $('#qa-detail-actions').append('<a id="btn-bbrau-shortcut" class="btn btn-sm btn-default" target="_blank"><i class="fa fa-book"></i> Laporan BBRAU</a>'); }
+                                if(!$('#btn-bbrau-shortcut').length){ $('#qa-detail-actions').append('<a id="btn-bbrau-shortcut" class="btn btn-sm btn-default" target="_self"><i class="fa fa-book"></i> Laporan BBRAU</a>'); }
                                 $('#btn-bbrau-shortcut').attr('href','laporan_bbrau.php?no_alat='+bbNo);
                                 // CEK ALAT QR V2 - GENERATOR DI SAMPING SHORTCUT BBRAU
                                 if(!$('#btn-qr-generator').length){ $('#qa-detail-actions').append('<button type="button" id="btn-qr-generator" class="btn btn-sm btn-default"><i class="fa fa-qrcode"></i> Buat QR Code</button>'); }

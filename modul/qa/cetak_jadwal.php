@@ -22,7 +22,7 @@ while($r = mysqli_fetch_assoc($query)) {
 <html>
 <head>
     <title>Cetak Jadwal Harian</title>
-    <link rel="icon" type="image/png" href="../../images/LogoTOTO.png?v=<?= time(); ?>"/>
+    <link rel="icon" type="image/png" href="../../images/LogoTOTO.png?v=20261013">
     <style>
         * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         body { font-family: Arial, sans-serif; font-size: 11px; color: #000; margin: 0; padding: 20px; background: #525659; }

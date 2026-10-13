@@ -32,6 +32,7 @@ if (!$user) { http_response_code(404); exit('User tidak ditemukan.'); }
 <!DOCTYPE html>
 <html lang="id">
 <head>
+    <link rel="icon" type="image/png" href="/qa_kalibrasi/images/favicon-toto-qa.png?v=1">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Edit User QA</title>

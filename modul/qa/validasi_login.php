@@ -46,7 +46,7 @@ function qaMagicLoginFail($message, $statusCode = 400)
     $loginUrl = '../../index.php';
 
     echo '<!doctype html>';
-    echo '<html lang="id"><head><meta charset="utf-8">';
+    echo '<html lang="id"><head><link rel="icon" type="image/png" href="../../images/LogoTOTO.png?v=20261013"><meta charset="utf-8">';
     echo '<meta name="viewport" content="width=device-width,initial-scale=1">';
     echo '<title>Link Validasi QA</title>';
     echo '<style>';

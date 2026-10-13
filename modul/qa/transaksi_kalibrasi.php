@@ -106,6 +106,7 @@ function statusLabel($s){
 
 ?>
 <!DOCTYPE html><html lang="id"><head>
+    <link rel="icon" type="image/png" href="/qa_kalibrasi/images/favicon-toto-qa.png?v=1">
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Transaksi Kalibrasi | QA System</title>
 <link href="../../css/bootstrap.min.css" rel="stylesheet"><link href="../../font-awesome-4.3.0/css/font-awesome.min.css" rel="stylesheet">
 <style>body{padding-top:70px;background:#f4f6f9;font-family:Arial,sans-serif}.card{background:#fff;border:1px solid #ddd;border-radius:8px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,.06);margin-bottom:20px}.table-wrap{overflow:auto}.table>thead>tr>th{background:#e9ecef;text-align:center;vertical-align:middle}.table>tbody>tr>td{vertical-align:middle}.btn-action{margin:2px 0}.small-note{color:#666}.iframe-wrap{height:72vh}.iframe-wrap iframe{width:100%;height:100%;border:0}</style>

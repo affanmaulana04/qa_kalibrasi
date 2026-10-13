@@ -4,6 +4,7 @@ session_start();
 <!DOCTYPE html>
 <html lang="id">
 <head>
+    <link rel="icon" type="image/png" href="../../images/LogoTOTO.png?v=20261013">
 <meta charset="UTF-8">
 <title>Laporan Pemeriksaan Gauge</title>
 <style>

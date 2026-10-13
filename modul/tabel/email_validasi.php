@@ -694,6 +694,7 @@ if ($tableReady) {
 <html lang="id">
 
 <head>
+    <link rel="icon" type="image/png" href="/qa_kalibrasi/images/favicon-toto-qa.png?v=1">
 
 <meta charset="utf-8">
 

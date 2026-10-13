@@ -12,7 +12,7 @@ $user = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 mysqli_stmt_close($stmt);
 if (!$user) { http_response_code(404); exit('User tidak ditemukan.'); }
 ?>
-<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reset Password</title>
+<!DOCTYPE html><html lang="id"><head><link rel="icon" type="image/png" href="/qa_kalibrasi/images/favicon-toto-qa.png?v=1"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reset Password</title>
 <link href="../../css/bootstrap.min.css" rel="stylesheet"><link href="../../font-awesome-4.3.0/css/font-awesome.min.css" rel="stylesheet"><link href="../../css/bootstrap-dialog.css" rel="stylesheet">
 <style>body{padding-top:50px}.navbar-default .navbar-nav>li>a:hover,.navbar-default .navbar-nav>li>a:focus{background:#E7E7E7;color:#333}.card{padding:30px 15px}</style></head>
 <body oncontextmenu="return false;">

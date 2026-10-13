@@ -55,7 +55,7 @@ $todayLabel = date('d.m.Y');
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Daftar Kalibrasi Alat</title>
-<link rel="shortcut icon" href="../../images/hrd.ico">
+<link rel="icon" type="image/png" href="../../images/LogoTOTO.png?v=20261013">
 <link href="../../css/bootstrap.min.css" rel="stylesheet">
 <link href="../../font-awesome-4.3.0/css/font-awesome.min.css" rel="stylesheet">
 <style>
