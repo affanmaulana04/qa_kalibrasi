@@ -122,6 +122,27 @@ $holidayDates = [
     '2027-12-25' => 'Hari Raya Natal',
     '2027-12-26' => 'Isra Mikraj Nabi Muhammad SAW'
 ];
+// CUSTOM TANGGAL MERAH PERUSAHAAN
+// Tambahkan tanggal yang diatur Admin tanpa mengubah daftar hari libur bawaan di atas.
+// Data custom dengan tanggal yang sama akan memakai keterangan dari qa_tanggal_merah.
+$customHolidayStart = sprintf('%04d-%02d-01', $selectedYear, $selectedMonth);
+$customHolidayEnd = date('Y-m-t', strtotime($customHolidayStart));
+$qCustomHoliday = @mysqli_query(
+    $konek,
+    "SELECT tanggal, keterangan
+     FROM qa_tanggal_merah
+     WHERE tanggal BETWEEN '$customHolidayStart' AND '$customHolidayEnd'
+     ORDER BY tanggal ASC"
+);
+if ($qCustomHoliday) {
+    while ($customHoliday = mysqli_fetch_assoc($qCustomHoliday)) {
+        $customDate = substr((string)($customHoliday['tanggal'] ?? ''), 0, 10);
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $customDate)) {
+            $customLabel = trim((string)($customHoliday['keterangan'] ?? ''));
+            $holidayDates[$customDate] = $customLabel !== '' ? $customLabel : 'Tanggal Merah Perusahaan';
+        }
+    }
+}
 function holidayClassForDate($date, $holidayDates) {
     $ts = strtotime($date);
     $isWeekend = $ts !== false && (int)date('N', $ts) >= 6;
@@ -427,7 +448,7 @@ $totalAlatOff = count($problemRows);
         <link href="../../font-awesome-4.3.0/css/font-awesome.min.css" rel="stylesheet">
         <style>
             body{padding-top:80px;background:#fff}.filter-box{background:#fff;border:1px solid #ddd;border-radius:4px;padding:20px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
-            .table-wrap{overflow:auto}.table-jadwal{width:100%;border-collapse:collapse;border:1px solid #aaa;font-family:Arial,sans-serif;font-size:12px}.table-jadwal th{border:1px solid #aaa;padding:7px;text-align:center;vertical-align:middle;background:#e2e6ea;color:#000;font-weight:bold;white-space:nowrap}.table-jadwal td{border:1px solid #aaa;padding:6px;vertical-align:middle;text-align:center;color:#000}.text-left{text-align:left!important}.tr-seksi{background:#d6d8db;font-weight:bold;border-top:2px solid #555}.r-row{background:#fff9e6}.h-row{background:#eef8ee}.b-row{background:#fdecec}.negative-row td{background:#f4cccc!important;color:#990000!important;font-weight:600}.holiday-col,.table-jadwal th.holiday-col,.table-jadwal td.holiday-col{background:#4b4f54!important;color:#fff!important}.mini-badge{font-size:10px;padding:3px 6px;border-radius:3px;display:inline-block}.btn-validate-report{margin-left:8px}.report-status{font-size:12px;font-weight:bold}.sticky-first{position:sticky;left:0;background:#fff;z-index:2}.sticky-second{position:sticky;left:42px;background:#fff;z-index:2}@media print{.no-print{display:none!important}.print-area{display:block!important}.table-jadwal{font-size:9px}.table-jadwal th,.table-jadwal td{padding:3px}}
+            .table-wrap{overflow:auto}.table-jadwal{width:100%;border-collapse:collapse;border:1px solid #aaa;font-family:Arial,sans-serif;font-size:12px}.table-jadwal th{border:1px solid #aaa;padding:7px;text-align:center;vertical-align:middle;background:#e2e6ea;color:#000;font-weight:bold;white-space:nowrap}.table-jadwal td{border:1px solid #aaa;padding:6px;vertical-align:middle;text-align:center;color:#000}.text-left{text-align:left!important}.tr-seksi{background:#d6d8db;font-weight:bold;border-top:2px solid #555}.r-row{background:#fff9e6}.h-row{background:#eef8ee}.b-row{background:#fdecec}.negative-row td{background:#f4cccc!important;color:#990000!important;font-weight:600}.holiday-col,.table-jadwal th.holiday-col,.table-jadwal td.holiday-col{background:rgba(220,53,69,.50)!important;color:#000!important}.mini-badge{font-size:10px;padding:3px 6px;border-radius:3px;display:inline-block}.btn-validate-report{margin-left:8px}.report-status{font-size:12px;font-weight:bold}.sticky-first{position:sticky;left:0;background:#fff;z-index:2}.sticky-second{position:sticky;left:42px;background:#fff;z-index:2}@media print{.no-print{display:none!important}.print-area{display:block!important}.table-jadwal{font-size:9px}.table-jadwal th,.table-jadwal td{padding:3px}}
             .print-area{display:none}
         </style>
     </head>
@@ -915,7 +936,7 @@ $totalAlatOff = count($problemRows);
 </table>
 </div>
 <div style="margin-top:8px;font-size:12px;color:#666">
-    <span style="display:inline-block;width:14px;height:14px;background:#4b4f54;vertical-align:-2px;margin-right:4px">
+    <span style="display:inline-block;width:14px;height:14px;background:rgba(220,53,69,.50);vertical-align:-2px;margin-right:4px">
     </span>
     = Sabtu/Minggu dan tanggal merah/cuti bersama.
     <b>

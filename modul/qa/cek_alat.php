@@ -151,9 +151,11 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                                 <div class="form-group" style="margin-top: 20px; margin-bottom: 0;"><button type="button" id="btn-cek" class="btn btn-validasi btn-block">Cek Alat</button></div>
                             </form>
                         </div>
-                        <div class="col-md-6 flex-col-center" style="padding-left: 30px; text-align: center;">
+                        <div class="col-md-6 flex-col-center" id="visual-alat-panel" style="padding-left: 30px; text-align: center;">
                             <h4 style="font-weight: bold; color:#555; margin-top:0; margin-bottom: 15px;">Visual Alat</h4>
-                            <div class="foto-alat-container"></div>
+                            <div class="foto-alat-container">
+                                <img id="preview_gambar_alat" src="" alt="Visual Alat" style="display:none;">
+                            </div>
                         </div>
                     </div>
 
@@ -373,7 +375,14 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                                     <div class="col-md-6 col-sm-12" id="reg-foto-home">
                                         <div class="form-group" id="reg_foto_group" style="margin-top:0;">
                                             <label><i class="fa fa-upload"></i> Upload Foto Alat ( Opsional )</label>
-                                            <input type="file" class="form-control" id="reg_foto_alat" accept="image/jpeg, image/png, image/jpg">
+                                            <div class="input-group">
+                                                <input type="file" class="form-control" id="reg_foto_alat" accept="image/jpeg, image/png, image/jpg">
+                                                <span class="input-group-btn">
+                                                    <button type="button" class="btn btn-danger" id="btn-batal-foto" title="Batalkan foto yang dipilih" style="display:none;">
+                                                        <i class="fa fa-times"></i>
+                                                    </button>
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -480,6 +489,36 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
     <script>
         $(document).ready(function() {
             $('.text-uppercase-input').on('input', function() { $(this).val($(this).val().toUpperCase()); });
+
+            // QR READER USB/KEYBOARD: QR lama boleh tetap berisi "QA_ALAT:",
+            // tetapi nilai yang tampil/terkirim dari kotak Cek Alat selalu nomor alat murni.
+            function qaNormalizeNoAlatInput(value) {
+                return String(value == null ? '' : value)
+                    .replace(/^\s*QA_ALAT\s*:\s*/i, '')
+                    .trim();
+            }
+
+            $(document).off('input.qaHardwareQr paste.qaHardwareQr', '#nomor_alat')
+                .on('input.qaHardwareQr paste.qaHardwareQr', '#nomor_alat', function() {
+                    var $input = $(this);
+                    setTimeout(function() {
+                        var raw = String($input.val() || '');
+                        var clean = qaNormalizeNoAlatInput(raw).toUpperCase();
+                        if (raw !== clean) $input.val(clean);
+                    }, 0);
+                });
+
+            // BATAL UPLOAD FOTO REGISTRASI
+            $(document).on('change', '#reg_foto_alat', function() {
+                $('#btn-batal-foto').toggle(this.files && this.files.length > 0);
+            });
+
+            $(document).on('click', '#btn-batal-foto', function() {
+                $('#reg_foto_alat').val('');
+                $(this).hide();
+                $('#reg_foto_alat').focus();
+            });
+
             let pakaiBagian = false;
             let currentAlatHistory = [];
             let currentAlatData = null;
@@ -563,6 +602,51 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                 return p[2] + '-' + p[1] + '-' + p[0]; 
             }
 
+
+            // Area Visual Alat tetap mempertahankan ukuran normal.
+            // Jika foto kosong/rusak, hanya gambarnya yang disembunyikan tanpa placeholder.
+            function setVisualAlat(fotoAlat) {
+                var $panel = $('#visual-alat-panel');
+                var $img = $('#preview_gambar_alat');
+                var foto = String(fotoAlat || '').trim();
+
+                $panel.show();
+                $img.off('error.qaVisualAlat');
+
+                if (!foto) {
+                    $img.attr('src', '').hide();
+                    return;
+                }
+
+                $img.one('error.qaVisualAlat', function() {
+                    $(this).attr('src', '').hide();
+                });
+
+                $img.show().attr('src', '../../images/alat/' + foto);
+            }
+
+            // Format O menyimpan Spesifikasi pada titik_standar_json.
+            // Format lain tetap menggunakan qa_part.spesifikasi seperti sebelumnya.
+            function getAlatSpesifikasi(alat) {
+                alat = alat || {};
+                var fallback = String(alat.spesifikasi || '').trim();
+                var format = String(alat.format_laporan || '').toUpperCase();
+                if (format !== 'O') return fallback;
+
+                try {
+                    var points = JSON.parse(alat.titik_standar_json || '[]');
+                    if (Array.isArray(points)) {
+                        for (var i = 0; i < points.length; i++) {
+                            if (!points[i] || typeof points[i] !== 'object') continue;
+                            var spesifikasi = String(points[i].spesifikasi || '').trim();
+                            if (spesifikasi !== '') return spesifikasi;
+                        }
+                    }
+                } catch (e) {}
+
+                return fallback;
+            }
+
             $('#btn-cek').click(function() {
                 var noAlat = $('#nomor_alat').val().trim().toUpperCase();
                 if(noAlat === '') { $('#group-input').addClass('has-error'); $('#error-msg').slideDown(200); $('#nomor_alat').focus(); return; } 
@@ -583,8 +667,7 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                             currentAlatData = alat;
                             currentAlatHistory = history;
                             
-                            if (alat.foto_alat) $('#preview_gambar_alat').attr('src', '../../images/alat/' + alat.foto_alat);
-                            else $('#preview_gambar_alat').attr;
+                            setVisualAlat(alat.foto_alat);
                             
                             // FORM UPDATE DI UNLOCK TAPI ADA NILAI DEFAULT DARI REGISTRASI
                             $('#qa_nomor_alat').val(alat.no_part); 
@@ -727,7 +810,7 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
 
                             var tGabungan = $('#tabel-gabungan tbody');
                             tGabungan.empty();
-                            tGabungan.append('<tr><td>1</td><td><strong>'+qaEsc(alat.no_part || '-')+'</strong></td><td>'+qaEsc(alat.nama_part || '-')+'</td><td>'+qaEsc(alat.spesifikasi || '-')+'</td><td>'+qaEsc(alat.seksi_pemilik || '-')+'</td><td>'+qaEsc(alat.lokasi || '-')+'</td><td style="background-color:#eaf2f8;"><span class="label label-info"><i class="fa fa-clock-o"></i> Jadwal</span></td><td style="background-color:#eaf2f8;"><strong>'+formatTanggalJadwal(alat.jadwal_kalibrasi)+'</strong></td><td style="background-color:#eaf2f8; text-align:center;">-</td><td style="background-color:#eaf2f8; text-align:center;">-</td></tr>');
+                            tGabungan.append('<tr><td>1</td><td><strong>'+qaEsc(alat.no_part || '-')+'</strong></td><td>'+qaEsc(alat.nama_part || '-')+'</td><td>'+qaEsc(getAlatSpesifikasi(alat) || '-')+'</td><td>'+qaEsc(alat.seksi_pemilik || '-')+'</td><td>'+qaEsc(alat.lokasi || '-')+'</td><td style="background-color:#eaf2f8;"><span class="label label-info"><i class="fa fa-clock-o"></i> Jadwal</span></td><td style="background-color:#eaf2f8;"><strong>'+formatTanggalJadwal(alat.jadwal_kalibrasi)+'</strong></td><td style="background-color:#eaf2f8; text-align:center;">-</td><td style="background-color:#eaf2f8; text-align:center;">-</td></tr>');
 
                             var num = 2;
                             if(history && history.length > 0) {
@@ -761,7 +844,7 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                                         btnAksi = '<button class="btn btn-xs btn-primary btn-print-hist" data-idx="'+idx+'"><i class="fa fa-print"></i> Cetak</button>';
                                     }
 
-                                    tGabungan.append('<tr><td>'+num+'</td><td><strong>'+(alat.no_part || "-")+'</strong></td><td>'+(alat.nama_part || "-")+'</td><td>'+(alat.spesifikasi || "-")+'</td><td>'+(alat.seksi_pemilik || "-")+'</td><td>'+(alat.lokasi || "-")+'</td><td style="background-color:#f4f7fa;">'+labelStatus+'</td><td style="background-color:#f4f7fa;"><strong>'+formatTanggal(row.tanggal)+'</strong></td><td style="background-color:#f4f7fa; text-align:center;">'+btnAksi+'</td></tr>');
+                                    tGabungan.append('<tr><td>'+num+'</td><td><strong>'+(alat.no_part || "-")+'</strong></td><td>'+(alat.nama_part || "-")+'</td><td>'+(getAlatSpesifikasi(alat) || "-")+'</td><td>'+(alat.seksi_pemilik || "-")+'</td><td>'+(alat.lokasi || "-")+'</td><td style="background-color:#f4f7fa;">'+labelStatus+'</td><td style="background-color:#f4f7fa;"><strong>'+formatTanggal(row.tanggal)+'</strong></td><td style="background-color:#f4f7fa; text-align:center;">'+btnAksi+'</td></tr>');
                                     num++;
                                 });
                             }
@@ -793,7 +876,7 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                                 pakaiBagian = false; $('.col-bagian').hide();
                                 $('#btn_toggle_bagian').show().html('<i class="fa fa-columns"></i> Tambah Kolom \'Bagian/Posisi\'').removeClass('btn-warning').addClass('btn-info');
                                 
-                                $('#preview_gambar_alat').attr('src', '../../images/no-image.svg');
+                                setVisualAlat('');
 
                                 $('#section-form-registrasi').hide(); $('#section-pilih-format').show();
                                 $('#form-registrasi').slideDown();
@@ -1289,7 +1372,7 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                         case 'L': return n(['arah','applied_value','toleransi'], ['Uji','Applied','Toleransi'], [{arah:'NAIK'},{arah:'NAIK'},{arah:'TURUN'},{arah:'TURUN'}]);
                         case 'M': return n(['jenis','std_mm','toleransi_axis','std_degree','toleransi_sudut'], ['Jenis','STD AXIS (mm)','Tol AXIS','STD ANGLE (°)','Tol ANGLE (\')'], [{jenis:'AXIS'},{jenis:'ANGLE'}]);
                         case 'N': return n(['standar','toleransi'], ['Standar','Toleransi'], [{},{},{}]);
-                        case 'O': return n(['spesifikasi','tol_plus','tol_minus','go_std','go_tol_near','go_tol_far','go_min','go_max','notgo_std','notgo_tol','notgo_min','notgo_max'], ['Spesifikasi','Tol +','Tol -','GO Std','GO Tol Near','GO Tol Far','GO Min','GO Max','NOT GO Std','NOT GO Tol','NOT GO Min','NOT GO Max'], [{}]);
+                        case 'O': return n(['spesifikasi','tol_plus','tol_minus','go_std','go_tol_near','go_tol_far','notgo_std','notgo_tol'], ['Spesifikasi','Tol +','Tol -','GO Alat','GO Tol Near','GO Tol Far','NOT GO Alat','NOT GO Tol'], [{}]);
                         case 'P': return n(['type','ukuran','upart','alat_nama','alat_no','std_label','min','max','actual_count'], ['Type','Ukuran','Upart','Alat Standar','No Alat STD','STD Ukuran','Min','Max','Jumlah Aktual'], [{}]);
                         case 'Q': return n(['subtype','std_spesifikasi','std_no_alat','std','tol_plus','tol_minus','min','max'], ['Subtipe','STD Spesifikasi','STD No Alat','Standar','Tol +','Tol -','Min','Max'], [{subtype:'SERATION'}]);
                         case 'R': return n(['bagian','standar','toleransi'], ['Posisi','Standar','Toleransi'], [{bagian:''},{bagian:''},{bagian:''}]);
@@ -1403,7 +1486,7 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                     const get = function(name, fallback){ return snap[name] !== '' && snap[name] != null ? snap[name] : (alat[name] != null ? alat[name] : (fallback || '')); };
                     $('#qa_nomor_alat').val(alat.no_part || '');
                     $('#qa_nama_alat').val(get('nama_part', ''));
-                    $('#qa_spesifikasi').val(get('spesifikasi', ''));
+                    $('#qa_spesifikasi').val(String(alat.format_laporan || '').toUpperCase() === 'O' ? getAlatSpesifikasi(alat) : get('spesifikasi', ''));
                     $('#qa_resolusi').val(get('resolusi', ''));
                     $('#qa_metode').val(get('metode_uji','-'));
                     $('#qa_standar_uji').val(get('standar_uji','-'));
@@ -1505,7 +1588,7 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                         case 'L': return ['toleransi'];
                         case 'M': return ['jenis','std_mm','toleransi_axis','std_degree','toleransi_sudut'];
                         case 'N': return ['standar','toleransi'];
-                        case 'O': return ['spesifikasi','tol_plus','tol_minus','go_std','go_tol_near','go_tol_far','go_min','go_max','notgo_std','notgo_tol','notgo_min','notgo_max'];
+                        case 'O': return ['spesifikasi','tol_plus','tol_minus','go_std','go_tol_near','go_tol_far','notgo_std','notgo_tol'];
                         case 'P': return ['std_label','min','max','actual_count','alat_nama','alat_no'];
                         case 'Q': return ['subtype','std_spesifikasi','std_no_alat','std','tol_plus','tol_minus','min','max'];
                         case 'R': return ['bagian','standar','toleransi'];
@@ -2036,7 +2119,8 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                 if(!oldBtnCek){
                     $('#btn-cek').data('qaPatchBound',true);
                     $('#btn-cek').off('click').on('click', function(){
-                        var noAlat=$('#nomor_alat').val().trim().toUpperCase();
+                        var noAlat=qaNormalizeNoAlatInput($('#nomor_alat').val()).toUpperCase();
+                        $('#nomor_alat').val(noAlat);
                         if(!noAlat){$('#group-input').addClass('has-error');$('#error-msg').slideDown(200);$('#nomor_alat').focus();return;}
                         $('#group-input').removeClass('has-error');$('#error-msg').slideUp(200);
                         var btn=$(this),textAsli=btn.html();btn.html('<i class="fa fa-spinner fa-spin"></i> Mengecek DB...').prop('disabled',true);
@@ -2044,9 +2128,9 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                             btn.html(textAsli).prop('disabled',false);$('#form-update-kalibrasi,#form-registrasi').hide();
                             if(res.found){
                                 var alat=res.data,history=res.history||[];currentAlatData=alat;currentAlatHistory=history;
-                                $('#preview_gambar_alat').attr('src',alat.foto_alat?'../../images/alat/'+alat.foto_alat:'../../images/no-image.svg');
-                                var tGabungan=$('#tabel-gabungan tbody').empty();tGabungan.append('<tr><td>1</td><td><strong>'+qaEsc(alat.no_part||'-')+'</strong></td><td>'+qaEsc(alat.nama_part||'-')+'</td><td>'+qaEsc(alat.spesifikasi||'-')+'</td><td>'+qaEsc(alat.seksi_pemilik||'-')+'</td><td>'+qaEsc(alat.lokasi||'-')+'</td><td><span class="label label-info">Jadwal</span></td><td><strong>'+formatTanggalJadwal(alat.jadwal_kalibrasi)+'</strong></td><td>-</td><td>-</td></tr>');
-                                history.forEach(function(row,idx){var rawSt=String(row.display_status||row.status_display||row.status_kalibrasi||row.status||'').toUpperCase();var sv=String(row.status_validasi||'').toLowerCase();var jt=String(row.jenis_transaksi||row.tipe_transaksi||'').toLowerCase();var kt=String(row.keterangan||'').toLowerCase();var isRegist=(jt==='registrasi_alat'||jt.indexOf('registr')!==-1||kt.indexOf('registrasi alat')!==-1);var st=isRegist?'REGISTER':(sv==='menunggu_pemeriksa'?'MENUNGGU VALIDASI (PEMERIKSA)':(sv==='menunggu_penyetuju'?'MENUNGGU VALIDASI (PENYETUJU)':rawSt));if(st==='GOOD'||st==='LULUS')st='OK';if(st==='NG'||st==='BAD')st='NOT GOOD';var label=st==='OK'?'<span class="label label-success">OK</span>':(st==='REGISTER'?'<span class="label label-info">Register</span>':(st==='NOT GOOD'||st==='RUSAK'||st==='DISCONTINUE'||st==='DITARIK TECHNICAL'||st==='DITOLAK PEMERIKSA'||st==='DITOLAK PENYETUJU'?'<span class="label label-danger">'+qaEsc(st)+'</span>':'<span class="label label-warning"><i class="fa fa-clock-o"></i> '+qaEsc(st||'MENUNGGU VALIDASI')+'</span>'));var btnA='<button class="btn btn-xs btn-primary btn-print-hist" data-idx="'+idx+'"><i class="fa fa-print"></i> '+'Cetak'+'</button>';tGabungan.append('<tr><td>'+(idx+2)+'</td><td><strong>'+qaEsc(row.no_part||alat.no_part||'-')+'</strong></td><td>'+qaEsc(alat.nama_part||'-')+'</td><td>'+qaEsc(alat.spesifikasi||'-')+'</td><td>'+qaEsc(alat.seksi_pemilik||'-')+'</td><td>'+qaEsc(alat.lokasi||'-')+'</td><td>'+label+'</td><td><strong>'+formatTanggal(row.tanggal_pengecekan||row.tanggal)+'</strong></td><td>'+qaEsc(row.operator||row.petugas||'-')+'</td><td>'+btnA+'</td></tr>');});
+                                setVisualAlat(alat.foto_alat);
+                                var tGabungan=$('#tabel-gabungan tbody').empty();tGabungan.append('<tr><td>1</td><td><strong>'+qaEsc(alat.no_part||'-')+'</strong></td><td>'+qaEsc(alat.nama_part||'-')+'</td><td>'+qaEsc(getAlatSpesifikasi(alat)||'-')+'</td><td>'+qaEsc(alat.seksi_pemilik||'-')+'</td><td>'+qaEsc(alat.lokasi||'-')+'</td><td><span class="label label-info">Jadwal</span></td><td><strong>'+formatTanggalJadwal(alat.jadwal_kalibrasi)+'</strong></td><td>-</td><td>-</td></tr>');
+                                history.forEach(function(row,idx){var rawSt=String(row.display_status||row.status_display||row.status_kalibrasi||row.status||'').toUpperCase();var sv=String(row.status_validasi||'').toLowerCase();var jt=String(row.jenis_transaksi||row.tipe_transaksi||'').toLowerCase();var kt=String(row.keterangan||'').toLowerCase();var isRegist=(jt==='registrasi_alat'||jt.indexOf('registr')!==-1||kt.indexOf('registrasi alat')!==-1);var st=isRegist?'REGISTER':(sv==='menunggu_pemeriksa'?'MENUNGGU VALIDASI (PEMERIKSA)':(sv==='menunggu_penyetuju'?'MENUNGGU VALIDASI (PENYETUJU)':rawSt));if(st==='GOOD'||st==='LULUS')st='OK';if(st==='NG'||st==='BAD')st='NOT GOOD';var label=st==='OK'?'<span class="label label-success">OK</span>':(st==='REGISTER'?'<span class="label label-info">Register</span>':(st==='NOT GOOD'||st==='RUSAK'||st==='DISCONTINUE'||st==='DITARIK TECHNICAL'||st==='DITOLAK PEMERIKSA'||st==='DITOLAK PENYETUJU'?'<span class="label label-danger">'+qaEsc(st)+'</span>':'<span class="label label-warning"><i class="fa fa-clock-o"></i> '+qaEsc(st||'MENUNGGU VALIDASI')+'</span>'));var btnA='<button class="btn btn-xs btn-primary btn-print-hist" data-idx="'+idx+'"><i class="fa fa-print"></i> '+'Cetak'+'</button>';tGabungan.append('<tr><td>'+(idx+2)+'</td><td><strong>'+qaEsc(row.no_part||alat.no_part||'-')+'</strong></td><td>'+qaEsc(alat.nama_part||'-')+'</td><td>'+qaEsc(getAlatSpesifikasi(alat)||'-')+'</td><td>'+qaEsc(alat.seksi_pemilik||'-')+'</td><td>'+qaEsc(alat.lokasi||'-')+'</td><td>'+label+'</td><td><strong>'+formatTanggal(row.tanggal_pengecekan||row.tanggal)+'</strong></td><td>'+qaEsc(row.operator||row.petugas||'-')+'</td><td>'+btnA+'</td></tr>');});
                                 // BBRAU SHORTCUT V1 - NOMOR ALAT TERDAFTAR LANGSUNG BISA BUKA LAPORAN BBRAU
                                 var bbNo=encodeURIComponent(alat.no_part||noAlat);
                                 if(!$('#btn-bbrau-shortcut').length){ $('#qa-detail-actions').append('<a id="btn-bbrau-shortcut" class="btn btn-sm btn-default" target="_self"><i class="fa fa-book"></i> Laporan BBRAU</a>'); }
@@ -2063,7 +2147,7 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                                     $('#reg_seksi, #reg_pilih_format').val('');
                                     pakaiBagian = false; $('.col-bagian').hide();
                                     $('#btn_toggle_bagian').show().html('<i class="fa fa-columns"></i> Tambah Kolom \'Bagian/Posisi\'').removeClass('btn-warning').addClass('btn-info');
-                                    $('#preview_gambar_alat').attr('src', '../../images/no-image.svg');
+                                    setVisualAlat('');
                                     $('#section-form-registrasi').hide(); $('#section-pilih-format').show();
                                     $('#form-registrasi').slideDown();
                                 };
@@ -2157,6 +2241,41 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                     return m ? m[1].length : (String(rText).match(/^\d+$/) ? 0 : 4);
                 }
                 function qaFmt(n,d){ return Number.isFinite(n) ? Number(n).toFixed(d==null?qaGetDecimals():d) : ''; }
+                function qaORange(master, isGo){
+                    master=master||{};
+                    const std=qaNum(isGo?master.go_std:master.notgo_std);
+                    let lower=NaN, upper=NaN;
+                    if(isGo){
+                        const near=qaNum(master.go_tol_near), far=qaNum(master.go_tol_far);
+                        if(Number.isFinite(std)&&Number.isFinite(near)&&Number.isFinite(far)){
+                            lower=std+Math.min(near,far);
+                            upper=std+Math.max(near,far);
+                        }else{
+                            const tm=qaNum(master.tol_minus), tp=qaNum(master.tol_plus);
+                            if(Number.isFinite(std)&&Number.isFinite(tm)&&Number.isFinite(tp)){
+                                lower=std+Math.min(tm,tp);
+                                upper=std+Math.max(tm,tp);
+                            }
+                        }
+                    }else{
+                        const tol=qaNum(master.notgo_tol);
+                        if(Number.isFinite(std)&&Number.isFinite(tol)){
+                            lower=std-Math.abs(tol);
+                            upper=std+Math.abs(tol);
+                        }else{
+                            const tm=qaNum(master.tol_minus), tp=qaNum(master.tol_plus);
+                            if(Number.isFinite(std)&&Number.isFinite(tm)&&Number.isFinite(tp)){
+                                lower=std+Math.min(tm,tp);
+                                upper=std+Math.max(tm,tp);
+                            }
+                        }
+                    }
+                    return {min:lower,max:upper};
+                }
+                function qaOStatusHtml($cell, ready, ok){
+                    const text=ready?(ok?'OK':'NOT GOOD'):'-';
+                    $cell.text(text).removeClass('text-success text-danger').addClass(!ready?'':(ok?'text-success':'text-danger'));
+                }
                 function qaToDms(decimal){
                     if(!Number.isFinite(decimal)) return '';
                     const sign=decimal<0?'-':''; let x=Math.abs(decimal);
@@ -2188,7 +2307,7 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                         case 'L': return n(['arah','applied_value','toleransi'],['Uji','Applied','Toleransi'],[{arah:'NAIK'},{arah:'NAIK'},{arah:'TURUN'},{arah:'TURUN'}]);
                         case 'M': return n(['jenis','std_x','toleransi_x','std_y','toleransi_y','std_angle','toleransi_angle'],['Jenis','STD X Axis (mm)','Tol X','STD Y Axis (mm)','Tol Y','STD Angle (°)','Tol Angle'],[{jenis:'AXIS'},{jenis:'ANGLE'}]);
                         case 'N': return n(['standar','toleransi'],['Standar','Toleransi'],[{},{},{}]);
-                        case 'O': return n(['spesifikasi','tol_plus','tol_minus','go_std','go_tol_near','go_tol_far','go_min','go_max','notgo_std','notgo_tol','notgo_min','notgo_max'],['Spesifikasi','Tol +','Tol -','GO Std','GO Tol Near','GO Tol Far','GO Min','GO Max','NOT GO Std','NOT GO Tol','NOT GO Min','NOT GO Max'],[{}]);
+                        case 'O': return n(['spesifikasi','tol_plus','tol_minus','go_std','go_tol_near','go_tol_far','notgo_std','notgo_tol'],['Spesifikasi','Tol +','Tol -','GO Alat','GO Tol Near','GO Tol Far','NOT GO Alat','NOT GO Tol'],[{}]);
                         case 'P': return n(['type_ukuran','alat_nama','alat_no','std_label','toleransi'],['Type dan Ukuran','Nama Alat','No Alat','Standar','Toleransi'],[{type_ukuran:'',alat_nama:'',alat_no:'',std_label:'',toleransi:''}]);
                         case 'Q': return n(['std_spesifikasi','std_no_alat','std','tol_minus','tol_plus'],['Spesifikasi Alat Standar','No Alat Standar','Standar Ukuran','Tol. Bawah','Tol. Atas'],[{bagian:'OUT',tol_minus:'-0',tol_plus:'+0'},{bagian:'PITCH',tol_minus:'-0',tol_plus:'+0'}]);
                         case 'R': return n(['bagian','standar','toleransi'],['Posisi','Standar','Toleransi'],[{bagian:'Ø Out'},{bagian:'Ø Dalam'},{bagian:'Height'}]);
@@ -2246,7 +2365,6 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                     const hiddenBase={
                         I:['#qa_spesifikasi'],
                         J:['#qa_metode','#qa_standar_uji'],
-                        O:['#qa_spesifikasi'],
                         P:['#qa_spesifikasi']
                     };
                     (hiddenBase[format]||[]).forEach(x=>qaCommonGroup(x).hide());
@@ -2325,6 +2443,55 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                             bt+=sub(go,'GO',true)+sub(ng,'NOT GO',false);
                         });
                         $('#body_reg_standar').html(bt); $('#tabel_reg_standar').data('qa-format',format); $('#container_btn_bagian').hide(); return;
+                    }
+                    if(format==='O'){
+                        // FORMAT O - MASTER REGISTRASI:
+                        // MIN/MAX bukan master; keduanya diisi saat update hasil kalibrasi.
+                        const p=(rows&&rows.length?rows[0]:{})||{};
+                        const noAlat=String($('#reg_nomor_alat').val()||'').trim().toUpperCase();
+                        const hO=
+                            '<tr>'+
+                                '<th rowspan="3" style="width:5%;vertical-align:bottom;">NO</th>'+
+                                '<th rowspan="3" style="width:12%;vertical-align:bottom;">NO ALAT</th>'+
+                                '<th rowspan="3" style="width:28%;vertical-align:bottom;">SPESIFIKASI</th>'+
+                                '<th colspan="3" style="text-align:left;">HASIL PERIKSA</th>'+
+                            '</tr>'+
+                            '<tr><th colspan="3" style="text-align:left;">STD UKURAN</th></tr>'+
+                            '<tr>'+
+                                '<th style="width:12%;">POSISI UKUR</th>'+
+                                '<th style="width:18%;">ALAT</th>'+
+                                '<th style="width:25%;">TOLERANSI</th>'+
+                            '</tr>';
+                        let bO='';
+                        bO+='<tr class="qa-o-master-row">'+
+                            '<td rowspan="2" class="text-center" style="vertical-align:top;"><b>1</b></td>'+
+                            '<td rowspan="2" style="vertical-align:top;"><b>'+qaEsc(noAlat)+'</b></td>'+
+                            '<td rowspan="2" style="vertical-align:middle;">'+
+                                '<input type="text" class="form-control qa-reg-field" data-key="spesifikasi" value="'+qaEsc(p.spesifikasi||'')+'" placeholder="Spesifikasi">'+
+                                '<label style="display:block;margin:8px 0 4px;">Tol +</label>'+
+                                '<input type="text" class="form-control qa-reg-field" data-key="tol_plus" value="'+qaEsc(p.tol_plus||'')+'" placeholder="+0.000">'+
+                                '<label style="display:block;margin:8px 0 4px;">Tol -</label>'+
+                                '<input type="text" class="form-control qa-reg-field" data-key="tol_minus" value="'+qaEsc(p.tol_minus||'')+'" placeholder="-0.000">'+
+                            '</td>'+
+                            '<td style="vertical-align:middle;"><b>GO</b></td>'+
+                            '<td><input type="text" class="form-control qa-reg-field" data-key="go_std" value="'+qaEsc(p.go_std||'')+'" placeholder="STD alat GO"></td>'+
+                            '<td>'+
+                                '<label style="display:block;margin:0 0 4px;font-size:11px;">Near</label>'+
+                                '<input type="text" class="form-control qa-reg-field" data-key="go_tol_near" value="'+qaEsc(p.go_tol_near||'')+'" placeholder="-0.017">'+
+                                '<label style="display:block;margin:7px 0 4px;font-size:11px;">Far</label>'+
+                                '<input type="text" class="form-control qa-reg-field" data-key="go_tol_far" value="'+qaEsc(p.go_tol_far||'')+'" placeholder="-0.050">'+
+                            '</td>'+
+                        '</tr>';
+                        bO+='<tr class="qa-o-master-row">'+
+                            '<td style="vertical-align:middle;"><b>NOT GO</b></td>'+
+                            '<td><input type="text" class="form-control qa-reg-field" data-key="notgo_std" value="'+qaEsc(p.notgo_std||'')+'" placeholder="STD alat NOT GO"></td>'+
+                            '<td><input type="text" class="form-control qa-reg-field" data-key="notgo_tol" value="'+qaEsc(p.notgo_tol||'')+'" placeholder="±0.017"></td>'+
+                        '</tr>';
+                        $('#tabel_reg_standar thead').html(hO);
+                        $('#body_reg_standar').html(bO);
+                        $('#tabel_reg_standar').data('qa-format',format);
+                        $('#container_btn_bagian').hide();
+                        return;
                     }
                     if(format==='P'){
                         // Format P: registrasi dibuat per kelompok agar user tidak mengisi tabel laporan mentah.
@@ -2611,7 +2778,7 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                     qaEnsureUpdateExtras(); const latest=history&&history.length?history[0]:null; const snap=latest?qaSnapshotFromHistory(latest):{};
                     const get=(name,fb)=>snap[name]!==''&&snap[name]!=null?snap[name]:(alat[name]!=null?alat[name]:(fb||''));
                     const format=String(alat.format_laporan||'A').toUpperCase();
-                    $('#qa_nomor_alat').val(alat.no_part||''); $('#qa_nama_alat').val(get('nama_part','')); $('#qa_spesifikasi').val(get('spesifikasi','')); $('#qa_resolusi').val(get('resolusi','')); $('#qa_type').val(get('type', alat.type || ''));
+                    $('#qa_nomor_alat').val(alat.no_part||''); $('#qa_nama_alat').val(get('nama_part','')); $('#qa_spesifikasi').val(format==='O' ? getAlatSpesifikasi(alat) : get('spesifikasi','')); $('#qa_resolusi').val(get('resolusi','')); $('#qa_type').val(get('type', alat.type || ''));
                     $('#qa_metode').val(get('metode_uji','')); $('#qa_standar_uji').val(get('standar_uji','')); $('#qa_trace').val(get('traceability','')); $('#qa_toleransi').val(get('toleransi_global',''));
                     if(get('format_laporan', '')==='F' && (get('toleransi_global','')||'').includes('|')){ const ft=get('toleransi_global','').split('|'); $('#qa_toleransi_f_rendah').val(ft[0]); $('#qa_toleransi_f_tinggi').val(ft[1]); }
                     $('#qa_suhu').val(snap.suhu||(latest&&latest.suhu)||''); $('#qa_kelembapan').val(snap.kelembapan||(latest&&latest.kelembapan)||''); $('#qa_ketidakpastian').val(snap.ketidakpastian||(latest&&latest.ketidakpastian)||''); $('#qa_confidence').val(snap.confidence_level||(latest&&latest.confidence_level)||'95 %');
@@ -2898,9 +3065,34 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                             b+=rowStart(i)+'<td>'+(i+1)+'</td><td>'+qaReadonly(p.standar)+'<input type="hidden" data-n-key="standar" value="'+qaEsc(p.standar||'')+'"></td><td>'+qaReadonly(p.toleransi)+'<input type="hidden" data-n-key="toleransi" value="'+qaEsc(p.toleransi||'')+'"></td><td>'+qaField(p.hasil||'','hasil_pos_0',' data-n-result="0"')+'</td><td class="qa-koreksi"></td><td class="qa-row-status">-</td>'+rowEnd;
                         });
                     } else if(format==='O'){
-                        const p=points[0]||{}; h='<tr><th>Posisi Ukur</th><th>Standar</th><th>Toleransi</th><th>Min</th><th>Max</th><th>Hasil Masuk</th><th>Hasil Tidak Masuk</th><th>Status</th></tr>';
-                        b+='<tr data-index="0" data-o-row="go"><td><b>GO</b></td><td>'+qaReadonly(p.go_std)+'</td><td>'+qaReadonly(p.go_tol_near||p.go_tol_far)+'</td><td>'+qaReadonly(p.go_min)+'</td><td>'+qaReadonly(p.go_max)+'</td><td>'+qaSelect('','go_hasil_min',['OK','TIDAK'])+'</td><td>'+qaSelect('','go_hasil_max',['OK','TIDAK'])+'</td><td class="qa-row-status">-</td></tr>'+
-                           '<tr data-index="1" data-o-row="notgo"><td><b>NOT GO</b></td><td>'+qaReadonly(p.notgo_std)+'</td><td>'+qaReadonly(p.notgo_tol)+'</td><td>'+qaReadonly(p.notgo_min)+'</td><td>'+qaReadonly(p.notgo_max)+'</td><td>'+qaSelect('','notgo_hasil_min',['OK','TIDAK'])+'</td><td>'+qaSelect('','notgo_hasil_max',['OK','TIDAK'])+'</td><td class="qa-row-status">-</td></tr>';
+                        const p=points[0]||{};
+                        const goTol=[p.go_tol_near,p.go_tol_far].filter(function(v){return String(v==null?'':v).trim()!=='';}).join(' / ');
+                        const goRange=qaORange(p,true), ngRange=qaORange(p,false);
+                        const goMinStd=Number.isFinite(goRange.min)?qaFmt(goRange.min,3):'';
+                        const goMaxStd=Number.isFinite(goRange.max)?qaFmt(goRange.max,3):'';
+                        const ngMinStd=Number.isFinite(ngRange.min)?qaFmt(ngRange.min,3):'';
+                        const ngMaxStd=Number.isFinite(ngRange.max)?qaFmt(ngRange.max,3):'';
+                        h='<tr><th>Posisi Ukur</th><th>Alat</th><th>Toleransi</th><th>MIN (mm)</th><th>MAX (mm)</th><th>MIN (MASUK)</th><th>MAX (TIDAK MASUK)</th></tr>';
+                        b+='<tr data-index="0" data-o-row="go">'+
+                                '<td><b>GO</b></td>'+
+                                '<td>'+qaReadonly(p.go_std)+'</td>'+
+                                '<td>'+qaReadonly(goTol)+'</td>'+
+                                '<td>'+qaField('','go_hasil_min',' placeholder="Std: '+qaEsc(goMinStd)+'"')+'</td>'+
+                                '<td>'+qaField('','go_hasil_max',' placeholder="Std: '+qaEsc(goMaxStd)+'"')+'</td>'+
+                                '<td class="qa-o-min-status" style="font-weight:bold;">-</td>'+
+                                '<td class="qa-o-max-status" style="font-weight:bold;">-</td>'+
+                                '<td class="qa-row-status" style="display:none;">-</td>'+
+                            '</tr>'+
+                            '<tr data-index="1" data-o-row="notgo">'+
+                                '<td><b>NOT GO</b></td>'+
+                                '<td>'+qaReadonly(p.notgo_std)+'</td>'+
+                                '<td>'+qaReadonly(p.notgo_tol)+'</td>'+
+                                '<td>'+qaField('','notgo_hasil_min',' placeholder="Std: '+qaEsc(ngMinStd)+'"')+'</td>'+
+                                '<td>'+qaField('','notgo_hasil_max',' placeholder="Std: '+qaEsc(ngMaxStd)+'"')+'</td>'+
+                                '<td class="qa-o-min-status" style="font-weight:bold;">-</td>'+
+                                '<td class="qa-o-max-status" style="font-weight:bold;">-</td>'+
+                                '<td class="qa-row-status" style="display:none;">-</td>'+
+                            '</tr>';
                     } else if(format==='P'){
                         h='<tr><th>No</th><th>Type dan Ukuran</th><th>Nama Alat yang Dipakai</th><th>No Alat</th><th>STD Ukuran</th><th>Range</th><th>Aktual 1</th><th>Aktual 2</th><th>Status</th></tr>';
                         points.forEach(function(p,i){
@@ -3020,7 +3212,22 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                             $tr.find('.qa-koreksi').text(Number.isFinite(c)?c.toFixed(4):'');
                             qaSetRowStatus($tr,Number.isFinite(c)&&Number.isFinite(t)?(Math.abs(c)<=t?'OK':'NOT GOOD'):null);
                         } else if(format==='O'){
-                            const vals=$tr.find('select.qa-update-field').map(function(){return String($(this).val()||'').toUpperCase();}).get().filter(Boolean); qaSetRowStatus($tr,vals.length?vals.every(v=>v==='OK'):null);
+                            const master=(qaStandardPoints(currentAlatData)||[])[0]||{};
+                            const isGo=String($tr.data('o-row')||'').toLowerCase()==='go';
+                            const minKey=isGo?'go_hasil_min':'notgo_hasil_min';
+                            const maxKey=isGo?'go_hasil_max':'notgo_hasil_max';
+                            const minText=String($tr.find('[data-key="'+minKey+'"]').val()||'').trim();
+                            const maxText=String($tr.find('[data-key="'+maxKey+'"]').val()||'').trim();
+                            const actualMin=qaNum(minText), actualMax=qaNum(maxText);
+                            const range=qaORange(master,isGo), lower=range.min, upper=range.max, eps=1e-9;
+                            const minReady=minText!==''&&Number.isFinite(actualMin)&&Number.isFinite(lower)&&Number.isFinite(upper);
+                            const maxReady=maxText!==''&&Number.isFinite(actualMax)&&Number.isFinite(lower)&&Number.isFinite(upper);
+                            const minOk=minReady&&(actualMin>=lower-eps&&actualMin<=upper+eps);
+                            const maxOk=maxReady&&(actualMax>=lower-eps&&actualMax<=upper+eps);
+
+                            qaOStatusHtml($tr.find('.qa-o-min-status'),minReady,minOk);
+                            qaOStatusHtml($tr.find('.qa-o-max-status'),maxReady,maxOk);
+                            qaSetRowStatus($tr,(minReady&&maxReady)?(minOk&&maxOk):null);
                         } else if(format==='P'){
                             // Range Format P adalah master dari registrasi: jangan pernah dihitung ulang dari nilai Aktual.
                             const actual1Text=String($tr.find('[data-key="actual1"]').val()||'').trim();
@@ -3122,7 +3329,38 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                         else if(format==='L'){o.correction=$tr.find('.qa-koreksi').text();}
                         else if(format==='M'){o.correction=($tr.find('.qa-m-angle-corr').text()||''); if($tr.find('.qa-m-corr-xl').length){o.x_left_correction=$tr.find('.qa-m-corr-xl').text();o.x_right_correction=$tr.find('.qa-m-corr-xr').text();o.y_front_correction=$tr.find('.qa-m-corr-yf').text();o.y_back_correction=$tr.find('.qa-m-corr-yb').text();o.std_x=$tr.find('td:eq(0) input').val()||'';o.toleransi_x=$tr.find('td:eq(1) input').val()||'';o.std_y=$tr.find('td:eq(6) input').val()||'';o.toleransi_y=$tr.find('td:eq(7) input').val()||'';o.std_mm=o.std_x;} else {o.std_degree=$tr.find('td:eq(0) input').val()||'';o.std_angle=o.std_degree;o.hasil_degree=$tr.find('[data-key="hasil_degree"]').val()||'';o.hasil_minute=$tr.find('[data-key="hasil_minute"]').val()||'';o.hasil_second=$tr.find('[data-key="hasil_second"]').val()||'';o.toleransi_angle=(qaStandardPoints(currentAlatData)||[]).find(x=>String(x.jenis||'').toUpperCase()==='ANGLE')?.toleransi_angle||'';}}
                         else if(format==='N'){const idx=$('#tabel_input_kalibrasi tbody tr[data-index]').index($tr),masters=(qaStandardPoints(currentAlatData)||[]).filter(x=>String(x.meta||x.jenis||'').toUpperCase()!=='N_KESEJAJARAN'),master=masters[idx]||{};o.standar=$tr.find('[data-n-key="standar"]').val()||master.standar||'';o.toleransi=$tr.find('[data-n-key="toleransi"]').val()||master.toleransi||'';o.hasil=$tr.find('[data-n-result="0"]').val()||'';o.koreksi=$tr.find('.qa-koreksi').text();}
-                        else if(format==='O'){const master=(qaStandardPoints(currentAlatData)||[])[0]||{};Object.assign(o,{posisi_ukur:String($tr.data('o-row')||'').toUpperCase()==='NOTGO'?'NOT GO':'GO',kode_warna:$('#qa_kode_warna').val(),keputusan:o.status==='OK'?'OK':'NG',no_alat:alatForNoPart(),spesifikasi:$('#qa_spesifikasi').val(),go_std:master.go_std||'',go_tol_near:master.go_tol_near||'',go_tol_far:master.go_tol_far||'',go_min:master.go_min||'',go_max:master.go_max||'',notgo_std:master.notgo_std||'',notgo_tol:master.notgo_tol||'',notgo_min:master.notgo_min||'',notgo_max:master.notgo_max||''});}
+                        else if(format==='O'){
+                            const master=(qaStandardPoints(currentAlatData)||[])[0]||{};
+                            const isGo=String($tr.data('o-row')||'').toLowerCase()==='go';
+                            const range=qaORange(master,isGo);
+                            const minStatus=String($tr.find('.qa-o-min-status').text()||'').trim();
+                            const maxStatus=String($tr.find('.qa-o-max-status').text()||'').trim();
+                            Object.assign(o,{
+                                posisi_ukur:isGo?'GO':'NOT GO',
+                                kode_warna:$('#qa_kode_warna').val(),
+                                keputusan:o.status==='OK'?'OK':'NG',
+                                no_alat:alatForNoPart(),
+                                spesifikasi:master.spesifikasi||'',
+                                tol_plus:master.tol_plus||'',
+                                tol_minus:master.tol_minus||'',
+                                go_std:master.go_std||'',
+                                go_tol_near:master.go_tol_near||'',
+                                go_tol_far:master.go_tol_far||'',
+                                notgo_std:master.notgo_std||'',
+                                notgo_tol:master.notgo_tol||''
+                            });
+                            if(isGo){
+                                o.go_min=Number.isFinite(range.min)?qaFmt(range.min,3):'';
+                                o.go_max=Number.isFinite(range.max)?qaFmt(range.max,3):'';
+                                o.go_status_min=minStatus==='-'?'':minStatus;
+                                o.go_status_max=maxStatus==='-'?'':maxStatus;
+                            }else{
+                                o.notgo_min=Number.isFinite(range.min)?qaFmt(range.min,3):'';
+                                o.notgo_max=Number.isFinite(range.max)?qaFmt(range.max,3):'';
+                                o.notgo_status_min=minStatus==='-'?'':minStatus;
+                                o.notgo_status_max=maxStatus==='-'?'':maxStatus;
+                            }
+                        }
                         else if(format==='P'){const master=(qaStandardPoints(currentAlatData)||[])[$tr.data('index')]||{},std=qaNum(master.std_label||master.standar),mode=String(master.toleransi_mode||((master.tol_plus!==undefined||master.tol_minus!==undefined)?'range':'pm'));let min=NaN,max=NaN;if(mode==='range'){const a=qaNum(master.tol_plus),b=qaNum(master.tol_minus);if(Number.isFinite(std)&&Number.isFinite(a)&&Number.isFinite(b)){min=std+Math.min(a,b);max=std+Math.max(a,b);}}else{const t=qaNum(master.toleransi);if(Number.isFinite(std)&&Number.isFinite(t)){min=std-Math.abs(t);max=std+Math.abs(t);}}const clean=v=>Number.isFinite(v)?Number(v.toFixed(6)).toString():'';o.group_id=master.group_id||'';o.type_ukuran=master.type_ukuran||master.type||'';o.type=o.type_ukuran;o.ukuran='';o.upart='';o.alat_nama=master.alat_nama||'';o.alat_no=master.alat_no||'';o.std_label=master.std_label||master.standar||'';o.toleransi_mode=mode;o.toleransi=master.toleransi||'';o.tol_plus=master.tol_plus||'';o.tol_minus=master.tol_minus||'';o.min=clean(min);o.max=clean(max);o.aktual1=o.actual1||'';o.aktual2=o.actual2||'';o.no_gambar=$('#qa_no_gambar').val()||'';}
                         else if(format==='Q'){const master=(qaStandardPoints(currentAlatData)||[])[$tr.data('index')]||{};o.subtype='SERATION';o.bagian=master.bagian||((($tr.data('index')||0)%2===0)?'OUT':'PITCH');o.std_spesifikasi=master.std_spesifikasi||'';o.std_no_alat=master.std_no_alat||'';o.std=master.std||'';o.tol_minus=master.tol_minus!==undefined?master.tol_minus:(master.toleransi!==undefined?('-'+Math.abs(qaNum(master.toleransi)||0)):'');o.tol_plus=master.tol_plus!==undefined?master.tol_plus:(master.toleransi!==undefined?('+'+Math.abs(qaNum(master.toleransi)||0)):'');const sv=qaNum(o.std),lo=qaNum(o.tol_minus),hi=qaNum(o.tol_plus),e1=(Number.isFinite(sv)&&Number.isFinite(lo))?sv+lo:NaN,e2=(Number.isFinite(sv)&&Number.isFinite(hi))?sv+hi:NaN;o.min=(Number.isFinite(e1)&&Number.isFinite(e2))?Math.min(e1,e2).toFixed(3):'';o.max=(Number.isFinite(e1)&&Number.isFinite(e2))?Math.max(e1,e2).toFixed(3):'';}
                         else if(format==='R'){const master=(qaStandardPoints(currentAlatData)||[])[$tr.data('index')]||{};o.bagian=o.bagian||master.bagian||'Ø Out';o.toleransi=master.toleransi||'';}
@@ -3137,11 +3375,27 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                         const master=(qaStandardPoints(currentAlatData)||[])[0]||{};
                         const go=rows.find(r=>String(r.posisi_ukur||'').toUpperCase()==='GO')||{};
                         const ng=rows.find(r=>String(r.posisi_ukur||'').toUpperCase()==='NOT GO')||{};
+                        const goRange=qaORange(master,true), ngRange=qaORange(master,false);
                         return [Object.assign({},master,{
-                            no_alat:alatForNoPart(),spesifikasi:$('#qa_spesifikasi').val(),kode_warna:$('#qa_kode_warna').val(),
+                            no_alat:alatForNoPart(),
+                            spesifikasi:master.spesifikasi||'',
+                            kode_warna:$('#qa_kode_warna').val(),
                             keputusan:$('#qa_status_final').val()==='OK'?'OK':'NOT GOOD',
-                            go_hasil_min:go.go_hasil_min||'',go_hasil_max:go.go_hasil_max||'',
-                            notgo_hasil_min:ng.notgo_hasil_min||'',notgo_hasil_max:ng.notgo_hasil_max||'',
+                            status:$('#qa_status_final').val()||'',
+                            go_min:Number.isFinite(goRange.min)?qaFmt(goRange.min,3):'',
+                            go_max:Number.isFinite(goRange.max)?qaFmt(goRange.max,3):'',
+                            go_hasil_min:go.go_hasil_min||'',
+                            go_hasil_max:go.go_hasil_max||'',
+                            go_status_min:go.go_status_min||'',
+                            go_status_max:go.go_status_max||'',
+                            go_status:go.status||'',
+                            notgo_min:Number.isFinite(ngRange.min)?qaFmt(ngRange.min,3):'',
+                            notgo_max:Number.isFinite(ngRange.max)?qaFmt(ngRange.max,3):'',
+                            notgo_hasil_min:ng.notgo_hasil_min||'',
+                            notgo_hasil_max:ng.notgo_hasil_max||'',
+                            notgo_status_min:ng.notgo_status_min||'',
+                            notgo_status_max:ng.notgo_status_max||'',
+                            notgo_status:ng.status||'',
                             no_gambar:$('#qa_no_gambar').val()||''
                         })];
                     }
@@ -3150,7 +3404,91 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                     return rows;
                 };
 
-                qaValidateUpdate=function(format,rows){ format=String(format||'').toUpperCase(); if(format==='F') return rows.length===1; return Array.isArray(rows)&&rows.length>0; };
+                qaValidateUpdate=function(format,rows){
+                    format=String(format||'').toUpperCase();
+                    if(format==='F') return rows.length===1;
+                    if(format==='O'){
+                        const row=Array.isArray(rows)&&rows.length?rows[0]:null;
+                        if(!row) return false;
+                        return ['go_hasil_min','go_hasil_max','notgo_hasil_min','notgo_hasil_max'].every(function(key){
+                            return String(row[key]||'').trim()!=='';
+                        });
+                    }
+                    return Array.isArray(rows)&&rows.length>0;
+                };
+
+                // VERIFIKASI REGISTRASI V1 - REVIEW HEADER & FOOTER SEBELUM DATA DISIMPAN
+                function qaRegFieldVisible(selector){
+                    const $el=$(selector);
+                    if(!$el.length) return false;
+                    const $group=$el.closest('.form-group');
+                    return $group.length ? $group.is(':visible') : $el.is(':visible');
+                }
+
+                function qaRegReviewValue(selector){
+                    const $el=$(selector);
+                    if(!$el.length) return '';
+                    if($el.is('select')) return String($el.find('option:selected').text()||'').trim();
+                    return String($el.val()||'').trim();
+                }
+
+                function qaBuildRegistrationReview(format){
+                    const headerRows=[];
+                    const footerRows=[];
+                    const addRow=function(target,label,selector,always,suffix){
+                        if(!always && !qaRegFieldVisible(selector)) return;
+                        let value=qaRegReviewValue(selector);
+                        if(value && suffix) value+=' '+suffix;
+                        target.push('<tr><th style="width:38%;background:#f7f7f7;vertical-align:middle;">'+qaEsc(label)+'</th><td style="vertical-align:middle;word-break:break-word;">'+qaEsc(value||'-')+'</td></tr>');
+                    };
+
+                    // Header laporan / identitas alat.
+                    addRow(headerRows,'Format Laporan','#reg_pilih_format',true);
+                    addRow(headerRows,'No. Alat','#reg_nomor_alat',true);
+                    addRow(headerRows,'No. Laporan','#reg_no_laporan',true);
+                    addRow(headerRows,'Nama Alat','#reg_nama_alat',true);
+                    addRow(headerRows,'Spesifikasi','#reg_spesifikasi',false);
+                    addRow(headerRows,'Resolusi','#reg_resolusi',false);
+                    addRow(headerRows,'Fungsi','#reg_fungsi',true);
+                    addRow(headerRows,'No. Asset / FA','#reg_no_fa',true);
+                    addRow(headerRows,'Lokasi','#reg_lokasi',true);
+                    addRow(headerRows,'Merk','#reg_merk',true);
+                    addRow(headerRows,'Type','#reg_type',false);
+                    addRow(headerRows,'Buatan','#reg_buatan',true);
+                    addRow(headerRows,'Seksi Pemilik','#reg_seksi',true);
+                    addRow(headerRows,'Periode Kalibrasi','#reg_periode',true,'Hari');
+                    addRow(headerRows,'Tanggal Manual','#reg_tgl_manual',true);
+
+                    // Footer laporan. Hanya field yang memang tampil pada format terpilih.
+                    addRow(footerRows,'Metode Kalibrasi','#reg_metode',false);
+                    addRow(footerRows,'Standar Toleransi','#reg_toleransi',false);
+                    addRow(footerRows,'Standar Uji','#reg_standar_uji',false);
+                    addRow(footerRows,'Satuan (Unit)','#reg_satuan',false);
+                    addRow(footerRows,'Traceability','#reg_trace',false);
+
+                    if(format==='F'){
+                        addRow(footerRows,'Standar Repeatability','#reg_f_std_sec1',true);
+                        addRow(footerRows,'Standar Center Loading','#reg_f_std_sec3',true);
+                        addRow(footerRows,'Batas Bawah','#reg_f_batas_bawah',true);
+                        addRow(footerRows,'Batas Atas','#reg_f_batas_atas',true);
+                    }
+
+                    const fotoInput=$('#reg_foto_alat')[0];
+                    const fotoName=(fotoInput&&fotoInput.files&&fotoInput.files[0])?fotoInput.files[0].name:'Tidak ada foto';
+                    footerRows.push('<tr><th style="width:38%;background:#f7f7f7;vertical-align:middle;">Foto Alat</th><td style="vertical-align:middle;word-break:break-word;">'+qaEsc(fotoName)+'</td></tr>');
+
+                    return ''+
+                        '<div style="max-height:65vh;overflow:auto;padding-right:4px;">'+
+                            '<div class="alert alert-info" style="margin-bottom:12px;">'+
+                                '<i class="fa fa-check-circle"></i> <b>Periksa kembali data sebelum disimpan.</b><br>'+
+                                '<span style="font-size:12px;">Jika ada typo atau data yang salah, pilih <b>Kembali Edit</b>.</span>'+
+                            '</div>'+
+                            '<h5 style="font-weight:bold;color:#1E3F66;margin:12px 0 7px;"><i class="fa fa-header"></i> HEADER LAPORAN</h5>'+
+                            '<table class="table table-bordered table-condensed" style="margin-bottom:16px;">'+headerRows.join('')+'</table>'+
+                            '<h5 style="font-weight:bold;color:#1E3F66;margin:12px 0 7px;"><i class="fa fa-align-bottom"></i> FOOTER LAPORAN</h5>'+
+                            '<table class="table table-bordered table-condensed" style="margin-bottom:0;">'+footerRows.join('')+'</table>'+
+                        '</div>';
+                }
 
                 // Simpan registrasi dengan validasi required yang menyesuaikan format.
                 $('#btn-simpan-alat').off('click').on('click',function(){
@@ -3166,10 +3504,41 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                     const missing=(required[format]||[]).filter(k=>!base[k]); if(missing.length){BootstrapDialog.alert('Field wajib belum lengkap: '+missing.join(', '));return;}
                     if(format==='F'&&(!$('#reg_f_std_sec1').val().trim()||!$('#reg_f_std_sec3').val().trim())){BootstrapDialog.alert('Standar Repeatability dan Center Loading wajib diisi untuk Format F.');return;}
                     const arr=qaCollectReg(format); if(!arr.length){BootstrapDialog.alert('Minimal ada satu konfigurasi standar untuk Format '+format+'.');return;}
-                    const btn=$(this);btn.prop('disabled',true).html('<i class="fa fa-spinner fa-spin"></i> Menyimpan...'); const fd=new FormData();
-                    fd.append('no_part',base.no);fd.append('no_laporan',base.lap);fd.append('nama_part',base.nama);fd.append('seksi',base.seksi);fd.append('periode',base.periode);fd.append('ukuran','');fd.append('resolusi',base.resolusi);fd.append('lokasi',base.lokasi);fd.append('tgl_manual',$('#reg_tgl_manual').val());fd.append('spesifikasi',base.spesifikasi);fd.append('toleransi_global',base.tol);fd.append('satuan',base.satuan);fd.append('metode_uji',base.metode);fd.append('standar_uji',base.standar);fd.append('traceability',base.trace);fd.append('format_laporan',format);fd.append('titik_standar_json',JSON.stringify(arr));fd.append('type',base.type);fd.append('no_fa',$('#reg_no_fa').val()||'');fd.append('merk',base.merk);fd.append('fungsi',base.fungsi);fd.append('buatan',base.buatan);
-                    if($('#reg_foto_alat')[0]&&$('#reg_foto_alat')[0].files[0])fd.append('foto_alat',$('#reg_foto_alat')[0].files[0]);
-                    $.ajax({url:'proses_qa.php?action=simpan_alat',type:'POST',dataType:'json',data:fd,processData:false,contentType:false,success:function(res){btn.prop('disabled',false).html('Simpan & Daftarkan Alat <i class="fa fa-save"></i>');if(res.status==='success'){sessionStorage.setItem('cetak_data',JSON.stringify(res.print_data||{no_laporan:base.lap,no_part:base.no,nama_part:base.nama,nama_alat:base.nama,format:format,format_laporan:format,hasil_array:arr,tanggal_periksa:$('#reg_tgl_manual').val()||'<?php echo date('Y-m-d'); ?>',jadwal_berikutnya:res.jadwal_selanjutnya||'',status_final:'OK',keputusan:'OK',petugas:'<?php echo addslashes($nama_petugas); ?>',operator:'<?php echo addslashes($nama_petugas); ?>'}));BootstrapDialog.confirm({title:'Berhasil',type:BootstrapDialog.TYPE_SUCCESS,message:'Alat berhasil didaftarkan.<br><br><b>Cetak laporan?</b>',btnCancelLabel:'Tidak',btnOKLabel:'Ya, Cetak',btnOKClass:'btn-primary',callback:function(ok){if(ok)window.location.href='cetak_laporan.php';else{$('#form-registrasi').slideUp();$('#nomor_alat').prop('disabled',false).val(base.no);$('#btn-cek').click();}}});}else BootstrapDialog.alert('Error DB: '+(res.message||'Gagal menyimpan.'));},error:function(xhr){btn.prop('disabled',false).html('Simpan & Daftarkan Alat <i class="fa fa-save"></i>');BootstrapDialog.alert('Koneksi Error! '+(xhr.responseText||''));}});
+                    if(format==='O'){
+                        const o=arr[0]||{};
+                        const requiredO=['spesifikasi','tol_plus','tol_minus','go_std','go_tol_near','go_tol_far','notgo_std','notgo_tol'];
+                        const missingO=requiredO.filter(function(key){return String(o[key]||'').trim()==='';});
+                        if(missingO.length){
+                            BootstrapDialog.alert('Format O belum lengkap. Isi Spesifikasi, Tol +, Tol -, ALAT dan TOLERANSI untuk GO / NOT GO.');
+                            return;
+                        }
+                    }
+                    const btn=$(this);
+                    BootstrapDialog.show({
+                        title:'Verifikasi Data Registrasi - Format '+qaEsc(format),
+                        type:BootstrapDialog.TYPE_INFO,
+                        message:qaBuildRegistrationReview(format),
+                        closable:true,
+                        buttons:[
+                            {
+                                label:'<i class="fa fa-pencil"></i> Kembali Edit',
+                                cssClass:'btn-default',
+                                action:function(dialog){ dialog.close(); }
+                            },
+                            {
+                                label:'<i class="fa fa-check"></i> Data Benar, Simpan',
+                                cssClass:'btn-success',
+                                action:function(dialog){
+                                    dialog.close();
+                                    btn.prop('disabled',true).html('<i class="fa fa-spinner fa-spin"></i> Menyimpan...');
+                                    const fd=new FormData();
+                                    fd.append('no_part',base.no);fd.append('no_laporan',base.lap);fd.append('nama_part',base.nama);fd.append('seksi',base.seksi);fd.append('periode',base.periode);fd.append('ukuran','');fd.append('resolusi',base.resolusi);fd.append('lokasi',base.lokasi);fd.append('tgl_manual',$('#reg_tgl_manual').val());fd.append('spesifikasi',base.spesifikasi);fd.append('toleransi_global',base.tol);fd.append('satuan',base.satuan);fd.append('metode_uji',base.metode);fd.append('standar_uji',base.standar);fd.append('traceability',base.trace);fd.append('format_laporan',format);fd.append('titik_standar_json',JSON.stringify(arr));fd.append('type',base.type);fd.append('no_fa',$('#reg_no_fa').val()||'');fd.append('merk',base.merk);fd.append('fungsi',base.fungsi);fd.append('buatan',base.buatan);
+                                    if($('#reg_foto_alat')[0]&&$('#reg_foto_alat')[0].files[0])fd.append('foto_alat',$('#reg_foto_alat')[0].files[0]);
+                                    $.ajax({url:'proses_qa.php?action=simpan_alat',type:'POST',dataType:'json',data:fd,processData:false,contentType:false,success:function(res){btn.prop('disabled',false).html('Simpan & Daftarkan Alat <i class="fa fa-save"></i>');if(res.status==='success'){sessionStorage.setItem('cetak_data',JSON.stringify(res.print_data||{no_laporan:base.lap,no_part:base.no,nama_part:base.nama,nama_alat:base.nama,format:format,format_laporan:format,hasil_array:arr,tanggal_periksa:$('#reg_tgl_manual').val()||'<?php echo date('Y-m-d'); ?>',jadwal_berikutnya:res.jadwal_selanjutnya||'',status_final:'OK',keputusan:'OK',petugas:'<?php echo addslashes($nama_petugas); ?>',operator:'<?php echo addslashes($nama_petugas); ?>'}));BootstrapDialog.confirm({title:'Berhasil',type:BootstrapDialog.TYPE_SUCCESS,message:'Alat berhasil didaftarkan.<br><br><b>Cetak laporan?</b>',btnCancelLabel:'Tidak',btnOKLabel:'Ya, Cetak',btnOKClass:'btn-primary',callback:function(ok){if(ok)window.location.href='cetak_laporan.php';else{$('#form-registrasi').slideUp();$('#nomor_alat').prop('disabled',false).val(base.no);$('#btn-cek').click();}}});}else BootstrapDialog.alert('Error DB: '+(res.message||'Gagal menyimpan.'));},error:function(xhr){btn.prop('disabled',false).html('Simpan & Daftarkan Alat <i class="fa fa-save"></i>');BootstrapDialog.alert('Koneksi Error! '+(xhr.responseText||''));}});
+                                }
+                            }
+                        ]
+                    });
                 });
 
                 // No laporan otomatis dari registrasi tetapi tetap editable saat update.
@@ -3195,7 +3564,7 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                             $('#qr-generator-box').html('<img src="'+qaEsc(res.file)+'?v=locked" alt="QR '+qaEsc(no)+'" style="width:190px;height:190px;display:block;">');
                             $('#btn-save-qr').prop('disabled',true).html('<i class="fa fa-lock"></i> QR Terkunci Permanen');
                         }else{
-                            new QRCode(document.getElementById('qr-generator-box'),{text:'QA_ALAT:'+no,width:190,height:190,correctLevel:QRCode.CorrectLevel.H});
+                            new QRCode(document.getElementById('qr-generator-box'),{text:no,width:190,height:190,correctLevel:QRCode.CorrectLevel.H});
                             $('#btn-save-qr').prop('disabled',false).html('<i class="fa fa-save"></i> Simpan QR Permanen');
                         }
                         $('#modalQrGenerator').modal('show');

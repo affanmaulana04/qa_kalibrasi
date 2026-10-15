@@ -55,7 +55,8 @@ $can_penyetuju = $is_admin || strtoupper($rf['penyetuju']) === 'Y';
     <title>QA System | Dashboard</title>
 
     <!-- Favicon lokal QA System -->
-    <link rel="icon" type="image/png" href="/qa_kalibrasi/images/favicon-toto-qa.png?v=1">
+    <link rel="icon" type="image/x-icon" href="/qa_kalibrasi/images/icon.ico?v=20261013-6">
+    <link rel="shortcut icon" type="image/x-icon" href="/qa_kalibrasi/images/icon.ico?v=20261013-6">
 
     <link href="css/bootstrap.min.css" rel="stylesheet">
     <link href="css/jquery.smartmenus.bootstrap.css" rel="stylesheet">
@@ -152,6 +153,7 @@ $can_penyetuju = $is_admin || strtoupper($rf['penyetuju']) === 'Y';
                         <ul class="dropdown-menu">
                             <li><a href="modul/tabel/pemakai.php">Data Pemakai Aplikasi</a></li>
                             <li><a href="modul/tabel/email_validasi.php">Konfigurasi Email Validasi</a></li>
+                            <li><a href="modul/qa/tanggal_merah.php">Custom Tanggal Merah</a></li>
                         </ul>
                     </li>
                     <?php } ?>

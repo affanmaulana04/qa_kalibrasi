@@ -4,7 +4,6 @@ session_start();
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <link rel="icon" type="image/png" href="../../images/LogoTOTO.png?v=20261013">
 <meta charset="UTF-8">
 <title>Laporan Pemeriksaan Gauge</title>
 <style>
@@ -917,6 +916,20 @@ html, body {
     data.operator = pick(data.operator, data.petugas, data.created_by, headerSnap.operator, headerSnap.petugas);
     data.petugas = data.operator || data.petugas || '';
     data.keterangan = pick(data.keterangan, footerSnap.keterangan);
+
+    // Khusus field KETERANGAN: kosong tetap kosong pada semua format cetak.
+    // Jangan gunakan fallback umum '///' untuk field ini.
+    const qaKeterangan = (value) => {
+        if (value === null || value === undefined) return '';
+        const text = String(value).trim();
+        if (text === '' || text === '///') return '';
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    };
     data.no_laporan = pick(data.no_laporan, data.nomor_pengecekan, headerSnap.no_laporan, snapshot.no_laporan);
     data.foreman = pick(data.foreman, footerSnap.foreman, headerSnap.foreman);
     data.supervisor = pick(data.supervisor, footerSnap.supervisor, headerSnap.supervisor);
@@ -1404,7 +1417,7 @@ html, body {
         const metodeCell=(metode===''||metode==='-')?'<td class="diag-w"></td>':'<td>'+eW(metode)+'</td>';
         const humCell=(hum===''||hum==='-')?'<td class="diag-w"></td>':'<td style="text-align:center">'+eW(qaHumidityValue(hum))+' %</td>';
         const suhuCell=(suhu===''||suhu==='-')?'<td class="diag-w"></td>':'<td>'+eW(qaSuhuValue(suhu))+' °C</td>';
-        document.getElementById('report').innerHTML=`<div class="report-w"><div class="company-w">PT. SURYA TOTO INDONESIA Tbk.</div><div class="title-w">LAPORAN PEMERIKSAAN</div><table class="info-w"><tr><td>NO LAPORAN</td><td>${eW(data.no_laporan)}</td><td>SEKSI</td><td style="font-weight:bold;text-align:center">${eW(data.seksi_pemilik||data.seksi)}</td></tr><tr><td>NAMA ALAT</td><td>${eW(data.nama_part||data.nama_alat)}</td><td>PETUGAS PERIKSA</td><td style="text-align:center">${qaSignatureName(data.operator||data.petugas)}</td></tr><tr><td>NO. ALAT</td><td>${eW(data.no_part||data.no_alat)}</td><td rowspan="2">TANGGAL PERIKSA</td><td rowspan="2" style="text-align:center">${dW(data.tanggal_periksa)}</td></tr><tr><td>SPESIFIKASI</td><td>${eW(data.spesifikasi)}</td></tr><tr><td>RESOLUSI</td><td>${eW(wResolusi)}</td><td></td><td></td></tr></table><div class="hasil-title-w">HASIL PEMERIKSAAN</div><table class="hasil-w"><thead><tr><th style="width:10%">NO</th><th style="width:38%">STANDAR<br><br>( derajat )</th><th style="width:32%">HASIL<br><br>( derajat . menit )</th><th style="width:20%">KOREKSI<br><br>( menit )</th></tr></thead><tbody>${body}</tbody></table><table class="detail-w"><tr><td>METODE</td>${metodeCell}<td>KELEMBABAN RUANGAN</td>${humCell}</tr><tr><td>STANDAR UJI</td><td>${eW(data.standar_uji)}</td><td>STANDAR TOLERANSI</td><td style="text-align:center">${tolText?eW(tolText):'///'}</td></tr><tr><td>TRACEABILITY</td><td>${eW(data.traceability)}</td><td>KEPUTUSAN</td><td style="font-weight:bold;text-align:center">${eW(kep)}</td></tr><tr><td>SUHU RUANGAN</td>${suhuCell}<td>PERIKSA BERIKUTNYA</td><td style="text-align:center">${dW(data.jadwal_berikutnya||data.periode_berikutnya)}</td></tr><tr><td colspan="4" class="ket-w"><b>KETERANGAN :</b><br>${eW(data.keterangan)}</td></tr></table><div class="city-date-w">TANGERANG, ${dlW(data.tanggal_periksa)}</div><table class="sign-w"><tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr><tr class="space-w"><td>${qaSignatureName(data.operator||data.petugas)}<br>${qaApprovalDate('pembuat')}</td><td>${qaSignatureName(data.pemeriksa||data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td><td>${qaSignatureName(data.penyetuju||data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td></tr><tr class="role-w"><td>PETUGAS</td><td>FOREMAN</td><td>SUPERVISOR</td></tr></table><div class="doc-w">STIS-CMFG4-03/R4</div></div>`;
+        document.getElementById('report').innerHTML=`<div class="report-w"><div class="company-w">PT. SURYA TOTO INDONESIA Tbk.</div><div class="title-w">LAPORAN PEMERIKSAAN</div><table class="info-w"><tr><td>NO LAPORAN</td><td>${eW(data.no_laporan)}</td><td>SEKSI</td><td style="font-weight:bold;text-align:center">${eW(data.seksi_pemilik||data.seksi)}</td></tr><tr><td>NAMA ALAT</td><td>${eW(data.nama_part||data.nama_alat)}</td><td>PETUGAS PERIKSA</td><td style="text-align:center">${qaSignatureName(data.operator||data.petugas)}</td></tr><tr><td>NO. ALAT</td><td>${eW(data.no_part||data.no_alat)}</td><td rowspan="2">TANGGAL PERIKSA</td><td rowspan="2" style="text-align:center">${dW(data.tanggal_periksa)}</td></tr><tr><td>SPESIFIKASI</td><td>${eW(data.spesifikasi)}</td></tr><tr><td>RESOLUSI</td><td>${eW(wResolusi)}</td><td></td><td></td></tr></table><div class="hasil-title-w">HASIL PEMERIKSAAN</div><table class="hasil-w"><thead><tr><th style="width:10%">NO</th><th style="width:38%">STANDAR<br><br>( derajat )</th><th style="width:32%">HASIL<br><br>( derajat . menit )</th><th style="width:20%">KOREKSI<br><br>( menit )</th></tr></thead><tbody>${body}</tbody></table><table class="detail-w"><tr><td>METODE</td>${metodeCell}<td>KELEMBABAN RUANGAN</td>${humCell}</tr><tr><td>STANDAR UJI</td><td>${eW(data.standar_uji)}</td><td>STANDAR TOLERANSI</td><td style="text-align:center">${tolText?eW(tolText):'///'}</td></tr><tr><td>TRACEABILITY</td><td>${eW(data.traceability)}</td><td>KEPUTUSAN</td><td style="font-weight:bold;text-align:center">${eW(kep)}</td></tr><tr><td>SUHU RUANGAN</td>${suhuCell}<td>PERIKSA BERIKUTNYA</td><td style="text-align:center">${dW(data.jadwal_berikutnya||data.periode_berikutnya)}</td></tr><tr><td colspan="4" class="ket-w"><b>KETERANGAN :</b><br>${qaKeterangan(data.keterangan)}</td></tr></table><div class="city-date-w">TANGERANG, ${dlW(data.tanggal_periksa)}</div><table class="sign-w"><tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr><tr class="space-w"><td>${qaSignatureName(data.operator||data.petugas)}<br>${qaApprovalDate('pembuat')}</td><td>${qaSignatureName(data.pemeriksa||data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td><td>${qaSignatureName(data.penyetuju||data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td></tr><tr class="role-w"><td>PETUGAS</td><td>FOREMAN</td><td>SUPERVISOR</td></tr></table><div class="doc-w">STIS-CMFG4-03/R4</div></div>`;
         return;
     }
 
@@ -1434,7 +1447,7 @@ html, body {
         const humV=rawV(data.kelembapan),metodeV=rawV(data.metode||data.metode_uji),showMetodeV=metodeV!==''&&metodeV!=='-';
         const humDisplayV=(humV!==''&&humV!=='-')?(eV(qaHumidityValue(humV))+' %'):eV(humV||'-');
         let first=''; if(showMetodeV)first=`<tr><td>METODE</td><td>${eV(metodeV)}</td><td>KELEMBABAN RUANGAN</td><td style="text-align:center">${humDisplayV}</td></tr>`;else first=`<tr><td>KELEMBABAN RUANGAN</td><td colspan="3" style="text-align:center">${humDisplayV}</td></tr>`;
-        document.getElementById('report').innerHTML=`<div class="report-v"><div class="company-v">PT.SURYA TOTO INDONESIA Tbk.</div><div class="title-v">LAPORAN KALIBRASI</div><table class="info-v"><tr><td>NO LAPORAN</td><td>${eV(data.no_laporan)}</td><td>SEKSI</td><td style="font-weight:bold;text-align:center">${eV(data.seksi_pemilik||data.seksi)}</td></tr><tr><td>NAMA ALAT</td><td>${eV(data.nama_part||data.nama_alat)}</td><td>PETUGAS KALIBRASI</td><td style="text-align:center">${qaSignatureName(data.operator||data.petugas)}</td></tr><tr><td>NOMOR ALAT</td><td>${eV(data.no_part||data.no_alat)}</td><td>TANGGAL KALIBRASI</td><td style="text-align:center">${dV(data.tanggal_periksa)}</td></tr><tr><td>SPESIFIKASI</td><td>${eV(data.spesifikasi)}</td><td></td><td></td></tr><tr><td>RESOLUSI</td><td>${eV(data.resolusi)}</td><td></td><td></td></tr></table><div class="hasil-title-v">HASIL KALIBRASI</div><table class="hasil-v"><thead><tr><th style="width:10%">BAGIAN</th><th style="width:30%">STANDAR<br>( ${eV(satuan)} )</th><th style="width:30%">HASIL<br>( ${eV(satuan)} )</th><th style="width:20%">KOREKSI</th><th style="width:10%">KEP</th></tr></thead><tbody>${body||'<tr><td colspan="5">Tidak ada data.</td></tr>'}</tbody></table><table class="detail-v">${first}<tr><td>STANDAR UJI</td><td>${eV(data.standar_uji)}</td><td>KETIDAKPASTIAN</td><td style="text-align:center">${eV(data.ketidakpastian)}</td></tr><tr><td>TRACEABILITY</td><td>${eV(data.traceability)}</td><td>STANDAR TOLERANSI</td><td style="text-align:center">${tol?eV(tol)+' '+eV(satuan):'///'}</td></tr><tr><td>CONFIDENCE LEVEL</td><td>${eV(data.confidence_level||data.confidence)}</td><td>KEPUTUSAN</td><td style="font-weight:bold;text-align:center">${eV(kep)}</td></tr><tr><td>SUHU RUANGAN</td><td>${rawV(data.suhu)?eV(qaSuhuValue(data.suhu))+' °C':'///'}</td><td>KALIBRASI BERIKUTNYA</td><td style="text-align:center">${dV(data.jadwal_berikutnya||data.periode_berikutnya)}</td></tr><tr><td colspan="4" class="ket-v"><b>KETERANGAN :</b><br>${eV(data.keterangan)}</td></tr></table><div class="city-date-v">TANGERANG, ${dV(data.tanggal_periksa)}</div><table class="sign-v"><tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr><tr class="space-v"><td>${qaSignatureName(data.operator||data.petugas)}<br>${qaApprovalDate('pembuat')}</td><td>${qaSignatureName(data.pemeriksa||data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td><td>${qaSignatureName(data.penyetuju||data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td></tr><tr class="role-v"><td>PETUGAS</td><td>FOREMAN</td><td>SUPERVISOR</td></tr></table><div class="doc-v">STIS-CMFG4-03/R4</div></div>`;
+        document.getElementById('report').innerHTML=`<div class="report-v"><div class="company-v">PT.SURYA TOTO INDONESIA Tbk.</div><div class="title-v">LAPORAN KALIBRASI</div><table class="info-v"><tr><td>NO LAPORAN</td><td>${eV(data.no_laporan)}</td><td>SEKSI</td><td style="font-weight:bold;text-align:center">${eV(data.seksi_pemilik||data.seksi)}</td></tr><tr><td>NAMA ALAT</td><td>${eV(data.nama_part||data.nama_alat)}</td><td>PETUGAS KALIBRASI</td><td style="text-align:center">${qaSignatureName(data.operator||data.petugas)}</td></tr><tr><td>NOMOR ALAT</td><td>${eV(data.no_part||data.no_alat)}</td><td>TANGGAL KALIBRASI</td><td style="text-align:center">${dV(data.tanggal_periksa)}</td></tr><tr><td>SPESIFIKASI</td><td>${eV(data.spesifikasi)}</td><td></td><td></td></tr><tr><td>RESOLUSI</td><td>${eV(data.resolusi)}</td><td></td><td></td></tr></table><div class="hasil-title-v">HASIL KALIBRASI</div><table class="hasil-v"><thead><tr><th style="width:10%">BAGIAN</th><th style="width:30%">STANDAR<br>( ${eV(satuan)} )</th><th style="width:30%">HASIL<br>( ${eV(satuan)} )</th><th style="width:20%">KOREKSI</th><th style="width:10%">KEP</th></tr></thead><tbody>${body||'<tr><td colspan="5">Tidak ada data.</td></tr>'}</tbody></table><table class="detail-v">${first}<tr><td>STANDAR UJI</td><td>${eV(data.standar_uji)}</td><td>KETIDAKPASTIAN</td><td style="text-align:center">${eV(data.ketidakpastian)}</td></tr><tr><td>TRACEABILITY</td><td>${eV(data.traceability)}</td><td>STANDAR TOLERANSI</td><td style="text-align:center">${tol?eV(tol)+' '+eV(satuan):'///'}</td></tr><tr><td>CONFIDENCE LEVEL</td><td>${eV(data.confidence_level||data.confidence)}</td><td>KEPUTUSAN</td><td style="font-weight:bold;text-align:center">${eV(kep)}</td></tr><tr><td>SUHU RUANGAN</td><td>${rawV(data.suhu)?eV(qaSuhuValue(data.suhu))+' °C':'///'}</td><td>KALIBRASI BERIKUTNYA</td><td style="text-align:center">${dV(data.jadwal_berikutnya||data.periode_berikutnya)}</td></tr><tr><td colspan="4" class="ket-v"><b>KETERANGAN :</b><br>${qaKeterangan(data.keterangan)}</td></tr></table><div class="city-date-v">TANGERANG, ${dV(data.tanggal_periksa)}</div><table class="sign-v"><tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr><tr class="space-v"><td>${qaSignatureName(data.operator||data.petugas)}<br>${qaApprovalDate('pembuat')}</td><td>${qaSignatureName(data.pemeriksa||data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td><td>${qaSignatureName(data.penyetuju||data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td></tr><tr class="role-v"><td>PETUGAS</td><td>FOREMAN</td><td>SUPERVISOR</td></tr></table><div class="doc-v">STIS-CMFG4-03/R4</div></div>`;
         return;
     }
 
@@ -1460,7 +1473,7 @@ html, body {
         }else if(showHumU){
             detailFirstRowU=`<tr><td>KELEMBABAN RUANGAN</td><td colspan="3" style="text-align:center">${eU(qaHumidityValue(humU))} %</td></tr>`;
         }
-        document.getElementById('report').innerHTML=`<div class="report-u"><div class="company-u">PT.SURYA TOTO INDONESIA Tbk.</div><div class="title-u">LAPORAN KALIBRASI</div><table class="info-u"><tr><td>NO LAPORAN</td><td>${eU(data.no_laporan)}</td><td>SEKSI</td><td>${eU(data.seksi_pemilik||data.seksi)}</td></tr><tr><td>NAMA ALAT</td><td>${eU(data.nama_part||data.nama_alat)}</td><td>PETUGAS KALIBRASI</td><td style="text-align:center">${qaSignatureName(data.operator||data.petugas)}</td></tr><tr><td>NOMOR ALAT</td><td>${eU(data.no_part||data.no_alat)}</td><td>TANGGAL KALIBRASI</td><td style="text-align:center">${dU(data.tanggal_periksa)}</td></tr><tr><td>SPESIFIKASI</td><td>${eU(data.spesifikasi)}</td><td></td><td></td></tr><tr><td>RESOLUSI</td><td>${eU(data.resolusi)}</td><td></td><td></td></tr></table><div class="hasil-title-u">HASIL KALIBRASI</div><table class="hasil-u"><thead><tr><th style="width:10%">NO</th><th style="width:30%">STANDAR<br>${eU(satuan)}</th><th style="width:30%">HASIL<br>${eU(satuan)}</th><th style="width:30%">KOREKSI<br>${eU(satuan)}</th></tr></thead><tbody>${body}</tbody></table><table class="detail-u">${detailFirstRowU}<tr><td>STANDAR UJI</td><td>${eU(data.standar_uji)}</td><td>KETIDAKPASTIAN</td><td style="text-align:center">${eU(data.ketidakpastian)}</td></tr><tr><td>TRACEABILITY</td><td>${eU(data.traceability)}</td><td>STANDAR TOLERANSI</td><td style="text-align:center">${tol?(tol.includes('±')?eU(tol):'± '+eU(tol))+' '+eU(satuan):'///'}</td></tr><tr><td>CONFIDENCE LEVEL</td><td>${rawU(data.confidence_level)?eU(data.confidence_level):'///'}</td><td>KEPUTUSAN</td><td style="text-align:center;font-weight:bold">${eU(kep)}</td></tr><tr><td>SUHU RUANGAN</td><td>${rawU(data.suhu)?eU(qaSuhuValue(data.suhu))+' °C':'///'}</td><td>KALIBRASI BERIKUTNYA</td><td style="text-align:center">${dU(data.jadwal_berikutnya||data.periksa_berikut)}</td></tr><tr><td colspan="4" class="ket-u">KETERANGAN :<br>${rawU(data.keterangan)?eU(data.keterangan):''}</td></tr></table><div class="city-date-u">TANGERANG, ${dU(data.tanggal_periksa)}</div><table class="sign-u"><tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr><tr class="space-u"><td>${qaSignatureName(data.operator||data.petugas)}<br>${qaApprovalDate('pembuat')}</td><td>${qaSignatureName(data.pemeriksa||data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td><td>${qaSignatureName(data.penyetuju||data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td></tr><tr class="role-u"><td>PETUGAS</td><td>FOREMAN</td><td>SUPERVISOR</td></tr></table><div class="doc-u">STIS-CMFG4-03/R4</div></div>`;
+        document.getElementById('report').innerHTML=`<div class="report-u"><div class="company-u">PT.SURYA TOTO INDONESIA Tbk.</div><div class="title-u">LAPORAN KALIBRASI</div><table class="info-u"><tr><td>NO LAPORAN</td><td>${eU(data.no_laporan)}</td><td>SEKSI</td><td>${eU(data.seksi_pemilik||data.seksi)}</td></tr><tr><td>NAMA ALAT</td><td>${eU(data.nama_part||data.nama_alat)}</td><td>PETUGAS KALIBRASI</td><td style="text-align:center">${qaSignatureName(data.operator||data.petugas)}</td></tr><tr><td>NOMOR ALAT</td><td>${eU(data.no_part||data.no_alat)}</td><td>TANGGAL KALIBRASI</td><td style="text-align:center">${dU(data.tanggal_periksa)}</td></tr><tr><td>SPESIFIKASI</td><td>${eU(data.spesifikasi)}</td><td></td><td></td></tr><tr><td>RESOLUSI</td><td>${eU(data.resolusi)}</td><td></td><td></td></tr></table><div class="hasil-title-u">HASIL KALIBRASI</div><table class="hasil-u"><thead><tr><th style="width:10%">NO</th><th style="width:30%">STANDAR<br>${eU(satuan)}</th><th style="width:30%">HASIL<br>${eU(satuan)}</th><th style="width:30%">KOREKSI<br>${eU(satuan)}</th></tr></thead><tbody>${body}</tbody></table><table class="detail-u">${detailFirstRowU}<tr><td>STANDAR UJI</td><td>${eU(data.standar_uji)}</td><td>KETIDAKPASTIAN</td><td style="text-align:center">${eU(data.ketidakpastian)}</td></tr><tr><td>TRACEABILITY</td><td>${eU(data.traceability)}</td><td>STANDAR TOLERANSI</td><td style="text-align:center">${tol?(tol.includes('±')?eU(tol):'± '+eU(tol))+' '+eU(satuan):'///'}</td></tr><tr><td>CONFIDENCE LEVEL</td><td>${rawU(data.confidence_level)?eU(data.confidence_level):'///'}</td><td>KEPUTUSAN</td><td style="text-align:center;font-weight:bold">${eU(kep)}</td></tr><tr><td>SUHU RUANGAN</td><td>${rawU(data.suhu)?eU(qaSuhuValue(data.suhu))+' °C':'///'}</td><td>KALIBRASI BERIKUTNYA</td><td style="text-align:center">${dU(data.jadwal_berikutnya||data.periksa_berikut)}</td></tr><tr><td colspan="4" class="ket-u">KETERANGAN :<br>${qaKeterangan(data.keterangan)}</td></tr></table><div class="city-date-u">TANGERANG, ${dU(data.tanggal_periksa)}</div><table class="sign-u"><tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr><tr class="space-u"><td>${qaSignatureName(data.operator||data.petugas)}<br>${qaApprovalDate('pembuat')}</td><td>${qaSignatureName(data.pemeriksa||data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td><td>${qaSignatureName(data.penyetuju||data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td></tr><tr class="role-u"><td>PETUGAS</td><td>FOREMAN</td><td>SUPERVISOR</td></tr></table><div class="doc-u">STIS-CMFG4-03/R4</div></div>`;
         return;
     }
 
@@ -1510,7 +1523,7 @@ html, body {
             const kode=rawT(r.kode_warna)||rawT(r.kodeWarna)||rawT(r.warna)||rawT(data.kode_warna);
             return `<tr>${i===0?`<td rowspan="${rows.length}">1</td><td rowspan="${rows.length}">${escT(data.no_part||data.no_alat)}</td><td rowspan="${rows.length}">${escT(data.spesifikasi)} ${rawT(data.toleransi)?'&nbsp; '+escT(data.toleransi):''}</td><td rowspan="${rows.length}"><div>${escT(sharedSpec)}</div>${rawT(sharedRes)?`<div style="margin-top:1.2mm">(${escT(sharedRes)})</div>`:''}</td><td rowspan="${rows.length}">${escT(sharedNoStd)}</td>`:''}<td class="posisi-t">${escT(r.posisi)}</td><td>${std}</td><td class="hasil-box-t">${escT(d1)}</td><td class="hasil-box-t">${escT(d2)}</td><td class="hasil-box-t">${escT(b1)}</td><td class="hasil-box-t">${escT(b2)}</td><td>${escT(kode)}</td>${i===0?`<td rowspan="${rows.length}" class="shared-t"><b>${escT(kep)}</b></td><td rowspan="${rows.length}" class="shared-t">${shortT(data.jadwal_berikutnya||data.periksa_berikut)}</td><td rowspan="${rows.length}" class="shared-t">${escT(nogambar)}</td>`:''}</tr>`;
         }).join('');
-        document.getElementById('report').innerHTML=`<div class="report report-t"><div class="company-t">PT. SURYA TOTO INDONESIA Tbk.</div><div class="top-t"><div class="title-t">LAPORAN PEMERIKSAAN GAUGE</div><div class="datebox-t"><table><tr><td colspan="3" style="text-align:left">Tanggal : ${longT(data.tanggal_periksa)}</td></tr><tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr><tr style="height:15mm"><td style="vertical-align:bottom">${qaSignatureName(data.operator||data.petugas)}</td><td style="vertical-align:bottom">${qaSignatureName(data.pemeriksa||data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td><td style="vertical-align:bottom">${qaSignatureName(data.penyetuju||data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td></tr><tr><td>PETUGAS</td><td>FOREMAN</td><td>SUPERVISOR</td></tr></table></div></div><div class="head-t"><table><tr><td>NO LAPORAN</td><td>: ${escT(data.no_laporan)}</td><td>ALAT STANDAR</td><td>: ${escT(data.standar_uji)}</td></tr><tr><td>NAMA ALAT</td><td>: ${escT(data.nama_alat||data.nama_part)}</td><td>TRACEABILITY</td><td>: ${escT(data.traceability)}</td></tr><tr><td>METODE</td><td>: ${escT(data.metode)}</td><td>SUHU / HUMIDITY</td><td>: ${escT(qaSuhuValue(data.suhu))} °C / ${escT(qaHumidityValue(data.kelembapan))} %</td></tr><tr><td>SEKSI</td><td>: ${escT(data.seksi_pemilik||data.seksi)}</td><td>TANGGAL PERIKSA</td><td>: ${longT(data.tanggal_periksa)}</td></tr></table></div><div class="page-t">HAL : 1 / 1</div><table class="grid-t"><thead><tr><th rowspan="2" class="t-no">NO</th><th rowspan="2" class="t-noalat">NO ALAT</th><th rowspan="2" class="t-spek">SPESIFIKASI</th><th colspan="2">ALAT STANDAR YANG DIPAKAI</th><th rowspan="2" class="t-posisi">POSISI<br>UKUR</th><th rowspan="2" class="t-std">STD UKURAN</th><th colspan="4">HASIL UKUR</th><th rowspan="2" class="t-warna">KODE<br>WARNA</th><th rowspan="2" class="t-kep">KEP</th><th rowspan="2" class="t-next">TANGGAL PERIKSA<br>BERIKUTNYA</th><th rowspan="2" class="t-gambar">NO<br>GAMBAR</th></tr><tr><th class="t-stdspec">SPESIFIKASI</th><th class="t-stdno">NO ALAT</th><th colspan="2">DEPAN</th><th colspan="2">BELAKANG</th></tr></thead><tbody>${body}</tbody></table><div class="ket-t"><b>KETERANGAN :</b><br>${rawT(data.keterangan)?escT(data.keterangan):''}</div><div class="foot-t">STIS-CMFG4-06 / R1</div></div>`;
+        document.getElementById('report').innerHTML=`<div class="report report-t"><div class="company-t">PT. SURYA TOTO INDONESIA Tbk.</div><div class="top-t"><div class="title-t">LAPORAN PEMERIKSAAN GAUGE</div><div class="datebox-t"><table><tr><td colspan="3" style="text-align:left">Tanggal : ${longT(data.tanggal_periksa)}</td></tr><tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr><tr style="height:15mm"><td style="vertical-align:bottom">${qaSignatureName(data.operator||data.petugas)}</td><td style="vertical-align:bottom">${qaSignatureName(data.pemeriksa||data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td><td style="vertical-align:bottom">${qaSignatureName(data.penyetuju||data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td></tr><tr><td>PETUGAS</td><td>FOREMAN</td><td>SUPERVISOR</td></tr></table></div></div><div class="head-t"><table><tr><td>NO LAPORAN</td><td>: ${escT(data.no_laporan)}</td><td>ALAT STANDAR</td><td>: ${escT(data.standar_uji)}</td></tr><tr><td>NAMA ALAT</td><td>: ${escT(data.nama_alat||data.nama_part)}</td><td>TRACEABILITY</td><td>: ${escT(data.traceability)}</td></tr><tr><td>METODE</td><td>: ${escT(data.metode)}</td><td>SUHU / HUMIDITY</td><td>: ${escT(qaSuhuValue(data.suhu))} °C / ${escT(qaHumidityValue(data.kelembapan))} %</td></tr><tr><td>SEKSI</td><td>: ${escT(data.seksi_pemilik||data.seksi)}</td><td>TANGGAL PERIKSA</td><td>: ${longT(data.tanggal_periksa)}</td></tr></table></div><div class="page-t">HAL : 1 / 1</div><table class="grid-t"><thead><tr><th rowspan="2" class="t-no">NO</th><th rowspan="2" class="t-noalat">NO ALAT</th><th rowspan="2" class="t-spek">SPESIFIKASI</th><th colspan="2">ALAT STANDAR YANG DIPAKAI</th><th rowspan="2" class="t-posisi">POSISI<br>UKUR</th><th rowspan="2" class="t-std">STD UKURAN</th><th colspan="4">HASIL UKUR</th><th rowspan="2" class="t-warna">KODE<br>WARNA</th><th rowspan="2" class="t-kep">KEP</th><th rowspan="2" class="t-next">TANGGAL PERIKSA<br>BERIKUTNYA</th><th rowspan="2" class="t-gambar">NO<br>GAMBAR</th></tr><tr><th class="t-stdspec">SPESIFIKASI</th><th class="t-stdno">NO ALAT</th><th colspan="2">DEPAN</th><th colspan="2">BELAKANG</th></tr></thead><tbody>${body}</tbody></table><div class="ket-t"><b>KETERANGAN :</b><br>${qaKeterangan(data.keterangan)}</div><div class="foot-t">STIS-CMFG4-06 / R1</div></div>`;
         return;
     }
 
@@ -1554,7 +1567,7 @@ html, body {
         });
         const tableQ=`<table class="grid-q q-clean"><thead><tr><th rowspan="2" style="width:4%">NO</th><th rowspan="2" style="width:9%">NO ALAT</th><th rowspan="2" style="width:10%">SPESIFIKASI</th><th colspan="2">ALAT STANDAR YANG DIPAKAI</th><th rowspan="2" style="width:8%">PARAMETER</th><th rowspan="2" style="width:18%">STANDAR UKURAN</th><th colspan="3">HASIL UKUR (CROSS)</th><th rowspan="2" style="width:8%">KODE WARNA</th><th rowspan="2" style="width:6%">KEP</th><th rowspan="2" style="width:10%">TANGGAL KALIBRASI BERIKUTNYA</th></tr><tr><th style="width:10%">SPESIFIKASI</th><th style="width:8%">NO ALAT</th><th>I</th><th>II</th><th>III</th></tr></thead><tbody>${bodyQ}</tbody></table>`;
         const ketQ=data.keterangan===null||data.keterangan===undefined?'':String(data.keterangan);
-        document.getElementById('report').innerHTML=`<div class="report report-q">${headerQ}${tableQ}<div class="ket-q"><b>KETERANGAN :</b><br>${ketQ.trim()?escQ(ketQ).replace(/\n/g,'<br>'):''}</div><div class="foot-q">STIS-CMFG4-06 / R1</div></div>`;
+        document.getElementById('report').innerHTML=`<div class="report report-q">${headerQ}${tableQ}<div class="ket-q"><b>KETERANGAN :</b><br>${qaKeterangan(ketQ)}</div><div class="foot-q">STIS-CMFG4-06 / R1</div></div>`;
         return;
     }
 
@@ -1717,7 +1730,7 @@ html, body {
                 <tbody>${body || '<tr><td colspan="10">Tidak ada data.</td></tr>'}</tbody>
             </table>
 
-            <div class="ket-p"><b>KETERANGAN :</b><br>${ketHtml}</div>
+            <div class="ket-p"><b>KETERANGAN :</b><br>${qaKeterangan(ket)}</div>
             <div class="foot-p">STIS-CMFG4-06 / R1</div>
         </div>`;
         return;
@@ -1747,6 +1760,44 @@ html, body {
             const x = (v === null || v === undefined) ? '' : String(v).trim();
             if (!x) return '///';
             return esc(x.replace(/^(?:±\s*)+/,'').trim());
+        };
+        const numO = (v) => {
+            if (v === null || v === undefined || String(v).trim() === '') return NaN;
+            const m = String(v).trim().replace(/[±%]/g,'').replace(/,/g,'.').match(/[+-]?\d+(?:\.\d+)?/);
+            return m ? parseFloat(m[0]) : NaN;
+        };
+        const fmtO = (v) => Number.isFinite(v) ? Number(v).toFixed(3) : '';
+        const rangeO = (obj, isGo) => {
+            obj = obj || {};
+            const std = numO(isGo ? ov(obj,['go_std','standar','std']) : ov(obj,['notgo_std','not_go_std','standar','std']));
+            let min = NaN, max = NaN;
+            if (isGo) {
+                const near = numO(ov(obj,['go_tol_near','tol_near','toleransi_near','toleransi']));
+                const far = numO(ov(obj,['go_tol_far','tol_far','toleransi_far']));
+                if (Number.isFinite(std) && Number.isFinite(near) && Number.isFinite(far)) {
+                    min = std + Math.min(near, far);
+                    max = std + Math.max(near, far);
+                }
+            } else {
+                const tol = numO(ov(obj,['notgo_tol','not_go_tol','toleransi','tol']));
+                if (Number.isFinite(std) && Number.isFinite(tol)) {
+                    min = std - Math.abs(tol);
+                    max = std + Math.abs(tol);
+                }
+            }
+            return {min:min,max:max};
+        };
+        const normalizeStatusO = (v) => {
+            const x = String(v == null ? '' : v).trim().toUpperCase();
+            if (!x) return '';
+            if (/^(OK|GOOD|PASS|LULUS)$/.test(x)) return 'OK';
+            if (/^(NG|NOT GOOD|TIDAK|FAIL|X)$/.test(x)) return 'NOT GOOD';
+            return x;
+        };
+        const statusFromValueO = (value, min, max) => {
+            const n = numO(value);
+            if (!Number.isFinite(n) || !Number.isFinite(min) || !Number.isFinite(max)) return '';
+            return (n >= min - 1e-9 && n <= max + 1e-9) ? 'OK' : 'NOT GOOD';
         };
         const rows = Array.isArray(data.hasil_array) ? data.hasil_array : [];
 
@@ -1809,17 +1860,23 @@ html, body {
             const goStd = ov(go, ['go_std','standar','std']);
             const goTolNear = ov(go, ['go_tol_near','tol_near','toleransi_near','toleransi']);
             const goTolFar = ov(go, ['go_tol_far','tol_far','toleransi_far']);
-            const goMin = ov(go, ['go_min','min']);
-            const goMax = ov(go, ['go_max','max']);
-            const goHMin = ov(go, ['go_hasil_min','hasil_min','hasil']);
-            const goHMax = ov(go, ['go_hasil_max','hasil_max','hasil_2']);
+            const goActualMin = ov(go, ['go_hasil_min','hasil_min','hasil']);
+            const goActualMax = ov(go, ['go_hasil_max','hasil_max','hasil_2']);
+            const goRange = rangeO(go,true);
+            const goMin = Number.isFinite(goRange.min) ? fmtO(goRange.min) : ov(go, ['go_min','min']);
+            const goMax = Number.isFinite(goRange.max) ? fmtO(goRange.max) : ov(go, ['go_max','max']);
+            const goHMin = normalizeStatusO(ov(go,['go_status_min','status_min'])) || statusFromValueO(goActualMin,numO(goMin),numO(goMax));
+            const goHMax = normalizeStatusO(ov(go,['go_status_max','status_max'])) || statusFromValueO(goActualMax,numO(goMin),numO(goMax));
 
             const ngStd = ov(ng, ['notgo_std','not_go_std','standar','std']);
             const ngTol = ov(ng, ['notgo_tol','not_go_tol','toleransi','tol']);
-            const ngMin = ov(ng, ['notgo_min','not_go_min','min']);
-            const ngMax = ov(ng, ['notgo_max','not_go_max','max']);
-            const ngHMin = ov(ng, ['notgo_hasil_min','not_go_hasil_min','hasil_min','hasil']);
-            const ngHMax = ov(ng, ['notgo_hasil_max','not_go_hasil_max','hasil_max','hasil_2']);
+            const ngActualMin = ov(ng, ['notgo_hasil_min','not_go_hasil_min','hasil_min','hasil']);
+            const ngActualMax = ov(ng, ['notgo_hasil_max','not_go_hasil_max','hasil_max','hasil_2']);
+            const ngRange = rangeO(ng,false);
+            const ngMin = Number.isFinite(ngRange.min) ? fmtO(ngRange.min) : ov(ng, ['notgo_min','not_go_min','min']);
+            const ngMax = Number.isFinite(ngRange.max) ? fmtO(ngRange.max) : ov(ng, ['notgo_max','not_go_max','max']);
+            const ngHMin = normalizeStatusO(ov(ng,['notgo_status_min','status_min'])) || statusFromValueO(ngActualMin,numO(ngMin),numO(ngMax));
+            const ngHMax = normalizeStatusO(ov(ng,['notgo_status_max','status_max'])) || statusFromValueO(ngActualMax,numO(ngMin),numO(ngMax));
 
             // Format O: satu NO terdiri dari dua sub-baris GO + NOT GO.
             // Field identitas hanya dicetak sekali dengan rowspan=2, jadi tidak
@@ -1913,7 +1970,7 @@ html, body {
                 </thead>
                 <tbody>${body || '<tr><td colspan="14">Tidak ada data.</td></tr>'}</tbody>
             </table>
-            <div class="ket-o"><b>KETERANGAN :</b> ${esc(data.keterangan)}</div>
+            <div class="ket-o"><b>KETERANGAN :</b> ${qaKeterangan(data.keterangan)}</div>
             <div class="foot-o">STIS-CMFG4-06 / R1</div>
         </div>`;
         return;
@@ -2091,7 +2148,7 @@ html, body {
                 </tr>
                 <tr>
                     <td colspan="4" class="ket-m">
-                        <b>KETERANGAN :</b><br>${esc(data.keterangan)}
+                        <b>KETERANGAN :</b><br>${qaKeterangan(data.keterangan)}
                     </td>
                 </tr>
             </table>
@@ -2151,7 +2208,7 @@ html, body {
                 <tr><td>TRACEABILITY</td><td>${e(data.traceability)}</td><td>STANDAR TOLERANSI</td><td>${raw(data.toleransi)?e(data.toleransi):'///'}</td></tr>
                 <tr><td>CONFIDENCE LEVEL</td><td>${raw(data.confidence)?e(data.confidence):'///'}</td><td>KEPUTUSAN</td><td style="font-weight:bold;text-align:center">${kep}</td></tr>
                 <tr><td>SUHU RUANGAN</td><td>${raw(data.suhu)?e(qaSuhuValue(data.suhu))+' °C':'///'}</td><td>KALIBRASI BERIKUTNYA</td><td>${dt(data.jadwal_berikutnya||data.periksa_berikut)}</td></tr>
-                <tr><td colspan="4" class="ket-l"><b>KETERANGAN :</b><br>${e(data.keterangan)}</td></tr>
+                <tr><td colspan="4" class="ket-l"><b>KETERANGAN :</b><br>${qaKeterangan(data.keterangan)}</td></tr>
             </table>
             <div class="city-date-l">TANGERANG, ${dl(data.tanggal_periksa)}</div>
             <table class="sign-l"><tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr><tr class="sign-space-l"><td>${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td><td>${qaSignatureName(data.pemeriksa || data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td><td>${qaSignatureName(data.penyetuju || data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td></tr><tr class="role-l"><td>PETUGAS</td><td>PEMERIKSA</td><td>PENYETUJU</td></tr></table>
@@ -2160,7 +2217,7 @@ html, body {
     }
 
 // ================= FORM K (VOLTAGE ULTRASONIC) =================
-    if(String(data.format||'').toUpperCase()==='K'){const e=v=>(v===null||v===undefined||String(v).trim()===''?'///':String(v).trim().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;')),raw=v=>(v===null||v===undefined?'':String(v).trim()),dt=v=>{if(!v)return'///';const m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?m[3]+'-'+m[2]+'-'+m[1]:e(v)},dl=v=>{if(!v)return'///';const m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!m)return e(v);const b=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];return m[3]+' '+b[parseInt(m[2],10)-1]+' '+m[1]},rows=Array.isArray(data.hasil_array)?data.hasil_array:[],body=rows.map((r,i)=>`<tr><td>${i+1}</td><td>${e(r.nilai_ditentukan)}</td><td>${e(r.nilai_pengukuran)}</td><td>${e(r.selisih)}</td><td>${e(r.status)}</td></tr>`).join(''),kr=String(data.keputusan||'').toUpperCase(),kep=(kr==='GOOD'||kr==='OK')?'OK':((kr==='NOT GOOD'||kr==='NOT GOOD')?'NOT GOOD':e(data.keputusan));document.getElementById('report').innerHTML=`<div class="report report-k"><div class="company-k">PT. SURYA TOTO INDONESIA Tbk.</div><div class="title-k">LAPORAN PEMERIKSAAN</div><table class="info-k"><tr><td>NO LAPORAN</td><td>${e(data.no_laporan)}</td><td>SEKSI</td><td style="font-weight:bold;text-align:center">${e(data.seksi_pemilik||data.seksi)}</td></tr><tr><td>NAMA ALAT</td><td>${e(data.nama_part||data.nama_alat)}</td><td>PETUGAS PERIKSA</td><td style="text-align:center">${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td></tr><tr><td>NOMOR MESIN</td><td>${e(data.no_part||data.no_alat)}</td><td>TANGGAL PERIKSA</td><td style="text-align:center">${dt(data.tanggal_periksa)}</td></tr><tr><td>SPESIFIKASI</td><td>${e(data.spesifikasi)}</td><td></td><td></td></tr><tr><td>RESOLUSI</td><td>${e(data.resolusi)}</td><td></td><td></td></tr></table><div class="hasil-title-k">HASIL PEMERIKSAAN</div><table class="hasil-k"><thead><tr><th>NO</th><th>NILAI YG DITENTUKAN</th><th>NILAI PENGUKURAN</th><th>SELISIH</th><th>PERTIMBANGAN KELULUSAN</th></tr></thead><tbody>${body||'<tr><td colspan="5">Tidak ada data.</td></tr>'}<tr class="blank-k"><td></td><td></td><td></td><td></td><td></td></tr></tbody></table><table class="detail-k"><tr><td>METODE</td><td>${e(data.metode)}</td><td>KELEMBABAN RUANGAN</td><td>${raw(data.kelembapan)?e(qaHumidityValue(data.kelembapan))+' %':'///'}</td></tr><tr><td>STANDAR UJI</td><td>${e(data.standar_uji)}</td><td>STANDAR TOLERANSI</td><td style="text-align:center">${raw(data.toleransi)?e(data.toleransi)+' %':'///'}</td></tr><tr><td>TRACEABILITY</td><td>${e(data.traceability)}</td><td>KEPUTUSAN</td><td style="font-weight:bold;text-align:center">${kep}</td></tr><tr><td>SUHU RUANGAN</td><td>${raw(data.suhu)?e(qaSuhuValue(data.suhu))+' °C':'///'}</td><td>TGL PERIKSA BERIKUTNYA</td><td style="text-align:center">${dt(data.jadwal_berikutnya||data.periksa_berikut)}</td></tr><tr><td colspan="4" class="ket-k"><b>KETERANGAN :</b><br>${e(data.keterangan)}</td></tr></table><div class="city-date-k">TANGERANG, ${dl(data.tanggal_periksa)}</div><table class="sign-k"><tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr><tr class="sign-space-k"><td>${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td><td>${qaSignatureName(data.pemeriksa || data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td><td>${qaSignatureName(data.penyetuju || data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td></tr><tr class="role-k"><td>PETUGAS</td><td>PEMERIKSA</td><td>PENYETUJU</td></tr></table><div class="doc-code-k">STIS-CMFG4-05/R3</div></div>`;return;}
+    if(String(data.format||'').toUpperCase()==='K'){const e=v=>(v===null||v===undefined||String(v).trim()===''?'///':String(v).trim().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;')),raw=v=>(v===null||v===undefined?'':String(v).trim()),dt=v=>{if(!v)return'///';const m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?m[3]+'-'+m[2]+'-'+m[1]:e(v)},dl=v=>{if(!v)return'///';const m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!m)return e(v);const b=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];return m[3]+' '+b[parseInt(m[2],10)-1]+' '+m[1]},rows=Array.isArray(data.hasil_array)?data.hasil_array:[],body=rows.map((r,i)=>`<tr><td>${i+1}</td><td>${e(r.nilai_ditentukan)}</td><td>${e(r.nilai_pengukuran)}</td><td>${e(r.selisih)}</td><td>${e(r.status)}</td></tr>`).join(''),kr=String(data.keputusan||'').toUpperCase(),kep=(kr==='GOOD'||kr==='OK')?'OK':((kr==='NOT GOOD'||kr==='NOT GOOD')?'NOT GOOD':e(data.keputusan));document.getElementById('report').innerHTML=`<div class="report report-k"><div class="company-k">PT. SURYA TOTO INDONESIA Tbk.</div><div class="title-k">LAPORAN PEMERIKSAAN</div><table class="info-k"><tr><td>NO LAPORAN</td><td>${e(data.no_laporan)}</td><td>SEKSI</td><td style="font-weight:bold;text-align:center">${e(data.seksi_pemilik||data.seksi)}</td></tr><tr><td>NAMA ALAT</td><td>${e(data.nama_part||data.nama_alat)}</td><td>PETUGAS PERIKSA</td><td style="text-align:center">${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td></tr><tr><td>NOMOR MESIN</td><td>${e(data.no_part||data.no_alat)}</td><td>TANGGAL PERIKSA</td><td style="text-align:center">${dt(data.tanggal_periksa)}</td></tr><tr><td>SPESIFIKASI</td><td>${e(data.spesifikasi)}</td><td></td><td></td></tr><tr><td>RESOLUSI</td><td>${e(data.resolusi)}</td><td></td><td></td></tr></table><div class="hasil-title-k">HASIL PEMERIKSAAN</div><table class="hasil-k"><thead><tr><th>NO</th><th>NILAI YG DITENTUKAN</th><th>NILAI PENGUKURAN</th><th>SELISIH</th><th>PERTIMBANGAN KELULUSAN</th></tr></thead><tbody>${body||'<tr><td colspan="5">Tidak ada data.</td></tr>'}<tr class="blank-k"><td></td><td></td><td></td><td></td><td></td></tr></tbody></table><table class="detail-k"><tr><td>METODE</td><td>${e(data.metode)}</td><td>KELEMBABAN RUANGAN</td><td>${raw(data.kelembapan)?e(qaHumidityValue(data.kelembapan))+' %':'///'}</td></tr><tr><td>STANDAR UJI</td><td>${e(data.standar_uji)}</td><td>STANDAR TOLERANSI</td><td style="text-align:center">${raw(data.toleransi)?e(data.toleransi)+' %':'///'}</td></tr><tr><td>TRACEABILITY</td><td>${e(data.traceability)}</td><td>KEPUTUSAN</td><td style="font-weight:bold;text-align:center">${kep}</td></tr><tr><td>SUHU RUANGAN</td><td>${raw(data.suhu)?e(qaSuhuValue(data.suhu))+' °C':'///'}</td><td>TGL PERIKSA BERIKUTNYA</td><td style="text-align:center">${dt(data.jadwal_berikutnya||data.periksa_berikut)}</td></tr><tr><td colspan="4" class="ket-k"><b>KETERANGAN :</b><br>${qaKeterangan(data.keterangan)}</td></tr></table><div class="city-date-k">TANGERANG, ${dl(data.tanggal_periksa)}</div><table class="sign-k"><tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr><tr class="sign-space-k"><td>${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td><td>${qaSignatureName(data.pemeriksa || data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td><td>${qaSignatureName(data.penyetuju || data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td></tr><tr class="role-k"><td>PETUGAS</td><td>PEMERIKSA</td><td>PENYETUJU</td></tr></table><div class="doc-code-k">STIS-CMFG4-05/R3</div></div>`;return;}
 
 // ================= FORM J (VERIFIKASI RADIUS GAUGE) =================
     if (String(data.format || '').toUpperCase() === 'J') {
@@ -2189,6 +2246,8 @@ html, body {
 
         const rowsJ = Array.isArray(data.hasil_array) ? data.hasil_array : [];
         const firstJ = rowsJ[0] || {};
+        const hasilJ = String(firstJ.hasil_verifikasi || '').toUpperCase();
+
         const bodyJ = rowsJ.map((r, i) => `
             <tr class="data-row-j">
                 <td>${i + 1}</td>
@@ -2272,7 +2331,7 @@ html, body {
                     <td>
                         <b>KETERANGAN :</b><br>
                         <div class="legend-j">&nbsp;&nbsp;&nbsp;&nbsp;O &nbsp;&nbsp;: OKE<br>&nbsp;&nbsp;&nbsp;&nbsp;X &nbsp;&nbsp;: TIDAK OKE/BAD</div>
-                        ${data.keterangan ? '<br>'+escJ(data.keterangan) : ''}
+                        ${qaKeterangan(data.keterangan) ? '<br>'+qaKeterangan(data.keterangan) : ''}
                     </td>
                 </tr>
             </table>
@@ -2428,7 +2487,7 @@ html, body {
                 </tbody>
             </table>
 
-            <table class="ket-h"><tr><td><b>KETERANGAN :</b><br>${escH(data.keterangan)}</td></tr></table>
+            <table class="ket-h"><tr><td><b>KETERANGAN :</b><br>${qaKeterangan(data.keterangan)}</td></tr></table>
             <div class="doc-h">STIS-CMFG4-05/R4</div>
         </div>`;
         return;
@@ -2540,7 +2599,7 @@ html, body {
             </table>
 
             <table class="ket-i">
-                <tr><td><b>KETERANGAN :</b><br>${escI(data.keterangan)}</td></tr>
+                <tr><td><b>KETERANGAN :</b><br>${qaKeterangan(data.keterangan)}</td></tr>
             </table>
             <div class="doc-code-i">STIS-CMFG4-06/R1</div>
         </div>`;
@@ -2557,6 +2616,7 @@ html, body {
             if (!value) return empty;
             return value.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
         };
+        const unitRawD = (v) => rawD(v).replace(/Ω/g, 'ohm').replace(/Ω/g, 'ohm');
         const unitD = (value) => {
             let unit = String(value ?? '').trim();
 
@@ -2585,6 +2645,8 @@ html, body {
             const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/);
             return m ? (m[3]+'-'+m[2]+'-'+m[1]) : htmlD(v);
         };
+        const suffixD = (v, suffix) => rawD(v) ? htmlD(v) + suffix : '///';
+
         const statusD = rawD(data.keputusan || data.status_final).toUpperCase();
         const keputusanD = (statusD === 'GOOD' || statusD === 'OK')
             ? 'OK'
@@ -2665,7 +2727,7 @@ html, body {
                 <tr><td>STANDAR UJI</td><td>${htmlD(data.standar_uji)}</td><td>STANDAR TOLERANSI</td><td>${htmlD(data.toleransi_global || data.toleransi)}</td></tr>
                 <tr><td>TRACEABILITY</td><td>${htmlD(data.traceability)}</td><td>KEPUTUSAN</td><td><b>${keputusanD}</b></td></tr>
                 <tr><td>SUHU RUANGAN</td><td>${htmlD(data.suhu)}</td><td>PERIKSA BERIKUTNYA</td><td>${dateD(data.jadwal_berikutnya || data.periksa_berikut)}</td></tr>
-                <tr><td>KETERANGAN :</td><td colspan="3" class="ket-d">${htmlD(data.keterangan, '')}</td></tr>
+                <tr><td>KETERANGAN :</td><td colspan="3" class="ket-d">${qaKeterangan(data.keterangan)}</td></tr>
             </table>
 
             <div class="city-date-d">TANGERANG, ${dateD(data.tanggal_periksa)}</div>
@@ -2767,7 +2829,7 @@ html, body {
                 <tr><td>STANDAR UJI</td><td>${escC(data.standar_uji)}</td><td>STANDAR TOLERANSI</td><td>${toleransiTextC}</td></tr>
                 <tr><td>TRACEABILITY</td><td>${escC(data.traceability)}</td><td>KEPUTUSAN</td><td class="${keputusanC === 'OK' ? 'ok-c' : 'bad-c'}">${keputusanC}</td></tr>
                 <tr><td>SUHU RUANGAN</td><td>${suhuC ? escC(suhuC) : diagC}</td><td>TGL PERIKSA BERIKUTNYA</td><td>${dateC(data.jadwal_berikutnya || data.periksa_berikut)}</td></tr>
-                <tr><td colspan="4" class="ket-c"><strong>KETERANGAN :</strong><br>${escC(data.keterangan)}</td></tr>
+                <tr><td colspan="4" class="ket-c"><strong>KETERANGAN :</strong><br>${qaKeterangan(data.keterangan)}</td></tr>
             </table>
 
             <div class="city-date-c">TANGERANG, ${dateC(data.tanggal_periksa)}</div>
@@ -2799,6 +2861,13 @@ html, body {
             const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/);
             if (!m) return escB(v);
             return m[3]+'-'+m[2]+'-'+m[1];
+        };
+        const dateLongB = (v) => {
+            if (!v) return '///';
+            const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!m) return escB(v);
+            const bulan=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+            return m[3]+' '+bulan[parseInt(m[2],10)-1]+' '+m[1];
         };
         const first = rows[0] || {};
         const statusFinal = String(data.keputusan || data.status_final || '').toUpperCase();
@@ -2887,7 +2956,7 @@ html, body {
                     <td class="d-label">TGL PERIKSA BERIKUTNYA</td><td class="d-value">${dateB(jadwal)}</td>
                 </tr>
                 <tr>
-                    <td colspan="4" class="ket-box"><strong>KETERANGAN :</strong><br>${escB(data.keterangan)}</td>
+                    <td colspan="4" class="ket-box"><strong>KETERANGAN :</strong><br>${qaKeterangan(data.keterangan)}</td>
                 </tr>
             </table>
 
@@ -3191,7 +3260,7 @@ html, body {
     <table class="footer-table">
         <tr>
             <th style="width:14%;">KETERANGAN</th>
-            <td>${val(keterangan)}</td>
+            <td>${qaKeterangan(keterangan)}</td>
         </tr>
     </table>
 
@@ -3997,7 +4066,7 @@ html, body {
                 </th>
 
                 <td>
-                    ${val(keterangan)}
+                    ${qaKeterangan(keterangan)}
                 </td>
 
             </tr>
@@ -4523,7 +4592,7 @@ html, body {
                             finalHtml += `
                             <tr>
                                 <td colspan="4" style="vertical-align:top; border-top: 1px solid #000; border-bottom: 1px solid #000; text-align:left; padding-left:5px;">KETERANGAN : <br>
-<span style="font-style:italic; word-wrap:break-word; word-break:break-word;">${data.keterangan || ''}</span>
+<span style="font-style:italic; word-wrap:break-word; word-break:break-word;">${qaKeterangan(data.keterangan)}</span>
                                 </td>
                             </tr>
                             <tr>

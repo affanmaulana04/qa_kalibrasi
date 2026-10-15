@@ -4,5 +4,6 @@
   include "inc/inc_koneksi.php";
   mysqli_query($konek,"UPDATE user SET online='N' WHERE uid='$id_pemakai'");
   session_destroy();
-  echo "<script>alert('Anda Telah Keluar Dari Sistem!'); window.location = 'index.php' </script>";
+  header('Location: index.php');
+  exit();
 ?>
