@@ -154,6 +154,7 @@ $can_penyetuju = $is_admin || strtoupper($rf['penyetuju']) === 'Y';
                             <li><a href="modul/tabel/pemakai.php">Data Pemakai Aplikasi</a></li>
                             <li><a href="modul/tabel/email_validasi.php">Konfigurasi Email Validasi</a></li>
                             <li><a href="modul/qa/tanggal_merah.php">Custom Tanggal Merah</a></li>
+                            <li><a href="modul/tabel/upload_master_csv.php">Upload Master Data CSV</a></li>
                         </ul>
                     </li>
                     <?php } ?>
@@ -170,6 +171,7 @@ $can_penyetuju = $is_admin || strtoupper($rf['penyetuju']) === 'Y';
                     <li><a href="#">Report</a>
                         <ul class="dropdown-menu">
                             <li><a href="modul/qa/laporan_bbrau.php">Laporan BBRAU</a></li>
+                            <li><a href="modul/qa/laporan_jadwal_bulanan.php">Laporan Jadwal Bulanan</a></li>
                         </ul>
                     </li>
                     <?php } ?>

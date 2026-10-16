@@ -1,10 +1,12 @@
 ﻿<?php
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 if (empty($_SESSION['login'])) {
     header('location: ../../logout.php');
     exit();
 }
 include "../../inc/inc_koneksi.php";
+$isMonthlyReport = isset($monthlyReportOptions);
+$isMonthlyPrint = $isMonthlyReport && $monthlyReportOptions['cetak'];
 $nama_petugas = isset($_SESSION['nama_lengkap']) && $_SESSION['nama_lengkap'] !== ''
     ? $_SESSION['nama_lengkap'] : ($_SESSION['userid'] ?? '');
 function h($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
@@ -23,6 +25,7 @@ function originalNoPartFromArchive($no) {
 }
 /* Semua tabel arsip QA dibuat seperti qa_part jika belum tersedia.
    Tidak memakai INFORMATION_SCHEMA/PREPARE agar aman untuk phpMyAdmin lokal. */
+if (!$isMonthlyReport) {
 foreach (['qa_alat_ng','qa_alat_rusak','qa_alat_discontinue','qa_alat_ditarik'] as $archiveTable) {
     @mysqli_query($konek, "CREATE TABLE IF NOT EXISTS `$archiveTable` LIKE `qa_part`");
 }
@@ -50,6 +53,7 @@ foreach (['qa_alat_ng','qa_alat_rusak','qa_alat_discontinue','qa_alat_ditarik'] 
     created_at DATETIME NOT NULL,
     INDEX idx_laporan (laporan_id)
 )");
+}
 // ------------------------ FILTER ------------------------
 $filter_seksi  = $_GET['seksi'] ?? 'ALL';
 $filter_status = $_GET['status'] ?? 'ALL';
@@ -59,6 +63,14 @@ $today = date('Y-m-d');
 $val_harian  = $_GET['tgl_harian'] ?? $today;
 $val_bulanan = $_GET['tgl_bulanan'] ?? date('Y-m');
 $val_tahunan = $_GET['tgl_tahunan'] ?? date('Y');
+if ($isMonthlyReport) {
+    $filter_seksi = $monthlyReportOptions['seksi'];
+    $filter_status = 'ALL';
+    $filter_waktu = 'bulanan';
+    $val_harian = $today;
+    $val_tahunan = (string)$monthlyReportOptions['tahun'];
+    $val_bulanan = sprintf('%04d-%02d', $monthlyReportOptions['tahun'], $monthlyReportOptions['bulan']);
+}
 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $val_harian)) $val_harian = $today;
 if (!preg_match('/^\d{4}-\d{2}$/', $val_bulanan)) $val_bulanan = date('Y-m');
 if (!preg_match('/^\d{4}$/', $val_tahunan)) $val_tahunan = date('Y');
@@ -127,13 +139,18 @@ $holidayDates = [
 // Data custom dengan tanggal yang sama akan memakai keterangan dari qa_tanggal_merah.
 $customHolidayStart = sprintf('%04d-%02d-01', $selectedYear, $selectedMonth);
 $customHolidayEnd = date('Y-m-t', strtotime($customHolidayStart));
-$qCustomHoliday = @mysqli_query(
+$qCustomHoliday = false;
+// Custom holidays are optional; report viewing must not create database tables.
+$customHolidayTable = mysqli_query($konek, "SHOW TABLES LIKE 'qa\\_tanggal\\_merah'");
+if ($customHolidayTable && mysqli_num_rows($customHolidayTable) > 0) {
+$qCustomHoliday = mysqli_query(
     $konek,
     "SELECT tanggal, keterangan
      FROM qa_tanggal_merah
      WHERE tanggal BETWEEN '$customHolidayStart' AND '$customHolidayEnd'
      ORDER BY tanggal ASC"
 );
+}
 if ($qCustomHoliday) {
     while ($customHoliday = mysqli_fetch_assoc($qCustomHoliday)) {
         $customDate = substr((string)($customHoliday['tanggal'] ?? ''), 0, 10);
@@ -434,6 +451,41 @@ foreach ($masterRows as $r) {
 usort($problemRows, function($a,$b){return strtoupper(($a['seksi_pemilik']??'').($a['nama_part']??'').($a['no_part']??''))<=>strtoupper(($b['seksi_pemilik']??'').($b['nama_part']??'').($b['no_part']??''));});
 // MASTER NON-OK V2 - TABEL ARSIP TAMPIL + TOTAL SELURUH ALAT NON-OK / BERMASALAH
 $totalAlatOff = count($problemRows);
+if ($isMonthlyReport) {
+    // Include sections present in legacy equipment data as well as the section master.
+    foreach ($masterByNo as $master) {
+        $section = trim((string)($master['seksi_pemilik'] ?? ''));
+        if ($section !== '' && !in_array($section, $seksiOptions, true)) $seksiOptions[] = $section;
+    }
+    natcasesort($seksiOptions);
+    if ($filter_seksi !== 'ALL' && !in_array($filter_seksi, $seksiOptions, true)) {
+        $monthlyReportOptions['errors'][] = 'Seksi tidak ditemukan. Pilih seksi yang tersedia.';
+    }
+    if ($monthlyReportOptions['errors']) {
+        http_response_code(400);
+        $reportRows = [];
+    }
+    $monthNames = [1=>'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    $monthlyTitle = $monthNames[$selectedMonth].' '.$selectedYear;
+    $monthlyPlanRows = [];
+    if (!$monthlyReportOptions['errors']) {
+        foreach ($planEvents as $event) {
+            if (substr($event['plan_date'], 0, 7) !== $val_bulanan) continue;
+            if ($filter_seksi !== 'ALL' && strcasecmp($event['seksi'], $filter_seksi) !== 0) continue;
+            $monthlyPlanRows[] = $event;
+        }
+    }
+    usort($monthlyPlanRows, function($a, $b) {
+        return strcasecmp($a['seksi'], $b['seksi'])
+            ?: strcmp($a['plan_date'], $b['plan_date'])
+            ?: strcasecmp($a['nama_part'], $b['nama_part'])
+            ?: strnatcasecmp($a['no_part'], $b['no_part']);
+    });
+    if ($isMonthlyPrint) {
+        require __DIR__ . '/cetak_jadwal_bulanan_format1.php';
+        return;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -441,7 +493,7 @@ $totalAlatOff = count($problemRows);
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>
-            Master Data | QA System
+            <?=$isMonthlyReport ? 'Laporan Jadwal Bulanan' : 'Master Data'?> | QA System
         </title>
         <link rel="icon" type="image/png" href="/qa_kalibrasi/images/favicon-toto-qa.png?v=1">
         <link href="../../css/bootstrap.min.css" rel="stylesheet">
@@ -451,10 +503,73 @@ $totalAlatOff = count($problemRows);
             .table-wrap{overflow:auto}.table-jadwal{width:100%;border-collapse:collapse;border:1px solid #aaa;font-family:Arial,sans-serif;font-size:12px}.table-jadwal th{border:1px solid #aaa;padding:7px;text-align:center;vertical-align:middle;background:#e2e6ea;color:#000;font-weight:bold;white-space:nowrap}.table-jadwal td{border:1px solid #aaa;padding:6px;vertical-align:middle;text-align:center;color:#000}.text-left{text-align:left!important}.tr-seksi{background:#d6d8db;font-weight:bold;border-top:2px solid #555}.r-row{background:#fff9e6}.h-row{background:#eef8ee}.b-row{background:#fdecec}.negative-row td{background:#f4cccc!important;color:#990000!important;font-weight:600}.holiday-col,.table-jadwal th.holiday-col,.table-jadwal td.holiday-col{background:rgba(220,53,69,.50)!important;color:#000!important}.mini-badge{font-size:10px;padding:3px 6px;border-radius:3px;display:inline-block}.btn-validate-report{margin-left:8px}.report-status{font-size:12px;font-weight:bold}.sticky-first{position:sticky;left:0;background:#fff;z-index:2}.sticky-second{position:sticky;left:42px;background:#fff;z-index:2}@media print{.no-print{display:none!important}.print-area{display:block!important}.table-jadwal{font-size:9px}.table-jadwal th,.table-jadwal td{padding:3px}}
             .print-area{display:none}
         </style>
+        <?php if ($isMonthlyReport): ?>
+        <style>
+            body{background:#f4f6f9}
+            .monthly-controls h3{margin-top:0;font-weight:700;color:#1e3f66}
+            .monthly-filters,.monthly-print-controls{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px}
+            .monthly-filters .form-group{margin:0;min-width:150px}
+            .monthly-filters .form-group:first-child{min-width:240px}
+            .monthly-filters .btn,.monthly-print-controls .btn{height:34px}
+            .monthly-print-controls{border-top:1px solid #e5e7eb;margin-top:18px;padding-top:16px}
+            #monthlyPrintHelp{margin:10px 0 0}
+            #monthlyFilterNotice{margin-top:10px}
+            .monthly-sheet{background:#fff;border:1px solid #ddd;border-radius:4px;padding:20px;margin-bottom:25px}
+            .monthly-heading{text-align:center;margin-bottom:18px}
+            .monthly-heading h2{font-size:20px;font-weight:700;margin:8px 0}
+            .monthly-sheet .table-jadwal{min-width:1200px}
+            .monthly-sheet [hidden]{display:none!important}
+            .monthly-format1 .section-table{width:100%;border-collapse:collapse;table-layout:fixed;margin-bottom:18px;font-size:14px}
+            .monthly-format1 .section-table th,.monthly-format1 .section-table td{border:1px solid #000;padding:10px 8px;vertical-align:middle;overflow-wrap:anywhere}
+            .monthly-format1 .section-table th{text-align:center;font-weight:normal;height:48px}
+            .monthly-format1 .section-table .section-label{text-align:left;height:auto;padding:8px}
+            .monthly-format1 .number,.monthly-format1 .planned-date{text-align:center}
+            .monthly-format1 .planned-date{font-weight:bold;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+            .monthly-format1 .planned-date.status-overdue{background:#f8d7da;color:#842029}
+            .monthly-format1 .planned-date.status-today{background:#cfe2ff;color:#084298}
+            .monthly-format1 .planned-date.status-scheduled{background:#d1e7dd;color:#0f5132}
+            .monthly-format1 .notice{padding:12px;border:1px solid #bbb}
+            .monthly-format1 .error{color:#a94442}
+            @media(max-width:600px){
+                .monthly-report-page>.container-fluid{padding:0 12px!important}
+                .monthly-filters .form-group,.monthly-filters .form-group:first-child{width:100%;min-width:0}
+                .monthly-print-controls>div{width:100%}
+                .monthly-sheet{padding:12px}
+            }
+            @page{size:A4 portrait;margin:12mm}
+            @media print{
+                body{padding:0!important;background:#fff;color:#000}
+                .no-print{display:none!important}
+                .monthly-report-page>.container-fluid{padding:0!important}
+                .monthly-sheet{padding:0;margin:0;border:0;border-radius:0}
+                .monthly-heading{margin-bottom:4mm;break-after:avoid}
+                .monthly-heading h2{font-size:12pt}
+                .monthly-heading p{margin:0 0 2mm}
+                .monthly-sheet .table-wrap{overflow:visible}
+                .monthly-sheet .table-jadwal{width:100%;min-width:0;table-layout:fixed;font-size:7pt}
+                .monthly-sheet .table-jadwal th,.monthly-sheet .table-jadwal td{padding:1mm .4mm;border-color:#555;white-space:normal;overflow-wrap:anywhere;font-size:7pt!important}
+                .monthly-sheet thead{display:table-header-group}
+                .monthly-sheet .table-jadwal thead tr:nth-child(2) th{font-size:6pt!important;white-space:nowrap}
+                .monthly-sheet tr{break-inside:avoid;page-break-inside:avoid}
+                .monthly-sheet .r-row,.monthly-sheet .tr-seksi{break-after:avoid;page-break-after:avoid}
+                .monthly-sheet .table-jadwal thead tr:first-child th:nth-child(1){width:3%}
+                .monthly-sheet .table-jadwal thead tr:first-child th:nth-child(2){width:14%}
+                .monthly-sheet .table-jadwal thead tr:first-child th:nth-child(3){width:7%}
+                .monthly-sheet .table-jadwal thead tr:first-child th:nth-child(4){width:3%}
+                .monthly-sheet .table-jadwal thead tr:first-child th:nth-last-child(2){width:5%}
+                .monthly-sheet .table-jadwal thead tr:first-child th:last-child{width:10%}
+                .monthly-sheet .r-row{background:#fff9e6!important}
+                .monthly-sheet .h-row{background:#eef8ee!important}
+                .monthly-sheet .tr-seksi{background:#d6d8db!important}
+                .monthly-sheet{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+            }
+        </style>
+        <?php endif; ?>
     </head>
     <body>
-        <div class="no-print">
-            <nav class="navbar navbar-default navbar-fixed-top">
+        <div class="<?=$isMonthlyReport ? 'monthly-report-page' : 'no-print'?>">
+            <?php if (!$isMonthlyPrint): ?>
+            <nav class="navbar navbar-default navbar-fixed-top no-print">
                 <div class="container-fluid">
                     <div class="navbar-header">
                         <a class="navbar-brand" href="../../media.php">
@@ -463,10 +578,10 @@ $totalAlatOff = count($problemRows);
                     </div>
                     <ul class="nav navbar-nav navbar-left">
                         <li>
-                            <a href="cek_alat.php">
+                            <a href="<?=$isMonthlyReport ? '../../media.php' : 'cek_alat.php'?>">
                                 <i class="fa fa-arrow-left">
                                 </i>
-                                Kembali ke Cek Alat
+                                <?=$isMonthlyReport ? 'Menu QA' : 'Kembali ke Cek Alat'?>
                             </a>
                         </li>
                     </ul>
@@ -481,7 +596,62 @@ $totalAlatOff = count($problemRows);
                     </ul>
                 </div>
             </nav>
+            <?php endif; ?>
             <div class="container-fluid" style="padding:0 25px">
+                <?php if ($isMonthlyReport): ?>
+                <div class="filter-box monthly-controls no-print">
+                    <h3>Laporan Jadwal Bulanan</h3>
+                    <p class="text-muted">Pilih seksi dan periode untuk menampilkan rencana kalibrasi.</p>
+                    <form method="get" id="formFilter" class="monthly-filters">
+                        <div class="form-group">
+                            <label for="monthlySection">Seksi</label>
+                            <select class="form-control" id="monthlySection" name="seksi">
+                                <option value="ALL">Semua Seksi</option>
+                                <?php foreach ($seksiOptions as $section): ?>
+                                <option value="<?=h($section)?>" <?=$filter_seksi===$section?'selected':''?>><?=h($section)?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="monthlyMonth">Bulan</label>
+                            <select class="form-control" id="monthlyMonth" name="bulan">
+                                <?php foreach ($monthNames as $number=>$monthName): ?>
+                                <option value="<?=$number?>" <?=$selectedMonth===$number?'selected':''?>><?=h($monthName)?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="monthlyYear">Tahun</label>
+                            <input type="number" class="form-control" id="monthlyYear" name="tahun" min="1900" max="9999" step="1" value="<?=$selectedYear?>" required>
+                        </div>
+                        <button class="btn btn-primary" type="submit"><i class="fa fa-search"></i> Tampilkan</button>
+                    </form>
+                    <div class="monthly-print-controls">
+                        <div>
+                            <label for="monthlyPrintFormat">Format tampilan &amp; cetak</label>
+                            <select class="form-control" id="monthlyPrintFormat" name="format" form="formFilter" aria-describedby="monthlyPrintHelp">
+                                <option value="1" <?=$monthlyReportOptions['format']==='1'?'selected':''?>>Format 1 — Daftar Rencana Kalibrasi</option>
+                                <option value="3" disabled>Format 3 — menunggu template</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-default" type="button" id="monthlyPrintButton" <?=!$monthlyPlanRows?'disabled':''?>><i class="fa fa-print"></i> Pratinjau &amp; Cetak</button>
+                    </div>
+                    <p id="monthlyPrintHelp" class="text-muted">Format 1 menampilkan daftar rencana kalibrasi per nomor alat. Format 3 menunggu template.</p>
+                    <?php if (!$monthlyPlanRows && !$monthlyReportOptions['errors']): ?>
+                    <p class="text-muted">Tidak ada rencana kalibrasi untuk Format 1 pada seksi dan periode ini.</p>
+                    <?php endif; ?>
+                    <p id="monthlyFilterNotice" class="text-warning" hidden>Filter berubah. Klik Tampilkan sebelum mencetak.</p>
+                    <?php if ($monthlyReportOptions['errors']): ?>
+                    <div class="alert alert-danger" role="alert"><?=h(implode(' ', $monthlyReportOptions['errors']))?></div>
+                    <?php endif; ?>
+                </div>
+                <section class="monthly-sheet" aria-label="Jadwal kalibrasi bulanan">
+                    <header class="monthly-heading">
+                        <div>PT. SURYA TOTO INDONESIA Tbk.</div>
+                        <h2>LAPORAN JADWAL KALIBRASI BULANAN</h2>
+                        <p><?=h($monthlyTitle)?> &middot; Seksi: <?=h($filter_seksi==='ALL'?'Semua Seksi':$filter_seksi)?></p>
+                    </header>
+                <?php else: ?>
                 <div class="filter-box">
                     <h4 style="margin-top:0;font-weight:bold">
                         <i class="fa fa-filter">
@@ -565,6 +735,7 @@ $totalAlatOff = count($problemRows);
                         </a>
                     </form>
                 </div>
+                <?php endif; ?>
                 <?php if($filter_waktu==='daftar'): ?>
                     <div class="table-wrap">
                         <table class="table-jadwal">
@@ -835,6 +1006,11 @@ $totalAlatOff = count($problemRows);
 </table>
 </div>
 <?php elseif($filter_waktu==='bulanan'): ?>
+    <?php if ($isMonthlyReport): ?>
+    <div id="monthlyFormat1" class="monthly-format1">
+        <?php require __DIR__ . '/jadwal_bulanan_format1_tabel.php'; ?>
+    </div>
+    <?php else: ?>
     <div class="filter-box">
         <b>
             JADWAL KALIBRASI BULANAN
@@ -948,6 +1124,7 @@ $totalAlatOff = count($problemRows);
     </b>
     = Aktual kalibrasi yang sudah dilakukan melalui Update Hasil Kalibrasi, tanpa menunggu validasi.
 </div>
+<?php endif; ?>
 <?php elseif($filter_waktu==='tahunan'): ?>
     <div class="filter-box">
         <b>
@@ -1040,10 +1217,34 @@ $totalAlatOff = count($problemRows);
     = Beda/terlewat = max(R-H, 0) pada bulan tersebut.
 </div>
 <?php endif; ?>
+<?php if ($isMonthlyReport): ?></section><?php endif; ?>
 </div>
 </div>
 <script src="../../js/jquery.js">
 </script>
+<?php if ($isMonthlyReport && !$isMonthlyPrint): ?>
+<script>
+(function(){
+    var form=document.getElementById('formFilter');
+    var printButton=document.getElementById('monthlyPrintButton');
+    var initialValues=$(form).find('[name]').serialize();
+    var formatSelect=document.getElementById('monthlyPrintFormat');
+    var hasData={'1':<?=!!$monthlyPlanRows?'true':'false'?>};
+    function updatePrintButton(){
+        var changed=$(form).find('[name]').serialize()!==initialValues;
+        printButton.disabled=changed || !hasData[formatSelect.value];
+        document.getElementById('monthlyFilterNotice').hidden=!changed;
+    }
+    $(form).on('input change',updatePrintButton);
+    $(formatSelect).on('change',updatePrintButton);
+    printButton.addEventListener('click',function(){
+        var url=<?=json_encode('laporan_jadwal_bulanan.php?'.http_build_query(['seksi'=>$filter_seksi,'bulan'=>$selectedMonth,'tahun'=>$selectedYear,'cetak'=>'1']), JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT)?>;
+        url+='&format='+encodeURIComponent(document.getElementById('monthlyPrintFormat').value);
+        window.open(url,'_blank','noopener');
+    });
+})();
+</script>
+<?php endif; ?>
 <script src="../../js/bootstrap.min.js">
 </script>
 <script>

@@ -1,5 +1,5 @@
 <?php
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -703,7 +703,7 @@ html, body {
 
 <script>
 (function () {
-    const raw = sessionStorage.getItem('cetak_data');
+    const raw = <?php if (isset($qaReportPayload)): ?><?=json_encode(json_encode($qaReportPayload, JSON_INVALID_UTF8_SUBSTITUTE), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE)?><?php else: ?>sessionStorage.getItem('cetak_data')<?php endif; ?>;
 
     if (!raw) {
         document.getElementById('report').innerHTML =

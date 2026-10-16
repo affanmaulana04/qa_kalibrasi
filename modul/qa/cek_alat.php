@@ -36,6 +36,20 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
         .input-group-lg > .form-control, .input-group-lg > .input-group-addon { height: 55px; font-size: 18px; }
         .btn-validasi { background-color: #1E3F66; color: white; font-weight: bold; height: 55px; font-size: 18px; }
         .btn-validasi:hover { background-color: #0d1e33; color: white; }
+        .navbar-default .navbar-nav > li > a.qa-report-button {
+            display:flex; align-items:center; gap:9px; margin:6px 10px;
+            padding:9px 16px; border:1px solid #174b87; border-radius:6px;
+            background:#1e5aa0; color:#fff; font-weight:bold;
+            box-shadow:0 3px 7px rgba(30,90,160,.22);
+        }
+        .navbar-default .navbar-nav > li > a.qa-report-button:hover,
+        .navbar-default .navbar-nav > li > a.qa-report-button:focus {
+            background:#174579; color:#fff;
+        }
+        .navbar-default .navbar-nav > li > a.qa-report-button:focus-visible {
+            outline:3px solid #1e5aa0; outline-offset:3px;
+        }
+        .qa-report-button .fa { font-size:18px; }
         .hidden-form-section { display: none; margin-top: 20px; text-align: left; border-top: 1px dashed #ccc; padding-top: 25px; }
         .table-custom th { background-color: #f8f9fa; color: #333; text-align: center; border-bottom: 2px solid #ddd !important; font-size: 13px;}
         .table-custom td { vertical-align: middle !important; text-align: center; font-size: 13px; white-space: nowrap; }
@@ -124,6 +138,7 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
             <div class="collapse navbar-collapse">
                 <ul class="nav navbar-nav navbar-left"><li><a href="../../media.php"><i class="fa fa-arrow-left"></i> Kembali ke Menu Utama</a></li></ul>
                 <ul class="nav navbar-nav navbar-right">
+                    <li><a href="laporan_hasil_kalibrasi.php" class="qa-report-button"><i class="fa fa-print" aria-hidden="true"></i> Laporan Kalibrasi Multi-Alat</a></li>
                     <li><a href="masterdata.php" style="padding-top: 10px; padding-bottom: 10px;"><button class="btn btn-default btn-sm" style="font-weight: bold; border: 1px solid #ccc; color:#333;"><i class="fa fa-database"></i> Master Data</button></a></li>
                     <li><a href="#"><span style='color: #1469EA; font-weight: bold;'><i class="fa fa-fw fa-user"></i> <?php echo $nama_petugas; ?></span></a></li>
                 </ul>
