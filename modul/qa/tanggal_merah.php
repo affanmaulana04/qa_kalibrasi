@@ -65,6 +65,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $action = strtolower(trim((string)($_POST['action'] ?? '')));
+
+    if ($action === 'save_bulk') {
+        $tanggalList = json_decode((string)($_POST['tanggal_list'] ?? '[]'), true);
+        if (!is_array($tanggalList) || empty($tanggalList)) {
+            echo json_encode(['status'=>'error','message'=>'Pilih minimal satu tanggal.']);
+            exit();
+        }
+
+        $tanggalList = array_values(array_unique(array_map('trim', $tanggalList)));
+        if (count($tanggalList) > 100) {
+            echo json_encode(['status'=>'error','message'=>'Maksimal 100 tanggal dalam sekali simpan.']);
+            exit();
+        }
+
+        $keterangan = trim((string)($_POST['keterangan'] ?? ''));
+        if ($keterangan === '') $keterangan = 'Tanggal Merah Perusahaan';
+        if (strlen($keterangan) > 150) $keterangan = substr($keterangan, 0, 150);
+        $ketEsc = esc($konek, $keterangan);
+        $userEsc = esc($konek, $nama_petugas !== '' ? $nama_petugas : $id_pemakai);
+        $saved = 0;
+
+        foreach ($tanggalList as $tanggalBulk) {
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $tanggalBulk) || strtotime($tanggalBulk) === false) continue;
+            $tanggalEsc = esc($konek, $tanggalBulk);
+            $sql = "INSERT INTO qa_tanggal_merah (tanggal,keterangan,created_by,created_at,updated_at)
+                    VALUES ('$tanggalEsc','$ketEsc','$userEsc',NOW(),NULL)
+                    ON DUPLICATE KEY UPDATE keterangan=VALUES(keterangan), updated_at=NOW()";
+            if (mysqli_query($konek, $sql)) $saved++;
+        }
+
+        if ($saved === 0) {
+            echo json_encode(['status'=>'error','message'=>'Tidak ada tanggal valid yang berhasil disimpan.']);
+            exit();
+        }
+        echo json_encode(['status'=>'success','message'=>$saved.' tanggal merah berhasil disimpan.']);
+        exit();
+    }
+
+    if ($action === 'delete_bulk') {
+        $tanggalList = json_decode((string)($_POST['tanggal_list'] ?? '[]'), true);
+        if (!is_array($tanggalList) || empty($tanggalList)) {
+            echo json_encode(['status'=>'error','message'=>'Pilih minimal satu tanggal merah yang akan dihapus.']);
+            exit();
+        }
+
+        $tanggalList = array_values(array_unique(array_map('trim', $tanggalList)));
+        if (count($tanggalList) > 100) {
+            echo json_encode(['status'=>'error','message'=>'Maksimal 100 tanggal dalam sekali hapus.']);
+            exit();
+        }
+
+        $deleted = 0;
+        foreach ($tanggalList as $tanggalBulk) {
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $tanggalBulk) || strtotime($tanggalBulk) === false) continue;
+            $tanggalEsc = esc($konek, $tanggalBulk);
+            if (mysqli_query($konek, "DELETE FROM qa_tanggal_merah WHERE tanggal='$tanggalEsc' LIMIT 1")) {
+                $deleted += mysqli_affected_rows($konek);
+            }
+        }
+
+        if ($deleted === 0) {
+            echo json_encode(['status'=>'error','message'=>'Tidak ada tanggal merah yang berhasil dihapus.']);
+            exit();
+        }
+        echo json_encode(['status'=>'success','message'=>$deleted.' tanggal merah berhasil dihapus.']);
+        exit();
+    }
+
     $tanggal = trim((string)($_POST['tanggal'] ?? ''));
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $tanggal) || strtotime($tanggal) === false) {
         echo json_encode(['status'=>'error','message'=>'Tanggal tidak valid.']);
@@ -147,7 +215,21 @@ $next = date('Y-m', strtotime($firstDate.' +1 month'));
         .holiday-cell .day-number{color:#8c1520}
         .holiday-label{display:block;margin-top:8px;font-size:11px;line-height:1.3;color:#7f101b;font-weight:bold;word-break:break-word}
         .holiday-check{position:absolute;right:8px;top:8px;color:#a31521;font-size:16px}
+        .selected-cell{background:rgba(51,122,183,.18)!important;box-shadow:inset 0 0 0 3px #337ab7}
+        .selected-cell .day-btn:hover{background:rgba(51,122,183,.18)!important}
+        .selected-check{position:absolute;right:8px;top:8px;color:#337ab7;font-size:16px;display:none}
+        .selected-cell .selected-check{display:block}
+        .delete-selected-cell{box-shadow:inset 0 0 0 3px #c9302c!important}
+        .delete-selected-check{position:absolute;right:8px;bottom:8px;color:#c9302c;font-size:16px;display:none}
+        .delete-selected-cell .delete-selected-check{display:block}
         .today-mark{box-shadow:inset 0 0 0 2px #337ab7}
+        .bulk-panel{margin:15px 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+        .bulk-panel .bulk-info{min-width:110px}
+        .bulk-panel .form-control{width:320px;max-width:100%}
+        .bulk-actions{display:flex;gap:8px;align-items:center}
+        .bulk-actions .btn{white-space:nowrap}
+        #btn-hapus-bulk.active{box-shadow:inset 0 0 0 2px #922b21}
+        .selected-list{font-size:12px;color:#666;width:100%;margin-top:2px;min-height:17px}
         .calendar-legend{margin-top:12px;color:#666;font-size:12px}
         .legend-box{display:inline-block;width:14px;height:14px;background:rgba(220,53,69,.50);border:1px solid rgba(220,53,69,.70);vertical-align:-2px;margin-right:5px}
         .toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:15px}
@@ -178,7 +260,7 @@ $next = date('Y-m', strtotime($firstDate.' +1 month'));
         <div class="toolbar">
             <div>
                 <h3><i class="fa fa-calendar"></i> Custom Tanggal Merah Perusahaan</h3>
-                <div class="text-muted">Klik tanggal untuk menandai / mengubah / menghapus tanggal merah.</div>
+                <div class="text-muted">Pilih tanggal pada kalender. Gunakan Simpan untuk tanggal baru atau Hapus untuk memilih beberapa tanggal merah yang sudah tersimpan.</div>
             </div>
             <div class="form-inline">
                 <a class="btn btn-default" href="?bulan=<?=h($prev)?>"><i class="fa fa-chevron-left"></i></a>
@@ -188,6 +270,18 @@ $next = date('Y-m', strtotime($firstDate.' +1 month'));
         </div>
 
         <h4 class="text-center" style="font-weight:bold;margin:18px 0"><?=h(strtoupper($namaBulan[$mon].' '.$year))?></h4>
+
+        <div class="bulk-panel">
+            <div class="bulk-info"><b><span id="selected-count">0</span> tanggal dipilih</b></div>
+            <input type="text" id="bulk-keterangan" maxlength="150" class="form-control" placeholder="Keterangan libur, contoh: Libur Idul Fitri">
+            <div class="bulk-actions">
+                <button type="button" class="btn btn-primary" id="btn-simpan-bulk" disabled><i class="fa fa-save"></i> Simpan</button>
+                <button type="button" class="btn btn-danger" id="btn-hapus-bulk"><i class="fa fa-trash"></i> Hapus <span id="delete-selected-count"></span></button>
+            </div>
+            <div class="selected-list" id="selected-list">Belum ada tanggal yang dipilih.</div>
+            <div class="selected-list" id="delete-selected-list" style="display:none"></div>
+        </div>
+
         <table class="calendar">
             <thead><tr><th>SEN</th><th>SEL</th><th>RAB</th><th>KAM</th><th>JUM</th><th>SAB</th><th>MIN</th></tr></thead>
             <tbody>
@@ -211,6 +305,8 @@ $next = date('Y-m', strtotime($firstDate.' +1 month'));
                     echo '<td class="'.h(implode(' ',$classes)).'">';
                     echo '<button type="button" class="day-btn js-day" data-date="'.h($date).'" data-keterangan="'.h($ket).'" data-holiday="'.($isHoliday?'1':'0').'">';
                     echo '<span class="day-number">'.$day.'</span>';
+                    echo '<i class="fa fa-check-circle selected-check"></i>';
+                    echo '<i class="fa fa-trash delete-selected-check"></i>';
                     if($isHoliday){echo '<i class="fa fa-check-circle holiday-check"></i><span class="holiday-label">'.h($ket).'</span>';}
                     elseif($isWeekend){echo '<span class="holiday-label" style="font-weight:normal;color:#999">Weekend</span>';}
                     echo '</button></td>';
@@ -221,7 +317,7 @@ $next = date('Y-m', strtotime($firstDate.' +1 month'));
             ?>
             </tbody>
         </table>
-        <div class="calendar-legend"><span class="legend-box"></span> Tanggal merah perusahaan. Sabtu/Minggu hari libur otomatis di Jadwal, tidak perlu dipilih di halaman ini</div>
+        <div class="calendar-legend"><span class="legend-box"></span> Tanggal merah perusahaan. Sabtu/Minggu tetap dianggap hari libur otomatis di Jadwal Kalibrasi Bulanan, walaupun tidak perlu dipilih di halaman ini.</div>
     </div>
 
     <div class="holiday-list panel panel-default">
@@ -256,7 +352,7 @@ $next = date('Y-m', strtotime($firstDate.' +1 month'));
             <div class="modal-body">
                 <div class="form-group"><label>Tanggal</label><input type="text" id="modal-tanggal-view" class="form-control" readonly></div>
                 <div class="form-group"><label>Nama / Keterangan Libur</label><input type="text" id="modal-keterangan" maxlength="150" class="form-control" placeholder="Contoh: Libur Idul Fitri / Cuti Bersama Perusahaan"></div>
-                <div class="alert alert-info" style="margin-bottom:0">Tanggal yang disimpan akan otomatis diberi warna merah transparan pada kolom tanggal di Jadwal.</div>
+                <div class="alert alert-info" style="margin-bottom:0">Tanggal yang disimpan di sini akan otomatis diberi warna merah transparan pada kolom tanggal di Jadwal Kalibrasi Bulanan.</div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-danger pull-left" id="btn-hapus"><i class="fa fa-trash"></i> Hapus Tanggal Merah</button>
@@ -285,21 +381,102 @@ $next = date('Y-m', strtotime($firstDate.' +1 month'));
     </div>
 </div>
 
+<div class="modal fade" id="bulkDeleteConfirmModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-sm" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+                <h4 class="modal-title"><i class="fa fa-trash"></i> Konfirmasi Hapus Banyak</h4>
+            </div>
+            <div class="modal-body">
+                <p style="margin:0">Hapus <b><span id="bulk-delete-count-view">0</span> tanggal merah</b> yang sudah dipilih?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-danger" id="btn-konfirmasi-hapus-bulk"><i class="fa fa-trash"></i> Ya, Hapus Semua</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="../../js/jquery.js"></script>
 <script src="../../js/bootstrap.min.js"></script>
 <script>
 (function(){
     var selectedDate='';
+    var selectedDates={};
+    var deleteMode=false;
+    var deleteSelectedDates={};
     var csrf=<?=json_encode($csrf)?>;
     var tableReady=<?= $tableReady ? 'true' : 'false' ?>;
 
     $('#pilih-bulan').on('change',function(){ if(this.value) window.location.href='?bulan='+encodeURIComponent(this.value); });
+
+    function refreshBulkSelection(){
+        var dates=Object.keys(selectedDates).sort();
+        $('#selected-count').text(dates.length);
+        $('#btn-simpan-bulk').prop('disabled',dates.length===0);
+        $('#selected-list').text(dates.length ? dates.map(function(d){return d.split('-').reverse().join('-');}).join(', ') : 'Belum ada tanggal yang dipilih.');
+    }
+
+    function toggleCalendarDate($button,date){
+        var $cell=$button.closest('td');
+        if(selectedDates[date]){
+            delete selectedDates[date];
+            $cell.removeClass('selected-cell');
+        }else{
+            selectedDates[date]=true;
+            $cell.addClass('selected-cell');
+        }
+        refreshBulkSelection();
+    }
+
+    function refreshDeleteSelection(){
+        var dates=Object.keys(deleteSelectedDates).sort();
+        $('#delete-selected-count').text(dates.length);
+        $('#delete-selected-list').text(dates.length ? dates.map(function(d){return d.split('-').reverse().join('-');}).join(', ') : 'Belum ada tanggal merah yang dipilih untuk dihapus.');
+    }
+
+    function toggleDeleteCalendarDate($button,date){
+        var $cell=$button.closest('td');
+        if(deleteSelectedDates[date]){
+            delete deleteSelectedDates[date];
+            $cell.removeClass('delete-selected-cell');
+        }else{
+            deleteSelectedDates[date]=true;
+            $cell.addClass('delete-selected-cell');
+        }
+        refreshDeleteSelection();
+    }
+
+    function stopDeleteMode(){
+        deleteMode=false;
+        deleteSelectedDates={};
+        $('.calendar td').removeClass('delete-selected-cell');
+        $('#btn-hapus-bulk').removeClass('active');
+        $('#delete-selected-count').text('');
+        $('#delete-selected-list').hide().text('');
+        $('#selected-list,#bulk-keterangan').show();
+        refreshBulkSelection();
+    }
 
     $(document).on('click','.js-day',function(){
         if(!tableReady){ alert('Tabel qa_tanggal_merah belum tersedia. Import qa_tanggal_merah.sql terlebih dahulu.'); return; }
         selectedDate=String($(this).data('date')||'');
         var ket=String($(this).attr('data-keterangan')||'');
         var isHoliday=String($(this).attr('data-holiday')||'0')==='1';
+        var fromCalendar=$(this).closest('.calendar').length>0;
+
+        if(fromCalendar && deleteMode){
+            if(isHoliday) toggleDeleteCalendarDate($(this),selectedDate);
+            return;
+        }
+
+        if(fromCalendar && !isHoliday){
+            toggleCalendarDate($(this),selectedDate);
+            return;
+        }
+
         $('#modal-tanggal-view').val(selectedDate.split('-').reverse().join('-'));
         $('#modal-keterangan').val(ket);
         $('#btn-hapus').toggle(isHoliday);
@@ -321,6 +498,62 @@ $next = date('Y-m', strtotime($firstDate.' +1 month'));
             error:function(xhr){ btns.prop('disabled',false); alert(xhr.responseText||'Request gagal.'); }
         });
     }
+
+    $('#btn-simpan-bulk').on('click',function(){
+        var dates=Object.keys(selectedDates).sort();
+        if(!dates.length) return;
+        var ket=$('#bulk-keterangan').val().trim();
+        if(!ket) ket='Tanggal Merah Perusahaan';
+        var $btn=$(this).prop('disabled',true);
+        $.ajax({
+            url:'tanggal_merah.php?bulan='+encodeURIComponent($('#pilih-bulan').val()),
+            type:'POST',dataType:'json',
+            data:{action:'save_bulk',tanggal_list:JSON.stringify(dates),keterangan:ket,csrf:csrf},
+            success:function(res){
+                if(res && res.status==='success') location.reload();
+                else{ $btn.prop('disabled',false); alert((res&&res.message)||'Gagal menyimpan tanggal merah.'); }
+            },
+            error:function(xhr){ $btn.prop('disabled',false); alert(xhr.responseText||'Request gagal.'); }
+        });
+    });
+
+    $('#btn-hapus-bulk').on('click',function(){
+        if(!deleteMode){
+            deleteMode=true;
+            selectedDates={};
+            $('.calendar td').removeClass('selected-cell');
+            refreshBulkSelection();
+            $('#btn-hapus-bulk').addClass('active');
+            $('#selected-list,#bulk-keterangan').hide();
+            $('#delete-selected-list').show();
+            refreshDeleteSelection();
+            return;
+        }
+        var dates=Object.keys(deleteSelectedDates).sort();
+        if(!dates.length){ stopDeleteMode(); return; }
+        $('#bulk-delete-count-view').text(dates.length);
+        $('#bulkDeleteConfirmModal').modal('show');
+    });
+
+    $('#btn-konfirmasi-hapus-bulk').on('click',function(){
+        var dates=Object.keys(deleteSelectedDates).sort();
+        if(!dates.length) return;
+        var $btn=$(this).prop('disabled',true);
+        $.ajax({
+            url:'tanggal_merah.php?bulan='+encodeURIComponent($('#pilih-bulan').val()),
+            type:'POST',dataType:'json',
+            data:{action:'delete_bulk',tanggal_list:JSON.stringify(dates),csrf:csrf},
+            success:function(res){
+                if(res && res.status==='success') location.reload();
+                else{ $btn.prop('disabled',false); $('#bulkDeleteConfirmModal').modal('hide'); alert((res&&res.message)||'Gagal menghapus tanggal merah.'); }
+            },
+            error:function(xhr){ $btn.prop('disabled',false); $('#bulkDeleteConfirmModal').modal('hide'); alert(xhr.responseText||'Request gagal.'); }
+        });
+    });
+
+    $('#bulkDeleteConfirmModal').on('hidden.bs.modal',function(){
+        $('#btn-konfirmasi-hapus-bulk').prop('disabled',false);
+    });
 
     $('#btn-simpan').on('click',function(){
         var ket=$('#modal-keterangan').val().trim();

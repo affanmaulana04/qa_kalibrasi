@@ -1,5 +1,5 @@
 <?php
-if (session_status() !== PHP_SESSION_ACTIVE) session_start();
+session_start();
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -703,7 +703,7 @@ html, body {
 
 <script>
 (function () {
-    const raw = <?php if (isset($qaReportPayload)): ?><?=json_encode(json_encode($qaReportPayload, JSON_INVALID_UTF8_SUBSTITUTE), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE)?><?php else: ?>sessionStorage.getItem('cetak_data')<?php endif; ?>;
+    const raw = sessionStorage.getItem('cetak_data');
 
     if (!raw) {
         document.getElementById('report').innerHTML =
@@ -766,6 +766,37 @@ html, body {
      * menerima literal "undefined".
      * ================================================================ */
     data = (data && typeof data === 'object') ? data : {};
+
+    // Judul laporan mengikuti jenis laporan yang dipilih saat Update Hasil.
+    // Layout tiap format tetap dipertahankan; hanya judul utama yang dinormalisasi.
+    const qaJenisLaporan = (() => {
+        let jenis = String(data.jenis_laporan || '').trim().toLowerCase();
+        if (jenis !== 'periksa' && jenis !== 'kalibrasi') {
+            const noLap = String(data.no_laporan || '').toLowerCase();
+            if (noLap.indexOf('/lap/kalibrasi/') !== -1) jenis = 'kalibrasi';
+            else if (noLap.indexOf('/lap/periksa/') !== -1 || noLap.indexOf('/lap/pemeriksaan/') !== -1) jenis = 'periksa';
+        }
+        return jenis;
+    })();
+    const qaJudulLaporan = qaJenisLaporan === 'kalibrasi' ? 'LAPORAN KALIBRASI' : (qaJenisLaporan === 'periksa' ? 'LAPORAN PEMERIKSAAN' : '');
+    if (qaJudulLaporan) {
+        const reportRoot = document.getElementById('report');
+        const titleTexts = ['LAPORAN KALIBRASI','LAPORAN PEMERIKSAAN','LAPORAN PEMERIKSAAN GAUGE','LAPORAN VERIFIKASI'];
+        const applyJenisTitle = function(root) {
+            if (!root || root.nodeType !== 1) return;
+            const nodes = [root].concat(Array.from(root.querySelectorAll('div,td,th')));
+            nodes.forEach(function(el) {
+                if (el.children.length) return;
+                const text = String(el.textContent || '').replace(/\s+/g,' ').trim().toUpperCase();
+                if (titleTexts.indexOf(text) !== -1) el.textContent = qaJudulLaporan;
+            });
+        };
+        new MutationObserver(function(mutations) {
+            mutations.forEach(function(m) {
+                m.addedNodes.forEach(function(node) { if (node.nodeType === 1) applyJenisTitle(node); });
+            });
+        }).observe(reportRoot, {childList:true, subtree:true});
+    }
 
     const isBlank = (v) => v === undefined || v === null || String(v).trim() === '';
     const pick = (...vals) => {
