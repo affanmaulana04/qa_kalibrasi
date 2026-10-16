@@ -1,0 +1,163 @@
+[2026-10-12 11:46:38] ============================================================
+[2026-10-12 11:46:38] DAILY VALIDASI START
+[2026-10-12 11:46:38] PENDING | pemeriksa=0 | penyetuju=20
+[2026-10-12 11:46:38] SKIP PEMERIKSA | tidak ada transaksi menunggu pemeriksa.
+[2026-10-12 11:48:37] ============================================================
+[2026-10-12 11:48:37] DAILY VALIDASI START
+[2026-10-12 11:48:37] PENDING | pemeriksa=0 | penyetuju=20
+[2026-10-12 11:48:37] SKIP PEMERIKSA | tidak ada transaksi menunggu pemeriksa.
+[2026-10-12 11:48:37] KIRIM PENYETUJU | uid=admin | email=affanmaulana041@gmail.co.id | pending=20 | token_id=11
+[2026-10-12 11:48:42] BERHASIL PENYETUJU | affanmaulana041@gmail.co.id | token_id=11
+[2026-10-12 11:48:42] KIRIM PENYETUJU | uid=qa_penyetuju | email=ridhoahmadfauzan38@gmail.com | pending=20 | token_id=12
+[2026-10-12 11:48:46] BERHASIL PENYETUJU | ridhoahmadfauzan38@gmail.com | token_id=12
+[2026-10-12 11:48:46] SELESAI | proses=2 | email_terkirim=2 | cc_terkirim=0 | pending_pemeriksa=0 | pending_penyetuju=20
+[2026-10-12 11:48:46] DAILY VALIDASI FINISH
+[2026-10-12 11:48:46] ============================================================
+[2026-10-12 13:20:00] ============================================================
+[2026-10-12 13:20:00] DAILY VALIDASI START
+[2026-10-12 13:20:00] PENDING | pemeriksa=0 | penyetuju=20
+[2026-10-12 13:20:00] SKIP PEMERIKSA | tidak ada transaksi menunggu pemeriksa.
+[2026-10-12 13:20:00] KIRIM PENYETUJU | uid=admin | email=affanmaulana041@gmail.co.id | pending=20 | token_id=13
+[2026-10-12 13:20:00] GAGAL PENYETUJU | affanmaulana041@gmail.co.id | token dicabut | QA_SMTP_PASSWORD belum dikonfigurasi.
+[2026-10-12 13:20:00] KIRIM PENYETUJU | uid=qa_penyetuju | email=ridhoahmadfauzan38@gmail.com | pending=20 | token_id=14
+[2026-10-12 13:20:00] GAGAL PENYETUJU | ridhoahmadfauzan38@gmail.com | token dicabut | QA_SMTP_PASSWORD belum dikonfigurasi.
+[2026-10-12 13:20:00] SELESAI | proses=2 | email_terkirim=0 | cc_terkirim=0 | pending_pemeriksa=0 | pending_penyetuju=20
+[2026-10-12 13:20:00] DAILY VALIDASI FINISH
+[2026-10-12 13:20:00] ============================================================
+[2026-10-12 13:20:26] ============================================================
+[2026-10-12 13:20:26] DAILY VALIDASI START
+[2026-10-12 13:20:26] PENDING | pemeriksa=0 | penyetuju=20
+[2026-10-12 13:20:26] SKIP PEMERIKSA | tidak ada transaksi menunggu pemeriksa.
+[2026-10-12 13:20:26] KIRIM PENYETUJU | uid=admin | email=affanmaulana041@gmail.co.id | pending=20 | token_id=15
+[2026-10-12 13:20:26] GAGAL PENYETUJU | affanmaulana041@gmail.co.id | token dicabut | QA_SMTP_PASSWORD belum dikonfigurasi.
+[2026-10-12 13:20:26] KIRIM PENYETUJU | uid=qa_penyetuju | email=ridhoahmadfauzan38@gmail.com | pending=20 | token_id=16
+[2026-10-12 13:20:26] GAGAL PENYETUJU | ridhoahmadfauzan38@gmail.com | token dicabut | QA_SMTP_PASSWORD belum dikonfigurasi.
+[2026-10-12 13:20:26] SELESAI | proses=2 | email_terkirim=0 | cc_terkirim=0 | pending_pemeriksa=0 | pending_penyetuju=20
+[2026-10-12 13:20:26] DAILY VALIDASI FINISH
+[2026-10-12 13:20:26] ============================================================
+[2026-10-12 13:21:16] ============================================================
+[2026-10-12 13:21:16] DAILY VALIDASI START
+[2026-10-12 13:21:16] PENDING | pemeriksa=0 | penyetuju=20
+[2026-10-12 13:21:16] SKIP PEMERIKSA | tidak ada transaksi menunggu pemeriksa.
+[2026-10-12 13:21:16] KIRIM PENYETUJU | uid=admin | email=affanmaulana041@gmail.co.id | pending=20 | token_id=17
+[2026-10-12 13:21:16] GAGAL PENYETUJU | affanmaulana041@gmail.co.id | token dicabut | QA_SMTP_PASSWORD belum dikonfigurasi.
+[2026-10-12 13:21:16] KIRIM PENYETUJU | uid=qa_penyetuju | email=ridhoahmadfauzan38@gmail.com | pending=20 | token_id=18
+[2026-10-12 13:21:16] GAGAL PENYETUJU | ridhoahmadfauzan38@gmail.com | token dicabut | QA_SMTP_PASSWORD belum dikonfigurasi.
+[2026-10-12 13:21:16] SELESAI | proses=2 | email_terkirim=0 | cc_terkirim=0 | pending_pemeriksa=0 | pending_penyetuju=20
+[2026-10-12 13:21:16] DAILY VALIDASI FINISH
+[2026-10-12 13:21:16] ============================================================
+[2026-10-12 13:25:23] ============================================================
+[2026-10-12 13:25:23] DAILY VALIDASI START
+[2026-10-12 13:25:23] PENDING | pemeriksa=0 | penyetuju=20
+[2026-10-12 13:25:23] SKIP PEMERIKSA | tidak ada transaksi menunggu pemeriksa.
+[2026-10-12 13:25:23] KIRIM PENYETUJU | uid=admin | email=affanmaulana041@gmail.co.id | pending=20 | token_id=19
+[2026-10-12 13:25:23] GAGAL PENYETUJU | affanmaulana041@gmail.co.id | token dicabut | QA_SMTP_PASSWORD belum dikonfigurasi.
+[2026-10-12 13:25:23] KIRIM PENYETUJU | uid=qa_penyetuju | email=ridhoahmadfauzan38@gmail.com | pending=20 | token_id=20
+[2026-10-12 13:25:23] GAGAL PENYETUJU | ridhoahmadfauzan38@gmail.com | token dicabut | QA_SMTP_PASSWORD belum dikonfigurasi.
+[2026-10-12 13:25:23] SELESAI | proses=2 | email_terkirim=0 | cc_terkirim=0 | pending_pemeriksa=0 | pending_penyetuju=20
+[2026-10-12 13:25:23] DAILY VALIDASI FINISH
+[2026-10-12 13:25:23] ============================================================
+[2026-10-12 13:41:08] ============================================================
+[2026-10-12 13:41:08] DAILY VALIDASI START
+[2026-10-12 13:41:08] PENDING | pemeriksa=0 | penyetuju=20
+[2026-10-12 13:41:08] SKIP PEMERIKSA | tidak ada transaksi menunggu pemeriksa.
+[2026-10-12 13:41:08] KIRIM PENYETUJU | uid=admin | email=affanmaulana041@gmail.co.id | pending=20 | token_id=21
+[2026-10-12 13:41:08] GAGAL PENYETUJU | affanmaulana041@gmail.co.id | token dicabut | QA_SMTP_PASSWORD belum dikonfigurasi.
+[2026-10-12 13:41:08] KIRIM PENYETUJU | uid=qa_penyetuju | email=ridhoahmadfauzan38@gmail.com | pending=20 | token_id=22
+[2026-10-12 13:41:08] GAGAL PENYETUJU | ridhoahmadfauzan38@gmail.com | token dicabut | QA_SMTP_PASSWORD belum dikonfigurasi.
+[2026-10-12 13:41:08] SELESAI | proses=2 | email_terkirim=0 | cc_terkirim=0 | pending_pemeriksa=0 | pending_penyetuju=20
+[2026-10-12 13:41:08] DAILY VALIDASI FINISH
+[2026-10-12 13:41:08] ============================================================
+[2026-10-12 13:42:33] ============================================================
+[2026-10-12 13:42:33] DAILY VALIDASI START
+[2026-10-12 13:42:33] PENDING | pemeriksa=0 | penyetuju=20
+[2026-10-12 13:42:33] SKIP PEMERIKSA | tidak ada transaksi menunggu pemeriksa.
+[2026-10-12 13:42:33] KIRIM PENYETUJU | uid=admin | email=affanmaulana041@gmail.co.id | pending=20 | token_id=23
+[2026-10-12 13:42:33] GAGAL PENYETUJU | affanmaulana041@gmail.co.id | token dicabut | QA_SMTP_PASSWORD belum dikonfigurasi.
+[2026-10-12 13:42:33] KIRIM PENYETUJU | uid=qa_penyetuju | email=ridhoahmadfauzan38@gmail.com | pending=20 | token_id=24
+[2026-10-12 13:42:33] GAGAL PENYETUJU | ridhoahmadfauzan38@gmail.com | token dicabut | QA_SMTP_PASSWORD belum dikonfigurasi.
+[2026-10-12 13:42:33] SELESAI | proses=2 | email_terkirim=0 | cc_terkirim=0 | pending_pemeriksa=0 | pending_penyetuju=20
+[2026-10-12 13:42:33] DAILY VALIDASI FINISH
+[2026-10-12 13:42:33] ============================================================
+[2026-10-12 13:45:24] ============================================================
+[2026-10-12 13:45:24] DAILY VALIDASI START
+[2026-10-12 13:45:24] PENDING | pemeriksa=0 | penyetuju=20
+[2026-10-12 13:45:24] SKIP PEMERIKSA | tidak ada transaksi menunggu pemeriksa.
+[2026-10-12 13:45:24] KIRIM PENYETUJU | uid=admin | email=affanmaulana041@gmail.co.id | pending=20 | token_id=25
+[2026-10-12 13:45:24] GAGAL PENYETUJU | affanmaulana041@gmail.co.id | token dicabut | QA_SMTP_PASSWORD belum dikonfigurasi.
+[2026-10-12 13:45:24] KIRIM PENYETUJU | uid=qa_penyetuju | email=ridhoahmadfauzan38@gmail.com | pending=20 | token_id=26
+[2026-10-12 13:45:24] GAGAL PENYETUJU | ridhoahmadfauzan38@gmail.com | token dicabut | QA_SMTP_PASSWORD belum dikonfigurasi.
+[2026-10-12 13:45:24] SELESAI | proses=2 | email_terkirim=0 | cc_terkirim=0 | pending_pemeriksa=0 | pending_penyetuju=20
+[2026-10-12 13:45:24] DAILY VALIDASI FINISH
+[2026-10-12 13:45:24] ============================================================
+[2026-10-12 13:50:27] ============================================================
+[2026-10-12 13:50:27] DAILY VALIDASI START
+[2026-10-12 13:50:27] PENDING | pemeriksa=0 | penyetuju=20
+[2026-10-12 13:50:27] SKIP PEMERIKSA | tidak ada transaksi menunggu pemeriksa.
+[2026-10-12 13:50:27] KIRIM PENYETUJU | uid=admin | email=affanmaulana041@gmail.co.id | pending=20 | token_id=27
+[2026-10-12 13:50:29] GAGAL PENYETUJU | affanmaulana041@gmail.co.id | token dicabut | SMTP Error: Could not authenticate. SMTP server error: QUIT command failed
+[2026-10-12 13:50:29] KIRIM PENYETUJU | uid=qa_penyetuju | email=ridhoahmadfauzan38@gmail.com | pending=20 | token_id=28
+[2026-10-12 13:50:33] GAGAL PENYETUJU | ridhoahmadfauzan38@gmail.com | token dicabut | SMTP Error: Could not authenticate. SMTP server error: QUIT command failed
+[2026-10-12 13:50:33] SELESAI | proses=2 | email_terkirim=0 | cc_terkirim=0 | pending_pemeriksa=0 | pending_penyetuju=20
+[2026-10-12 13:50:33] DAILY VALIDASI FINISH
+[2026-10-12 13:50:33] ============================================================
+[2026-10-12 13:56:29] ============================================================
+[2026-10-12 13:56:29] DAILY VALIDASI START
+[2026-10-12 13:56:29] PENDING | pemeriksa=0 | penyetuju=20
+[2026-10-12 13:56:29] SKIP PEMERIKSA | tidak ada transaksi menunggu pemeriksa.
+[2026-10-12 13:56:29] KIRIM PENYETUJU | uid=admin | email=affanmaulana041@gmail.co.id | pending=20 | token_id=29
+[2026-10-12 13:56:32] GAGAL PENYETUJU | affanmaulana041@gmail.co.id | token dicabut | SMTP Error: Could not authenticate. SMTP server error: QUIT command failed
+[2026-10-12 13:56:32] KIRIM PENYETUJU | uid=qa_penyetuju | email=ridhoahmadfauzan38@gmail.com | pending=20 | token_id=30
+[2026-10-12 13:56:35] GAGAL PENYETUJU | ridhoahmadfauzan38@gmail.com | token dicabut | SMTP Error: Could not authenticate. SMTP server error: QUIT command failed
+[2026-10-12 13:56:35] SELESAI | proses=2 | email_terkirim=0 | cc_terkirim=0 | pending_pemeriksa=0 | pending_penyetuju=20
+[2026-10-12 13:56:35] DAILY VALIDASI FINISH
+[2026-10-12 13:56:35] ============================================================
+[2026-10-12 14:02:38] ============================================================
+[2026-10-12 14:02:38] DAILY VALIDASI START
+[2026-10-12 14:02:38] PENDING | pemeriksa=0 | penyetuju=20
+[2026-10-12 14:02:38] SKIP PEMERIKSA | tidak ada transaksi menunggu pemeriksa.
+[2026-10-12 14:02:38] KIRIM PENYETUJU | uid=admin | email=affanmaulana041@gmail.co.id | pending=20 | token_id=31
+[2026-10-12 14:02:43] BERHASIL PENYETUJU | affanmaulana041@gmail.co.id | token_id=31
+[2026-10-12 14:02:43] KIRIM PENYETUJU | uid=qa_penyetuju | email=ridhoahmadfauzan38@gmail.com | pending=20 | token_id=32
+[2026-10-12 14:02:47] BERHASIL PENYETUJU | ridhoahmadfauzan38@gmail.com | token_id=32
+[2026-10-12 14:02:47] SELESAI | proses=2 | email_terkirim=2 | cc_terkirim=0 | pending_pemeriksa=0 | pending_penyetuju=20
+[2026-10-12 14:02:47] DAILY VALIDASI FINISH
+[2026-10-12 14:02:47] ============================================================
+[2026-10-12 14:03:17] ============================================================
+[2026-10-12 14:03:17] DAILY VALIDASI START
+[2026-10-12 14:03:17] PENDING | pemeriksa=0 | penyetuju=20
+[2026-10-12 14:03:17] SKIP PEMERIKSA | tidak ada transaksi menunggu pemeriksa.
+[2026-10-12 14:03:17] KIRIM PENYETUJU | uid=admin | email=affanmaulana041@gmail.co.id | pending=20 | token_id=33
+[2026-10-12 14:03:23] BERHASIL PENYETUJU | affanmaulana041@gmail.co.id | token_id=33
+[2026-10-12 14:03:23] KIRIM PENYETUJU | uid=qa_penyetuju | email=ridhoahmadfauzan38@gmail.com | pending=20 | token_id=34
+[2026-10-12 14:03:28] BERHASIL PENYETUJU | ridhoahmadfauzan38@gmail.com | token_id=34
+[2026-10-12 14:03:28] SELESAI | proses=2 | email_terkirim=2 | cc_terkirim=0 | pending_pemeriksa=0 | pending_penyetuju=20
+[2026-10-12 14:03:28] DAILY VALIDASI FINISH
+[2026-10-12 14:03:28] ============================================================
+[2026-10-12 14:06:11] ============================================================
+[2026-10-12 14:06:11] DAILY VALIDASI START
+[2026-10-12 14:06:11] PENDING | pemeriksa=0 | penyetuju=20
+[2026-10-12 14:06:11] SKIP PEMERIKSA | tidak ada transaksi menunggu pemeriksa.
+[2026-10-12 14:06:11] KIRIM PENYETUJU | uid=admin | email=affanmaulana041@gmail.com | pending=20 | token_id=35
+[2026-10-12 14:06:15] GAGAL PENYETUJU | affanmaulana041@gmail.com | token dicabut | SMTP Error: Could not authenticate. SMTP server error: QUIT command failed
+[2026-10-12 14:06:15] SELESAI | proses=1 | email_terkirim=0 | cc_terkirim=0 | pending_pemeriksa=0 | pending_penyetuju=20
+[2026-10-12 14:06:15] DAILY VALIDASI FINISH
+[2026-10-12 14:06:15] ============================================================
+[2026-10-12 14:07:11] ============================================================
+[2026-10-12 14:07:11] DAILY VALIDASI START
+[2026-10-12 14:07:11] PENDING | pemeriksa=0 | penyetuju=20
+[2026-10-12 14:07:11] SKIP PEMERIKSA | tidak ada transaksi menunggu pemeriksa.
+[2026-10-12 14:07:11] KIRIM PENYETUJU | uid=admin | email=affanmaulana041@gmail.com | pending=20 | token_id=36
+[2026-10-12 14:07:17] BERHASIL PENYETUJU | affanmaulana041@gmail.com | token_id=36
+[2026-10-12 14:07:17] SELESAI | proses=1 | email_terkirim=1 | cc_terkirim=0 | pending_pemeriksa=0 | pending_penyetuju=20
+[2026-10-12 14:07:17] DAILY VALIDASI FINISH
+[2026-10-12 14:07:17] ============================================================
+[2026-10-12 14:15:01] ============================================================
+[2026-10-12 14:15:01] DAILY VALIDASI START
+[2026-10-12 14:15:01] PENDING | pemeriksa=0 | penyetuju=20
+[2026-10-12 14:15:01] SKIP PEMERIKSA | tidak ada transaksi menunggu pemeriksa.
+[2026-10-12 14:15:01] KIRIM PENYETUJU | uid=admin | email=affanmaulana041@gmail.com | pending=20 | token_id=37
+[2026-10-12 14:15:05] BERHASIL PENYETUJU | affanmaulana041@gmail.com | token_id=37
+[2026-10-12 14:15:05] SELESAI | proses=1 | email_terkirim=1 | cc_terkirim=0 | pending_pemeriksa=0 | pending_penyetuju=20
+[2026-10-12 14:15:05] DAILY VALIDASI FINISH
+[2026-10-12 14:15:05] ============================================================
