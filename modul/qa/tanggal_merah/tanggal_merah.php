@@ -6,13 +6,15 @@ if (empty($_SESSION['login'])) {
 }
 
 require_once __DIR__ . '/../../../inc/inc_koneksi.php';
+require_once __DIR__ . '/../../../inc/qa_rbac.php';
+qaRbacRequire($konek,'tanggal_merah');
 
 $nama_petugas = isset($_SESSION['nama_lengkap']) && $_SESSION['nama_lengkap'] !== ''
     ? $_SESSION['nama_lengkap'] : ($_SESSION['userid'] ?? '');
 $id_pemakai = $_SESSION['userid'] ?? '';
 $role = strtolower(trim((string)($_SESSION['role'] ?? '')));
 $status_admin = strtoupper(trim((string)($_SESSION['admin'] ?? 'N')));
-$is_admin = ($status_admin === 'Y' || $status_admin === '1' || $role === 'admin');
+$is_admin = qaRbacCan($konek,'tanggal_merah');
 
 if (!$is_admin) {
     http_response_code(403);

@@ -1,14 +1,9 @@
 <?php
 session_start();
 if (empty($_SESSION['login'])) { header('Location: ../../logout.php'); exit; }
-$role = strtolower(trim((string)($_SESSION['role'] ?? '')));
-$admin = strtoupper(trim((string)($_SESSION['admin'] ?? 'N')));
-if (!in_array($admin, ['Y','1'], true) && $role !== 'admin') {
-    http_response_code(403);
-    echo '<!doctype html><html lang="id"><meta charset="utf-8"><title>Akses ditolak</title><body><h3>Akses ditolak</h3><p>Upload master data hanya dapat diakses Admin QA.</p></body></html>';
-    exit;
-}
-require_once __DIR__ . '/../../inc/inc_koneksi.php';
+require_once __DIR__.'/../../inc/inc_koneksi.php';
+require_once __DIR__.'/../../inc/qa_rbac.php';
+qaRbacRequire($konek,'upload_master');
 require_once __DIR__ . '/../../inc/qa_master_csv.php';
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 $konek->set_charset('utf8mb4');
@@ -64,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'items'=>array_values(array_filter($plan['items'],static function($item){return !empty($item['errors']);}))];
                     header('Location: upload_master_csv.php#csvErrors'); exit;
                 }
-                // Apply the entire validated batch in one transaction.
+                // Import diverifikasi ulang dengan table locks MyISAM; backup dianjurkan sebelum import massal.
                 $counts = qaCsvApply($konek, $rows, $plan['signature'], $actor);
                 $_SESSION['qa_csv_flash'] = $counts;
                 // A repeated POST with the previous form token cannot import again.
@@ -74,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (Throwable $e) {
             if ($e instanceof mysqli_sql_exception) {
                 error_log('QA CSV import: '.$e->getMessage());
-                $error = 'Proses database gagal. Tidak ada perubahan dari batch ini yang disimpan. Periksa data dan unggah ulang CSV.';
+                $error = 'Proses database gagal. Karena MyISAM tidak mendukung rollback, sebagian data mungkin sudah masuk. Periksa qa_part dan qa_alat_registry sebelum mengulang import.';
             } else { $error = $e->getMessage(); }
         }
     }
@@ -138,15 +133,16 @@ $items = $validation ? array_slice($validation['items'], ($page-1)*100, 100) : [
             <div class="form-group"><label for="csvFile">File CSV</label><input class="form-control" type="file" id="csvFile" name="csv_file" accept=".csv,text/csv" required aria-describedby="csvFileHelp"></div>
             <button class="btn btn-primary" type="submit"><i class="fa fa-upload"></i> Upload &amp; Simpan</button>
         </form>
+        <p class="text-warning" style="margin-top:12px"><b>Catatan:</b> database MyISAM tidak mendukung rollback jika server gagal saat batch berjalan. Backup database sebelum upload banyak alat.</p>
         <p id="csvFileHelp" class="text-muted" style="margin-top:10px">CSV UTF-8, maksimal 2 MB / 1.000 baris. Pemisah koma, titik koma, atau tab dikenali otomatis.</p>
         <p>Baris pertama berisi tujuh judul kolom; isi alat mulai baris kedua. Isi <b>Seksi</b> pada setiap baris, di kolom setelah <b>Rencana Kalibrasi</b>, menggunakan nama seksi yang terdaftar. Satu file boleh berisi beberapa seksi.</p>
         <p><b>Nama Alat, No. Alat, Periode Kalibrasi, Rencana Kalibrasi, dan Seksi wajib diisi.</b> Spesifikasi dan Resolusi boleh kosong; saat memperbarui alat, isian kosong mempertahankan nilai lama.</p>
-        <p>Periode dapat ditulis <b>180</b>, <b>180 Hari</b>, atau <b>1 Tahun</b> (disimpan sebagai <b>365 hari</b> per tahun). Tanggal dapat ditulis <b>16 - 09 - 2026</b>, <b>16-09-2026</b>, atau <b>2026-09-16</b>. Simpan file sebagai CSV UTF-8 setelah mengisi template.</p>
+        <p>Isi <b>Periode Kalibrasi</b> dengan angka dalam <b>satuan hari</b>, misalnya <b>180</b> atau <b>365</b>. Tanggal dapat ditulis <b>16 - 09 - 2026</b>, <b>16-09-2026</b>, atau <b>2026-09-16</b>. Simpan file sebagai CSV UTF-8 setelah mengisi template.</p>
     </section>
     <?php if ($validation): ?>
     <section class="csv-card" id="csvErrors">
         <h3 style="margin-top:0">Upload gagal: <?=csvH($validation['filename'])?></h3>
-        <div class="alert alert-warning" role="alert">Tidak ada data dari file ini yang disimpan. Perbaiki <?=count($validation['items'])?> baris bermasalah di bawah, lalu upload ulang CSV.</div>
+        <div class="alert alert-warning" role="alert">Data belum disimpan karena validasi menemukan masalah. Perbaiki <?=count($validation['items'])?> baris bermasalah di bawah, lalu upload ulang CSV.</div>
         <div class="csv-table-wrap"><table class="table table-bordered csv-table">
             <thead><tr><th>Baris CSV</th><th>No. Alat</th><th>Nama Alat</th><th>Seksi</th><th>Periode (hari)</th><th>Jadwal</th><th>Kesalahan</th></tr></thead><tbody>
             <?php foreach ($items as $item): $d=$item['data']; ?>

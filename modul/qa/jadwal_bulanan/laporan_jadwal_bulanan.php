@@ -6,20 +6,31 @@ if (empty($_SESSION['login'])) {
     exit;
 }
 
+require_once __DIR__.'/../../../inc/inc_koneksi.php';
+require_once __DIR__.'/../../../inc/qa_rbac.php';
+$monthlyPermissions = ['jadwal_bulanan', 'jadwal_bulanan_internal', 'jadwal_bulanan_external'];
+qaRbacRequireAny($konek, $monthlyPermissions);
+$monthlyAvailableFormats = [];
+foreach (['1','2','3'] as $formatCode) {
+    if (qaRbacCan($konek, qaRbacMonthlyPermission($formatCode))) $monthlyAvailableFormats[] = $formatCode;
+}
+$monthlyDefaultFormat = $monthlyAvailableFormats[0];
+
 $now = new DateTimeImmutable('now', new DateTimeZone('Asia/Bangkok'));
 $monthlyReportOptions = [
     'seksi' => 'ALL',
     'bulan' => (int)$now->format('n'),
     'tahun' => (int)$now->format('Y'),
     'cetak' => isset($_GET['cetak']) && $_GET['cetak'] === '1',
-    'format' => '1',
+    'format' => $monthlyDefaultFormat,
     'errors' => [],
 ];
 if (isset($_GET['format'])) {
-    if ($_GET['format'] === '1') {
-        $monthlyReportOptions['format'] = $_GET['format'];
+    if (in_array((string)$_GET['format'], ['1','2','3'], true)) {
+        $monthlyReportOptions['format'] = (string)$_GET['format'];
+        qaRbacRequire($konek, qaRbacMonthlyPermission($monthlyReportOptions['format']));
     } else {
-        $monthlyReportOptions['errors'][] = 'Format cetak tidak tersedia. Pilih Format 1.';
+        $monthlyReportOptions['errors'][] = 'Pilih Format 1, Internal, atau External.';
     }
 }
 foreach (['bulan' => [1, 12], 'tahun' => [1900, 9999]] as $name => $range) {

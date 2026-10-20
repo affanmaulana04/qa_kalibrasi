@@ -1,5 +1,9 @@
 <?php
 session_start();
+if (empty($_SESSION['login'])) {http_response_code(401);exit('Login diperlukan.');}
+require_once __DIR__.'/../../../inc/inc_koneksi.php';
+require_once __DIR__.'/../../../inc/qa_rbac.php';
+qaRbacRequireAny($konek,['kalibrasi','approval_pemeriksa','approval_penyetuju','laporan_hasil']);
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -703,7 +707,7 @@ html, body {
 
 <script>
 (function () {
-    const raw = sessionStorage.getItem('cetak_data');
+    const raw = <?php if (isset($qaReportPayload)): ?><?=json_encode(json_encode($qaReportPayload, JSON_INVALID_UTF8_SUBSTITUTE), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE)?><?php else: ?>sessionStorage.getItem('cetak_data')<?php endif; ?>;
 
     if (!raw) {
         document.getElementById('report').innerHTML =
@@ -1387,6 +1391,10 @@ html, body {
  * - Header creator date is hidden; footer validation date remains.
  * - Common typo/label cleanup and Format A print-only fields.
  * ================================================================ */
+<?php if (isset($qaReportPayload)): ?>
+    // The embedded multi-alat renderer consumes the same normalized snapshot.
+    window.qaExcelPrintData = data;
+<?php endif; ?>
     const qaCleanReport = () => {
         const root = document.getElementById('report');
         if (!root) return;
@@ -4660,5 +4668,10 @@ html, body {
     // Jangan langsung membuka dialog print agar user bisa mengecek tampilan dulu.
 })();
 </script>
+<?php if (isset($qaReportPayload)): ?>
+<script>
+<?php readfile(__DIR__.'/../../../js/qa_excel_report.js'); ?>
+</script>
+<?php endif; ?>
 </body>
 </html>

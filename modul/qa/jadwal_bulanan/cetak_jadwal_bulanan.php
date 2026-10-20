@@ -5,6 +5,18 @@ if (empty($_SESSION['login'])) {
     exit();
 }
 require_once __DIR__ . '/../../../inc/inc_koneksi.php';
+require_once __DIR__ . '/../../../inc/qa_rbac.php';
+// Protected independently of the report page/iframe. No cross-format access via URL.
+$requestedMode = strtolower(trim((string)($_GET['mode'] ?? 'both')));
+if (!in_array($requestedMode,['internal','external','both'],true)) {
+    http_response_code(400); exit('Format laporan tidak valid.');
+}
+if ($requestedMode === 'internal' || $requestedMode === 'both') {
+    qaRbacRequire($konek,'jadwal_bulanan_internal');
+}
+if ($requestedMode === 'external' || $requestedMode === 'both') {
+    qaRbacRequire($konek,'jadwal_bulanan_external');
+}
 
 function h($v) {
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
@@ -18,6 +30,7 @@ $bulan = $_GET['bulan'] ?? date('Y-m');
 $seksi = $_GET['seksi'] ?? 'ALL';
 $status = $_GET['status'] ?? 'ALL';
 $autoprint = isset($_GET['autoprint']) && $_GET['autoprint'] === '1';
+$embedded = isset($_GET['embed']) && $_GET['embed'] === '1';
 $mode = strtolower(trim((string)($_GET['mode'] ?? 'both')));
 if (!in_array($mode, ['internal','external','both'], true)) $mode = 'both';
 
@@ -141,6 +154,53 @@ if ($qActual) {
 }
 
 $groups = [];
+$isNextYearPlanning = $year === ((int)date('Y') + 1);
+if ($isNextYearPlanning) {
+    // Ambil tanggal jatuh tempo terakhir per nomor alat dari transaksi Update Hasil.
+    // Tidak menghitung registrasi atau membuat rencana di tanggal tertentu.
+    $latestDueByNo = [];
+    $qDue = mysqli_query($konek, "SELECT q.no_part, q.periode_berikutnya, q.status_kalibrasi
+        FROM qa_pengecekan q
+        WHERE COALESCE(q.jenis_transaksi,'update_hasil_kalibrasi') <> 'registrasi_alat'
+          AND (q.nomor_pengecekan IS NULL OR q.nomor_pengecekan NOT LIKE 'QA-REG-%')
+        ORDER BY q.tanggal_pengecekan ASC, q.id ASC");
+    if ($qDue) {
+        while ($q = mysqli_fetch_assoc($qDue)) {
+            $no = trim((string)($q['no_part'] ?? ''));
+            $due = substr((string)($q['periode_berikutnya'] ?? ''), 0, 10);
+            if ($no !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $due)) {
+                $latestDueByNo[$no] = [
+                    'tanggal'=>$due,
+                    'status'=>strtoupper(trim((string)($q['status_kalibrasi'] ?? '')))
+                ];
+            }
+        }
+    }
+
+    $qActive = mysqli_query($konek, "SELECT no_part, nama_part, seksi_pemilik FROM qa_part");
+    if ($qActive) {
+        while ($m = mysqli_fetch_assoc($qActive)) {
+            $no = trim((string)($m['no_part'] ?? ''));
+            if (!isset($latestDueByNo[$no])) continue;
+            if (substr($latestDueByNo[$no]['tanggal'], 0, 7) !== $bulan) continue;
+            $sec = trim((string)($m['seksi_pemilik'] ?? ''));
+            $nama = trim((string)($m['nama_part'] ?? ''));
+            if ($seksi !== 'ALL' && strtoupper($sec) !== strtoupper($seksi)) continue;
+            if ($status !== 'ALL' && $latestDueByNo[$no]['status'] !== strtoupper($status)) continue;
+            $gk = strtoupper($sec).'|'.strtoupper($nama);
+            if (!isset($groups[$gk])) {
+                $groups[$gk] = [
+                    'seksi'=>$sec, 'nama_part'=>$nama,
+                    'R'=>array_fill(1,$daysInMonth,0),
+                    'H'=>array_fill(1,$daysInMonth,0),
+                    'petugas'=>[], 'jumlah_rencana'=>0,
+                    'future_plan'=>true
+                ];
+            }
+            $groups[$gk]['jumlah_rencana']++;
+        }
+    }
+} else {
 foreach ($events as $e) {
     $gk = strtoupper($e['seksi']).'|'.strtoupper($e['nama_part']);
     if (!isset($groups[$gk])) {
@@ -159,10 +219,11 @@ foreach ($events as $e) {
     }
     if ($e['petugas'] !== '') $groups[$gk]['petugas'][] = $e['petugas'];
 }
+}
 foreach ($groups as &$g) {
-    $g['totalR'] = array_sum($g['R']);
-    $g['totalH'] = array_sum($g['H']);
-    $g['petugas'] = implode(', ', array_values(array_unique(array_filter($g['petugas']))));
+    $g['totalR'] = $isNextYearPlanning ? (int)($g['jumlah_rencana'] ?? 0) : array_sum($g['R']);
+    $g['totalH'] = $isNextYearPlanning ? '' : array_sum($g['H']);
+    $g['petugas'] = $isNextYearPlanning ? '' : implode(', ', array_values(array_unique(array_filter($g['petugas']))));
 }
 unset($g);
 uasort($groups, function($a, $b) {
@@ -177,25 +238,33 @@ function renderReport($mode, $reportRows, $daysInMonth, $year, $month, $holidayD
     $colspan = $daysInMonth + 6;
     ?>
     <section class="report-sheet <?= $pageBreak ? 'page-break' : '' ?>">
-        <div class="company-title">PT. SURYA TOTO INDONESIA Tbk.</div>
-        <div class="report-head">
-            <div class="head-spacer"></div>
-            <div class="head-title">
-                <div>JADWAL KALIBRASI BULANAN - <?=$titleMode?></div>
-                <div>DIVISI <?=h($division)?> <?=h($periodeLabel)?></div>
-            </div>
-            <div class="approval-wrap">
-                <div class="print-date">Tanggal, <?=h(date('d-m-Y'))?></div>
-                <table class="approval-table">
-                    <tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr>
-                    <tr><td><?=h($namaPetugas ?: '-')?></td><td>&nbsp;</td><td>&nbsp;</td></tr>
-                    <tr><td>PETUGAS</td><td>SUPERVISOR</td><td>MANAGER</td></tr>
-                </table>
-            </div>
-        </div>
-
-        <table class="schedule-table">
+        <table class="schedule-table" style="--days:<?=$daysInMonth?>">
+            <colgroup>
+                <col class="col-no"><col class="col-name"><col class="col-section"><col class="col-type">
+                <?php for ($colDay=1; $colDay<=$daysInMonth; $colDay++): ?><col class="col-day"><?php endfor; ?>
+                <col class="col-total"><col class="col-officer">
+            </colgroup>
             <thead>
+                <tr class="report-banner-row">
+                    <th colspan="<?=$colspan?>" class="report-heading-cell">
+                        <div class="company-title">PT. SURYA TOTO INDONESIA Tbk.</div>
+                        <div class="report-head">
+                            <div class="head-spacer"></div>
+                            <div class="head-title">
+                                <div>JADWAL KALIBRASI BULANAN - <?=$titleMode?></div>
+                                <div>DIVISI <?=h($division)?> <?=h($periodeLabel)?></div>
+                            </div>
+                            <div class="approval-wrap">
+                                <div class="print-date">Tanggal, <?=h(date('d-m-Y'))?></div>
+                                <table class="approval-table">
+                                    <tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr>
+                                    <tr><td><?=h($namaPetugas ?: '-')?></td><td>&nbsp;</td><td>&nbsp;</td></tr>
+                                    <tr><td>PETUGAS</td><td>SUPERVISOR</td><td>MANAGER</td></tr>
+                                </table>
+                            </div>
+                        </div>
+                    </th>
+                </tr>
                 <tr>
                     <th rowspan="2" class="col-no">NO</th>
                     <th rowspan="2" class="col-name">NAMA ALAT</th>
@@ -215,11 +284,13 @@ function renderReport($mode, $reportRows, $daysInMonth, $year, $month, $holidayD
                     <?php endfor; ?>
                 </tr>
             </thead>
+            <?php if (!$reportRows): ?>
             <tbody>
-                <?php if (!$reportRows): ?>
-                    <tr><td colspan="<?=$colspan?>" class="empty-row">Tidak ada data Update Hasil Kalibrasi pada periode ini.</td></tr>
-                <?php else: ?>
-                    <?php $no=0; $lastSection=null; foreach ($reportRows as $g): $no++; ?>
+                <tr><td colspan="<?=$colspan?>" class="empty-row"><?= $year === ((int)date('Y') + 1) ? 'Tidak ada alat yang jatuh tempo pada bulan ini.' : 'Tidak ada data Update Hasil Kalibrasi pada periode ini.' ?></td></tr>
+            </tbody>
+            <?php else: ?>
+                <?php $no=0; $lastSection=null; foreach ($reportRows as $g): $no++; ?>
+                <tbody class="tool-group">
                         <?php if ($lastSection !== $g['seksi']): $lastSection=$g['seksi']; ?>
                         <tr class="section-row"><td colspan="<?=$colspan?>">SEKSI: <?=h(strtoupper($lastSection))?></td></tr>
                         <?php endif; ?>
@@ -227,16 +298,16 @@ function renderReport($mode, $reportRows, $daysInMonth, $year, $month, $holidayD
                         <?php if ($internal): ?>
                         <tr>
                             <td rowspan="2"><?=$no?></td>
-                            <td rowspan="2" class="text-left"><?=h($g['nama_part'])?></td>
-                            <td rowspan="2"><?=h($g['seksi'])?></td>
+                            <td rowspan="2" class="text-left tool-name"><?=h($g['nama_part'])?></td>
+                            <td rowspan="2" class="tool-section"><?=h($g['seksi'])?></td>
                             <td><b>R</b></td>
                             <?php for ($d=1; $d<=$daysInMonth; $d++):
                                 $date=sprintf('%04d-%02d-%02d',$year,$month,$d);
                                 $hc=holidayClassForDate($date,$holidayDates);
                                 $v=(int)($g['R'][$d]??0);
-                            ?><td class="<?=h($hc)?>"><?=$v ?: ''?></td><?php endfor; ?>
+                            ?><td class="<?=h($hc)?>"><?=$v ?: '&nbsp;'?></td><?php endfor; ?>
                             <td><b><?=$g['totalR']?></b></td>
-                            <td rowspan="2"><?=h($g['petugas'] ?: '-')?></td>
+                            <td rowspan="2"><?= !empty($g['future_plan']) ? '&nbsp;' : h($g['petugas'] ?: '-') ?></td>
                         </tr>
                         <tr>
                             <td><b>H</b></td>
@@ -244,44 +315,49 @@ function renderReport($mode, $reportRows, $daysInMonth, $year, $month, $holidayD
                                 $date=sprintf('%04d-%02d-%02d',$year,$month,$d);
                                 $hc=holidayClassForDate($date,$holidayDates);
                                 $v=(int)($g['H'][$d]??0);
-                            ?><td class="<?=h($hc)?>"><?=$v ?: ''?></td><?php endfor; ?>
+                            ?><td class="<?=h($hc)?>"><?=$v ?: '&nbsp;'?></td><?php endfor; ?>
                             <td><b><?=$g['totalH']?></b></td>
                         </tr>
                         <?php else: ?>
                         <tr>
                             <td rowspan="2"><?=$no?></td>
-                            <td rowspan="2" class="text-left"><?=h($g['nama_part'])?></td>
-                            <td rowspan="2"><?=h($g['seksi'])?></td>
+                            <td rowspan="2" class="text-left tool-name"><?=h($g['nama_part'])?></td>
+                            <td rowspan="2" class="tool-section"><?=h($g['seksi'])?></td>
                             <td><b>R</b></td>
                             <?php for ($d=1; $d<=$daysInMonth; $d++):
                                 $date=sprintf('%04d-%02d-%02d',$year,$month,$d);
                                 $hc=holidayClassForDate($date,$holidayDates);
                                 $v=(int)($g['R'][$d]??0);
-                            ?><td class="<?=h($hc)?>"><?=$v ?: ''?></td><?php endfor; ?>
+                            ?><td class="<?=h($hc)?>"><?=$v ?: '&nbsp;'?></td><?php endfor; ?>
                             <td><b><?=$g['totalR']?></b></td>
-                            <td rowspan="2"><?=h($g['petugas'] ?: '-')?></td>
+                            <td rowspan="2"><?= !empty($g['future_plan']) ? '&nbsp;' : h($g['petugas'] ?: '-') ?></td>
                         </tr>
                         <tr>
                             <td><b>H</b></td>
                             <?php for ($d=1; $d<=$daysInMonth; $d++):
                                 $date=sprintf('%04d-%02d-%02d',$year,$month,$d);
                                 $hc=holidayClassForDate($date,$holidayDates);
-                            ?><td class="<?=h($hc)?>"></td><?php endfor; ?>
-                            <td></td>
+                            ?><td class="<?=h($hc)?>">&nbsp;</td><?php endfor; ?>
+                            <td>&nbsp;</td>
                         </tr>
                         <?php endif; ?>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </tbody>
+                </tbody>
+                <?php endforeach; ?>
+            <?php endif; ?>
+            <tfoot>
+                <tr>
+                    <td colspan="<?=$colspan?>" class="report-footer-cell">
+                        <div class="legend">
+                            <b>Keterangan :</b>
+                            <span><b>R</b> : Rencana</span>
+                            <span><b>H</b> : Hasil</span>
+                            <span class="holiday-chip"></span><span>: Sabtu/Minggu/Tanggal Merah</span>
+                        </div>
+                        <div class="doc-code">STIS-CMFG4-10/R3</div>
+                    </td>
+                </tr>
+            </tfoot>
         </table>
-
-        <div class="legend">
-            <b>Keterangan :</b>
-            <span><b>R</b> : Rencana</span>
-            <span><b>H</b> : Hasil</span>
-            <span class="holiday-chip"></span><span>: Sabtu/Minggu/Tanggal Merah</span>
-        </div>
-        <div class="doc-code">STIS-CMFG4-10/R3</div>
     </section>
     <?php
 }
@@ -296,15 +372,97 @@ function renderReport($mode, $reportRows, $daysInMonth, $year, $month, $holidayD
     <link href="../../../css/bootstrap.min.css" rel="stylesheet">
     <link href="../../../font-awesome-4.3.0/css/font-awesome.min.css" rel="stylesheet">
     <style>
-        body{background:#eef1f5;font-family:Arial,sans-serif;color:#000;padding:20px}.toolbar{background:#fff;border:1px solid #ddd;border-radius:5px;padding:15px;margin-bottom:18px}.preview-wrap{overflow:auto}.report-sheet{background:#fff;width:1500px;min-height:820px;margin:0 auto 24px;padding:10px 12px;box-shadow:0 1px 6px rgba(0,0,0,.18);position:relative}.company-title{text-align:center;font-size:11px;font-weight:bold;border-bottom:1px solid #000;padding:4px 0}.report-head{display:grid;grid-template-columns:1fr 2fr 1fr;align-items:start;min-height:118px}.head-title{text-align:center;font-size:18px;line-height:1.55;padding-top:27px}.approval-wrap{padding-top:5px}.print-date{font-size:10px;margin-bottom:3px}.approval-table{width:100%;border-collapse:collapse;font-size:9px}.approval-table th,.approval-table td{border:1px solid #000;text-align:center;padding:3px;height:30px}.approval-table th{height:auto;font-weight:normal}.schedule-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:9px}.schedule-table th,.schedule-table td{border:1px solid #000;text-align:center;padding:2px;height:20px;overflow:hidden}.schedule-table th{font-weight:normal}.schedule-table .text-left{text-align:left;padding-left:4px}.col-no{width:28px}.col-name{width:155px}.col-section{width:82px}.col-type{width:34px}.col-total{width:55px}.col-officer{width:95px}.day{width:28px}.section-row td{text-align:left;font-weight:bold;background:#f0f0f0;height:18px}.holiday-col{background:rgba(220,53,69,.50)!important}.legend{border:1px solid #000;border-top:0;padding:7px 6px;font-size:10px;display:flex;gap:28px;align-items:center}.holiday-chip{display:inline-block;width:14px;height:14px;background:rgba(220,53,69,.50);border:1px solid #999;margin-right:-24px}.doc-code{text-align:right;font-size:9px;margin-top:4px}.empty-row{height:50px!important}.page-break{page-break-before:always}
-        @media print{
-            @page{size:A4 landscape;margin:0}
-            html,body{margin:0!important;padding:0!important;background:#fff}.no-print{display:none!important}.preview-wrap{overflow:visible}.report-sheet{width:auto;min-height:0;margin:0;padding:6mm;box-sizing:border-box;box-shadow:none;page-break-after:always}.report-sheet:last-child{page-break-after:auto}.company-title{font-size:8px}.report-head{min-height:72px;grid-template-columns:1fr 2fr 1fr}.head-title{font-size:13px;padding-top:15px}.print-date{font-size:7px}.approval-table{font-size:6px}.approval-table th,.approval-table td{height:18px;padding:1px}.schedule-table{font-size:6.2px}.schedule-table th,.schedule-table td{padding:1px;height:13px}.col-no{width:18px}.col-name{width:100px}.col-section{width:55px}.col-type{width:22px}.col-total{width:38px}.col-officer{width:62px}.day{width:auto}.section-row td{height:12px}.legend{font-size:7px;padding:4px;gap:18px}.doc-code{font-size:6px}.holiday-chip{width:9px;height:9px;margin-right:-14px}
+        /* Komposisi surat mengacu pada jadwal bulanan pabrik: kolom alat/seksi
+           diperlebar, semua tanggal tetap satu baris pada A4 landscape. */
+        * { box-sizing:border-box; }
+        body { background:#e9ecf1; font-family:Arial,sans-serif; color:#000; padding:20px; }
+        .toolbar { background:#fff; border:1px solid #ddd; border-radius:5px; padding:15px; margin-bottom:18px; }
+        .preview-wrap { overflow:auto; }
+        .report-sheet { background:#fff; width:1400px; margin:0 auto 24px; padding:12px 12px 18px;
+                        box-shadow:0 1px 6px rgba(0,0,0,.18); position:relative; }
+        .schedule-table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:9px; }
+        .schedule-table .col-no { width:2.5%; }
+        .schedule-table .col-name { width:19%; }
+        .schedule-table .col-section { width:10.5%; }
+        .schedule-table .col-type { width:2.5%; }
+        .schedule-table .col-day { width:calc(52% / var(--days)); }
+        .schedule-table .col-total { width:5%; }
+        .schedule-table .col-officer { width:8.5%; }
+        .schedule-table > thead > tr > th,
+        .schedule-table > tbody > tr > td { border:1px solid #000; text-align:center;
+                                             padding:2px 1px; height:19px; vertical-align:middle; }
+        .schedule-table > thead > tr > th { font-weight:normal; }
+        .schedule-table .text-left { text-align:left; padding-left:5px; }
+        .schedule-table .tool-name { font-size:10px; line-height:1.15; overflow-wrap:break-word; }
+        .schedule-table .tool-section { font-size:9.5px; line-height:1.15; overflow-wrap:break-word; }
+        .section-row td { text-align:left!important; font-weight:bold; background:#e1e1e1; height:17px; }
+        .holiday-col { background:#bdbdbd!important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+        .company-title { font-size:11px; font-weight:bold; text-align:center;
+                         border-bottom:2px solid #000; padding:5px 0 4px; }
+        .report-head { display:grid; grid-template-columns:1fr 2fr 1fr;
+                       align-items:start; min-height:115px; border-bottom:1px solid #000; }
+        .head-title { text-align:center; font-size:17px; line-height:1.4; padding-top:26px; font-weight:normal; }
+        .approval-wrap { padding:5px 0 0 8px; }
+        .print-date { font-size:10px; text-align:left; margin-bottom:4px; font-weight:bold; }
+        .approval-table { width:100%; border-collapse:collapse; font-size:9px; }
+        .approval-table th,.approval-table td { border:1px solid #000; text-align:center;
+                                              padding:2px; height:28px; font-weight:normal; }
+        .approval-table th { height:auto; }
+        .schedule-table > thead > tr > th.report-heading-cell {
+            border:0!important; padding:0!important; height:auto!important; overflow:visible!important;
+            vertical-align:top!important; text-align:initial!important; font-weight:normal;
+        }
+        .schedule-table > tfoot > tr > td.report-footer-cell {
+            border:0!important; padding:0!important; height:auto!important;
+            overflow:visible!important; text-align:left!important;
+        }
+        .schedule-table > tbody.tool-group { break-inside:avoid; page-break-inside:avoid; }
+        .schedule-table > tbody > tr { break-inside:avoid; page-break-inside:avoid; }
+        .legend { border:1px solid #000; border-top:0; padding:6px; font-size:10px;
+                  display:flex; flex-wrap:wrap; gap:22px; align-items:center; }
+        .holiday-chip { display:inline-block; width:13px; height:13px; background:#bdbdbd;
+                        border:1px solid #999; margin-right:-18px; }
+        .doc-code { font-size:9px; text-align:right; margin-top:3px; }
+        .empty-row { height:50px!important; }
+        .page-break { page-break-before:always; }
+        @media print {
+            /* Margin 0 mencegah URL/judul browser ikut tercetak; padding di sheet menjadi margin konten. */
+            @page { size:A4 landscape; margin:0; }
+            html,body { margin:0!important; padding:0!important; background:#fff!important; }
+            .no-print { display:none!important; }
+            .preview-wrap { overflow:visible; }
+            .report-sheet { width:auto; min-height:0; margin:0; padding:0 5mm 5mm;
+                            box-shadow:none; page-break-after:always; }
+            .report-sheet:last-child { page-break-after:auto; }
+            .schedule-table { font-size:6.5pt; }
+            .schedule-table > thead { display:table-header-group!important; }
+            .schedule-table > tbody { display:table-row-group!important; }
+            .schedule-table > tfoot { display:table-footer-group!important; }
+            .schedule-table > thead > tr > th.report-heading-cell { padding-top:5mm!important; }
+            .schedule-table > thead > tr > th:not(.report-heading-cell),
+            .schedule-table > tbody > tr > td { font-size:6.1pt; padding:1px 1px; height:13px; line-height:1.15; }
+            .schedule-table .tool-name { font-size:7.1pt!important; font-weight:600; }
+            .schedule-table .tool-section { font-size:6.8pt!important; }
+            .schedule-table .text-left { padding-left:3px; }
+            .section-row td { height:13px!important; font-size:6.4pt!important; }
+            .company-title { font-size:8pt; padding:3px 0 4px; }
+            .report-head { min-height:78px; grid-template-columns:1fr 2fr 1fr; }
+            .head-title { font-size:11pt; padding-top:19px; }
+            .approval-wrap { padding-top:4px; }
+            .print-date { font-size:6pt; margin-bottom:2px; }
+            .approval-table { font-size:5.5pt; }
+            .approval-table th,.approval-table td { padding:1px; height:20px; }
+            .legend { font-size:6pt; padding:4px; gap:15px; }
+            .holiday-chip { width:9px; height:9px; margin-right:-12px; }
+            .doc-code { font-size:6pt; }
+            .schedule-table,.schedule-table td,.schedule-table th {
+                -webkit-print-color-adjust:exact; print-color-adjust:exact;
+            }
         }
     </style>
 </head>
 <body>
-<div class="toolbar no-print">
+<div class="toolbar no-print" <?= $embedded ? 'style="display:none"' : '' ?>>
     <form method="GET" class="form-inline" style="margin:0">
         <input type="hidden" name="mode" value="<?=h($mode)?>">
         <a href="../../../media.php" class="btn btn-default"><i class="fa fa-arrow-left"></i> Kembali ke Menu Utama</a>

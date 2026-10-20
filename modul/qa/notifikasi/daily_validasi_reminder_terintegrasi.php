@@ -63,6 +63,7 @@ date_default_timezone_set('Asia/Jakarta');
 
 
 require_once __DIR__ . '/../../../inc/inc_koneksi.php';
+require_once __DIR__ . '/../../../inc/qa_rbac.php';
 
 require_once __DIR__ . '/email_helper.php';
 
@@ -378,10 +379,21 @@ function qaAmbilPenerimaValidasi($konek, $kolomRole, $isTest, $testEmail)
         // Konfigurasi halaman email_validasi.php adalah sumber tunggal.
         // Tidak fallback ke semua validator jika daftar TUJUAN kosong/nonaktif.
         $filterConfig = " AND EXISTS (SELECT 1 FROM qa_email_validasi_penerima c
-            WHERE c.user_uid = user.uid
+            WHERE c.user_uid = u.uid
               AND c.jenis_validasi = '$jenis'
               AND c.tipe_penerima = 'TUJUAN'
               AND c.status = 'aktif')";
+    }
+
+    $rbacFilter = "UPPER(COALESCE(u.{$kolomRole}, 'N')) = 'Y'";
+    if (qaRbacReady($konek)) {
+        $permission=$kolomRole==='pemeriksa'?'approval_pemeriksa':'approval_penyetuju';
+        $rbacFilter="((NOT EXISTS (SELECT 1 FROM qa_user_roles a0 WHERE a0.uid=u.uid)
+            AND UPPER(COALESCE(u.{$kolomRole},'N'))='Y')
+            OR EXISTS (SELECT 1 FROM qa_user_roles a
+                INNER JOIN qa_roles r ON r.id=a.role_id AND r.aktif=1
+                INNER JOIN qa_role_permissions p ON p.role_id=r.id
+                WHERE a.uid=u.uid AND p.permission_key='$permission'))";
     }
 
     $sql = "
@@ -400,9 +412,9 @@ function qaAmbilPenerimaValidasi($konek, $kolomRole, $isTest, $testEmail)
 
             block
 
-        FROM \`user\`
+        FROM `user` u
 
-        WHERE UPPER(COALESCE({$kolomRole}, 'N')) = 'Y'
+        WHERE {$rbacFilter}
 
           AND UPPER(COALESCE(block, 'N')) <> 'Y'
 

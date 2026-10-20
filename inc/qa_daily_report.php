@@ -44,6 +44,7 @@ function qaDailyPayload(array $row, array $master, array $audit): array {
     $payload['toleransi'] = $payload['toleransi_global'];
     $payload['tanggal_periksa'] = $row['tanggal_pengecekan'];
     $payload['no_laporan'] = $row['no_laporan'] ?: ($h['no_laporan'] ?? $row['nomor_pengecekan']);
+    $payload['jenis_laporan'] = strtolower(trim((string)($row['jenis_laporan'] ?? $h['jenis_laporan'] ?? '')));
     $payload['nomor_pengecekan'] = $row['nomor_pengecekan'];
     foreach (['suhu','kelembapan','ketidakpastian','confidence_level'] as $key) $payload[$key] = $row[$key] ?? $env[$key] ?? '';
     $payload['keterangan'] = $row['keterangan'] ?? $footer['keterangan'] ?? '';

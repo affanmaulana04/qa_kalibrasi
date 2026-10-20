@@ -2,6 +2,11 @@
 session_start();
 if (empty($_SESSION['login'])) { header('Location: ../../logout.php'); exit; }
 include '../../inc/inc_koneksi.php';
+require_once __DIR__.'/../../inc/qa_rbac.php';
+if (empty($_SESSION['qa_user_admin_csrf'])) $_SESSION['qa_user_admin_csrf']=bin2hex(random_bytes(20));
+
+if (!qaRbacIsAdmin($konek)) {http_response_code(403);exit('Hanya Admin QA.');}
+qaRbacRequire($konek,'pengguna',false);
 
 $id_pemakai = trim((string)($_SESSION['userid'] ?? ''));
 $nama_pemakai = trim((string)($_SESSION['username'] ?? $id_pemakai));
@@ -28,6 +33,8 @@ $user = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 mysqli_stmt_close($stmt);
 
 if (!$user) { http_response_code(404); exit('User tidak ditemukan.'); }
+$customRoles=qaRbacActiveRoles($konek);
+$selectedCustomRole=qaRbacRoleForUser($konek,(string)$user['uid']);
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -57,7 +64,7 @@ body{padding-top:70px;background:#f4f6f9}.navbar-brand img{height:25px;margin-to
 <div class="card">
 <h3 class="form-title">Edit User QA</h3>
 <p class="text-muted">Kelola identitas dan hak akses user QA.</p>
-<form id="formUser">
+<form id="formUser"><input type="hidden" name="qa_user_csrf" value="<?=htmlspecialchars($_SESSION['qa_user_admin_csrf'],ENT_QUOTES,'UTF-8')?>">
 <input type="hidden" name="status_proses" value="edit">
 <input type="hidden" name="zuid" value="<?php echo htmlspecialchars($user['uid'], ENT_QUOTES); ?>">
 <input type="hidden" name="xloginid" value="<?php echo htmlspecialchars($id_pemakai, ENT_QUOTES); ?>">
@@ -71,14 +78,14 @@ body{padding-top:70px;background:#f4f6f9}.navbar-brand img{height:25px;margin-to
 </div>
 <div class="col-md-6">
 <div class="flag-box">
-<h4 style="margin-top:0">Hak Akses QA</h4>
+<h4 style="margin-top:0">Status User</h4>
 <label class="checkbox"><input type="checkbox" name="input_admin" value="Y" <?php echo strtoupper((string)$user['admin'])==='Y'?'checked':''; ?>> <b>Admin QA</b></label>
-<label class="checkbox"><input type="checkbox" name="input_pembuat" value="Y" <?php echo strtoupper((string)$user['pembuat'])==='Y'?'checked':''; ?>> <b>Pembuat</b> — Check / Update QA</label>
+<details><summary>Hak QA lama (untuk user tanpa Custom Role)</summary><label class="checkbox"><input type="checkbox" name="input_pembuat" value="Y" <?php echo strtoupper((string)$user['pembuat'])==='Y'?'checked':''; ?>> <b>Pembuat</b> — Check / Update QA</label>
 <label class="checkbox"><input type="checkbox" name="input_pemeriksa" value="Y" <?php echo strtoupper((string)$user['pemeriksa'])==='Y'?'checked':''; ?>> <b>Pemeriksa</b> — validasi tahap pemeriksa</label>
 <label class="checkbox"><input type="checkbox" name="input_penyetuju" value="Y" <?php echo strtoupper((string)$user['penyetuju'])==='Y'?'checked':''; ?>> <b>Penyetuju</b> — validasi tahap penyetuju</label>
-<label class="checkbox"><input type="checkbox" name="input_block" value="Y" <?php echo strtoupper((string)$user['block'])==='Y'?'checked':''; ?>> <b>Block</b> — tidak dapat login</label>
+</details><label class="checkbox"><input type="checkbox" name="input_block" value="Y" <?php echo strtoupper((string)$user['block'])==='Y'?'checked':''; ?>> <b>Block</b> — tidak dapat login</label>
 </div>
-<div class="form-group" style="margin-top:15px"><label>Role</label><select class="form-control" name="input_role"><option value="QA" <?php echo strtolower((string)$user['role']) !== 'admin' ? 'selected' : ''; ?>>QA</option><option value="admin" <?php echo strtolower((string)$user['role']) === 'admin' ? 'selected' : ''; ?>>admin</option></select></div>
+<div class="form-group" style="margin-top:15px"><label>Custom Role (Hak Akses Halaman)</label><select class="form-control" name="input_custom_role"><option value="0" <?=$selectedCustomRole===0?'selected':''?>>-- Belum memakai Custom Role (akses legacy) --</option><?php foreach($customRoles as $r): ?><option value="<?=(int)$r['id']?>" <?=(int)$r['id']===$selectedCustomRole?'selected':''?>><?=htmlspecialchars($r['nama_role'],ENT_QUOTES,'UTF-8')?></option><?php endforeach; ?></select><p class="help-block">Role mengatur halaman yang bisa dibuka. <a href="../akses/roles.php">Kelola role</a>.</p></div><input type="hidden" name="input_role" value="QA">
 <div class="btn-row"><button type="button" id="simpan" class="btn btn-primary"><i class="fa fa-save"></i> Simpan</button> <button type="button" id="batal" class="btn btn-default"><i class="fa fa-arrow-left"></i> Kembali</button></div>
 </div>
 </div>

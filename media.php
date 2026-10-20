@@ -1,4 +1,4 @@
-﻿﻿<?php
+﻿<?php
 session_start();
 
 // Cek apakah user sudah login
@@ -7,6 +7,7 @@ if (empty($_SESSION['login'])) {
     exit();
 }
 include "inc/inc_koneksi.php";
+require_once __DIR__.'/inc/qa_rbac.php';
 
 // Ambil data session
 $id_pemakai = isset($_SESSION['userid']) ? $_SESSION['userid'] : '';
@@ -15,35 +16,23 @@ $role = isset($_SESSION['role']) ? $_SESSION['role'] : '';
 $jam_login = isset($_SESSION['jamlogin']) ? $_SESSION['jamlogin'] : date('H:i:s');
 $sapaan = isset($_SESSION['sapaan']) ? $_SESSION['sapaan'] : 'Bpk/Ibu';
 
-// Pengecekan hak akses admin.
-$status_admin = isset($_SESSION['admin']) ? $_SESSION['admin'] : 'N';
-$is_admin = ($status_admin == 'Y' || $status_admin == '1' || strtolower($role) == 'admin');
-
-$can_pembuat = $can_pemeriksa = $can_penyetuju = false;
-$rf = null;
-$stmtRole = $konek->prepare("SELECT pembuat, pemeriksa, penyetuju FROM `user` WHERE uid = ? LIMIT 1");
-
-if ($stmtRole) {
-    $stmtRole->bind_param('s', $id_pemakai);
-    $stmtRole->execute();
-    $rf = $stmtRole->get_result()->fetch_assoc();
-    $stmtRole->close();
-}
-
-if (empty($rf) && $nama_pemakai !== '') {
-    $stmtRole = $konek->prepare("SELECT pembuat, pemeriksa, penyetuju FROM `user` WHERE uname = ? LIMIT 1");
-    if ($stmtRole) {
-        $stmtRole->bind_param('s', $nama_pemakai);
-        $stmtRole->execute();
-        $rf = $stmtRole->get_result()->fetch_assoc();
-        $stmtRole->close();
-    }
-}
-
-$rf = $rf ?: ['pembuat' => 'N', 'pemeriksa' => 'N', 'penyetuju' => 'N'];
-$can_pembuat = $is_admin || strtoupper($rf['pembuat']) === 'Y';
-$can_pemeriksa = $is_admin || strtoupper($rf['pemeriksa']) === 'Y';
-$can_penyetuju = $is_admin || strtoupper($rf['penyetuju']) === 'Y';
+// Hak akses halaman berasal dari Custom Role (legacy untuk user yang belum migrasi).
+$is_admin = qaRbacIsAdmin($konek);
+$can_pembuat = qaRbacCan($konek,'kalibrasi');
+$can_pemeriksa = qaRbacCan($konek,'approval_pemeriksa');
+$can_penyetuju = qaRbacCan($konek,'approval_penyetuju');
+$can_master = qaRbacCan($konek,'masterdata');
+$can_monthly = qaRbacCanAny($konek,['jadwal_bulanan','jadwal_bulanan_internal','jadwal_bulanan_external']);
+$can_daily = qaRbacCan($konek,'jadwal_harian');
+$can_bbrau = qaRbacCan($konek,'laporan_bbrau');
+$can_results = qaRbacCan($konek,'laporan_hasil');
+$can_calendar = qaRbacCan($konek,'tanggal_merah');
+$can_users = qaRbacCan($konek,'pengguna');
+$can_mail = qaRbacCan($konek,'konfigurasi_email');
+$can_csv = qaRbacCan($konek,'upload_master');
+$can_manage_tables=$can_users||$can_mail||$can_calendar||$can_csv;
+$can_qa = $can_pembuat||$can_pemeriksa||$can_penyetuju||$can_master;
+$can_reports = $can_bbrau||$can_monthly||$can_daily||$can_results;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -148,39 +137,33 @@ $can_penyetuju = $is_admin || strtoupper($rf['penyetuju']) === 'Y';
             </div>
             <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
                 <ul class="nav navbar-nav navbar-left">
-                    <?php if ($is_admin) { ?>
-                    <li><a href="#">Tabel</a>
-                        <ul class="dropdown-menu">
-                            <li><a href="modul/tabel/pemakai.php">Data Pemakai Aplikasi</a></li>
-                            <li><a href="modul/tabel/email_validasi.php">Konfigurasi Email Validasi</a></li>
-                            <li><a href="modul/qa/tanggal_merah/tanggal_merah.php">Custom Tanggal Merah</a></li>
-                            <li><a href="modul/tabel/upload_master_csv.php">Upload Master Data CSV</a></li>
-                        </ul>
-                    </li>
-                    <?php } ?>
-                    <?php if ($can_pembuat || $can_pemeriksa || $can_penyetuju) { ?><li><a href="#">QA (Kalibrasi Alat)</a>
-                        <ul class="dropdown-menu">
-                            <?php if ($can_pembuat || $can_pemeriksa || $can_penyetuju) { ?><li><a href="modul/qa/kalibrasi/cek_alat.php">Check / Update QA Alat</a></li><?php } ?>
-                            <?php if ($can_pemeriksa || $can_penyetuju) { ?><li><a href="modul/qa/approval/transaksi_kalibrasi.php">Transaksi Kalibrasi</a></li><?php } ?>
-                        </ul>
-                    </li><?php } ?>
-                    <?php if ($is_admin || $can_pembuat || $can_pemeriksa || $can_penyetuju) { ?>
-
-                    <!-- REPORT BBRAU MENU V1 - MENU REPORT DI SEBELAH QA KALIBRASI -->
-                    <?php if ($can_pembuat || $can_pemeriksa || $can_penyetuju) { ?>
-                    <li><a href="#">Report</a>
-                        <ul class="dropdown-menu">
-                            <li><a href="modul/qa/laporan_bbrau/laporan_bbrau.php">Laporan BBRAU</a></li>
-                            <li><a href="modul/qa/jadwal_bulanan/laporan_jadwal_bulanan.php">Laporan Jadwal Bulanan</a></li>
-                        </ul>
-                    </li>
-                    <?php } ?>
-                    <li><a href="#">Alat Bantu</a>
-                        <ul class="dropdown-menu">
-                            <li><a href="modul/tabel/resetpwd_user.php">Reset Password</a></li>
-                        </ul>
-                    </li>
-                    <?php } ?>
+                    <?php if ($can_manage_tables): ?>
+                    <li><a href="#">Tabel</a><ul class="dropdown-menu">
+                        <?php if ($can_users): ?><li><a href="modul/tabel/pemakai.php">Data Pemakai Aplikasi</a></li><?php endif; ?>
+                        <?php if ($is_admin): ?><li><a href="modul/akses/roles.php">Custom Role & Hak Akses</a></li><?php endif; ?>
+                        <?php if ($can_mail): ?><li><a href="modul/tabel/email_validasi.php">Konfigurasi Email Validasi</a></li><?php endif; ?>
+                        <?php if ($can_calendar): ?><li><a href="modul/qa/tanggal_merah/tanggal_merah.php">Custom Tanggal Merah</a></li><?php endif; ?>
+                        <?php if ($can_csv): ?><li><a href="modul/tabel/upload_master_csv.php">Upload Master Data CSV</a></li><?php endif; ?>
+                    </ul></li>
+                    <?php endif; ?>
+                    <?php if ($can_qa): ?>
+                    <li><a href="#">QA (Kalibrasi Alat)</a><ul class="dropdown-menu">
+                        <?php if ($can_pembuat): ?><li><a href="modul/qa/kalibrasi/cek_alat.php">Check / Update QA Alat</a></li><?php endif; ?>
+                        <?php if ($can_pemeriksa || $can_penyetuju): ?><li><a href="modul/qa/approval/transaksi_kalibrasi.php">Transaksi Kalibrasi</a></li><?php endif; ?>
+                        <?php if ($can_master): ?><li><a href="modul/qa/masterdata/masterdata.php">Master Data QA</a></li><?php endif; ?>
+                    </ul></li>
+                    <?php endif; ?>
+                    <?php if ($can_reports): ?>
+                    <li><a href="#">Report</a><ul class="dropdown-menu">
+                        <?php if ($can_bbrau): ?><li><a href="modul/qa/laporan_bbrau/laporan_bbrau.php">Laporan BBRAU</a></li><?php endif; ?>
+                        <?php if ($can_monthly): ?><li><a href="modul/qa/jadwal_bulanan/laporan_jadwal_bulanan.php">Laporan Jadwal Bulanan</a></li><?php endif; ?>
+                        <?php if ($can_daily): ?><li><a href="modul/qa/jadwal_harian/cetak_jadwal.php">Jadwal Harian</a></li><?php endif; ?>
+                        <?php if ($can_results): ?><li><a href="modul/qa/laporan_hasil/laporan_hasil_kalibrasi.php">Laporan Hasil Kalibrasi</a></li><?php endif; ?>
+                    </ul></li>
+                    <?php endif; ?>
+                    <li><a href="#">Alat Bantu</a><ul class="dropdown-menu">
+                        <li><a href="modul/tabel/resetpwd_user.php">Reset Password</a></li>
+                    </ul></li>
                 </ul>
                 <ul class="nav navbar-nav navbar-right">
                     <li class="mega-menu">

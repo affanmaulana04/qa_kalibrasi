@@ -3,6 +3,8 @@
 session_start();
 if (empty($_SESSION['login'])) { header('location: ../../../logout.php'); exit(); }
 require_once __DIR__ . '/../../../inc/inc_koneksi.php';
+require_once __DIR__ . '/../../../inc/qa_rbac.php';
+qaRbacRequire($konek,'laporan_bbrau');
 
 function h($v){ return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8'); }
 function dmy($v){ if(!$v||$v==='0000-00-00')return ''; $t=strtotime($v); return $t?date('d-m-Y',$t):$v; }
@@ -69,7 +71,33 @@ $type=$alat?firstNonEmpty($alat,['type','tipe']):'';
 <!doctype html><html lang="id"><head><link rel="icon" type="image/png" href="/qa_kalibrasi/images/favicon-toto-qa.png?v=1"><meta charset="utf-8"><title>Laporan BBRAU</title>
 <style>
 *{box-sizing:border-box}body{font-family:"Times New Roman",serif;margin:0;background:#eef1f4;color:#000}.no-print{max-width:980px;margin:22px auto 14px;padding:0;background:#fff;border:1px solid #d7dce1;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.07);overflow:hidden;font-family:Arial,sans-serif}.toolbar-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #e3e6e9;background:#fafbfc}.toolbar-title{font-size:16px;font-weight:700;color:#263238}.toolbar-sub{font-size:12px;color:#6b747c;margin-top:3px}.backbtn{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border:1px solid #c8cdd2;border-radius:6px;background:#fff;color:#333;text-decoration:none;font-size:13px;font-weight:600}.backbtn:hover{background:#f2f3f5;color:#111;text-decoration:none}.search-wrap{padding:16px 18px}.search{display:flex;gap:8px}.search input{flex:1;padding:10px 12px;font:14px Arial;border:1px solid #bfc5ca;border-radius:6px;outline:none}.search input:focus{border-color:#6d7780;box-shadow:0 0 0 2px rgba(80,90,100,.08)}.search button,.printbtn{padding:9px 16px;border:1px solid #555;border-radius:6px;background:#fff;cursor:pointer;font:600 13px Arial;color:#222}.search button[type="submit"]{background:#343a40;color:#fff;border-color:#343a40}.search button:hover,.printbtn:hover{filter:brightness(.96)}.err{color:#a52828;margin-top:10px;padding:9px 11px;border:1px solid #e4c2c2;background:#fff7f7;border-radius:5px;font:13px Arial}.sheet{width:210mm;min-height:297mm;margin:8px auto;background:#fff;padding:3mm 2mm 2mm}.company{text-align:center;font:bold 9pt Arial;border-bottom:.35mm solid #000;height:5mm}.title{text-align:center;font:bold 14pt "Times New Roman";height:13mm;padding-top:3mm}.sub{text-align:center;font:bold 10pt Arial;height:6mm}.tbl{width:100%;border-collapse:collapse;table-layout:fixed}.tbl td,.tbl th{border:.25mm solid #000;padding:.6mm 1mm;font-size:8pt;vertical-align:middle}.meta td{height:7mm}.meta .lbl{font-size:7pt;width:17%}.meta .val{font-weight:normal}.meta .strong{font-weight:bold;text-align:center}.mini{margin-top:0}.mini th{font-weight:normal;text-align:center;height:5mm}.mini td{height:5mm}.mini .riwayat-vertical{padding:0;text-align:center;vertical-align:middle;font-weight:normal;width:4%;border-top:.25mm solid #000;border-bottom:.25mm solid #000;border-left:.25mm solid #000;border-right:.25mm solid #000!important}.riwayat-vertical .vertical-text{writing-mode:vertical-rl;transform:none;letter-spacing:1.4mm;font-size:7pt;display:inline-block}.mini .riwayat-data{border-left:.25mm solid #000!important}.main{margin-top:1mm}.main th{font-weight:normal;text-align:center;height:7mm;font-size:7pt}.main td{height:6mm;text-align:center;font-size:7pt}.left{text-align:left!important}.doc{text-align:right;font:7pt Arial;margin-top:1mm}.slot-no{width:4%}.c-tgl{width:12%}.c-jenis{width:16%}.c-hasil{width:10%}.c-pet{width:14%}.c-per{width:15%}.c-pel{width:13%}.c-ket{width:14%}
-@media print{body{background:#fff}.no-print{display:none}.sheet{margin:0;width:210mm;min-height:297mm;page-break-after:always}}
+/* Ukur tinggi dengan aturan cetak SEBELUM Chrome mengganti media screen menjadi print. */
+html.bbrau-print-measuring .sheet{width:210mm!important;min-height:0!important;height:296mm!important;margin:0!important;padding:2mm!important;overflow:hidden!important}
+html.bbrau-print-measuring .company{height:4.5mm}
+html.bbrau-print-measuring .title{height:10mm;padding-top:2mm}
+html.bbrau-print-measuring .sub{height:5mm}
+html.bbrau-print-measuring .meta td{height:5.8mm;padding:.4mm .65mm;font-size:7.5pt}
+html.bbrau-print-measuring .mini th,html.bbrau-print-measuring .mini td{height:4.4mm;padding:.3mm .65mm;font-size:7pt;line-height:1.1}
+html.bbrau-print-measuring .main th{height:5.4mm;padding:.3mm .6mm;font-size:6.7pt}
+html.bbrau-print-measuring .main td{height:5.15mm;padding:.2mm .4mm;font-size:6.5pt;line-height:1.07}
+/* Satu lembar A4 tanpa header/footer URL & tanggal dari margin browser. */
+@page{size:A4 portrait;margin:0}
+@media print{
+  html,body{margin:0!important;padding:0!important;background:#fff!important}
+  .no-print{display:none!important}
+  .sheet{margin:0!important;width:210mm!important;min-height:0!important;
+    height:296mm!important;padding:2mm!important;overflow:hidden!important;
+    box-shadow:none!important;break-before:avoid!important;break-after:auto!important;
+    page-break-before:avoid!important;page-break-after:auto!important}
+  .sheet-content{transform-origin:top left;transform:scale(var(--bbrau-fit,1));width:var(--bbrau-width,100%)}
+  .company{height:4.5mm}
+  .title{height:10mm;padding-top:2mm}
+  .sub{height:5mm}
+  .meta td{height:5.8mm;padding:.4mm .65mm;font-size:7.5pt}
+  .mini th,.mini td{height:4.4mm;padding:.3mm .65mm;font-size:7pt;line-height:1.1}
+  .main th{height:5.4mm;padding:.3mm .6mm;font-size:6.7pt}
+  .main td{height:5.15mm;padding:.2mm .4mm;font-size:6.5pt;line-height:1.07}
+}
 </style></head><body>
 <div class="no-print">
  <div class="toolbar-head">
@@ -83,6 +111,7 @@ $type=$alat?firstNonEmpty($alat,['type','tipe']):'';
 </div>
 <?php if($alat): ?>
 <div class="sheet">
+ <div class="sheet-content">
  <div class="company">PT. SURYA TOTO INDONESIA Tbk.</div>
  <div class="title">BUKU BESAR RIWAYAT ALAT UKUR</div>
  <div class="sub"><?=h(strtoupper($nama))?></div>
@@ -101,6 +130,36 @@ $type=$alat?firstNonEmpty($alat,['type','tipe']):'';
  <?php for($i=1;$i<=26;$i++):$r=$slots[$i];?><tr><td><?= $i ?></td><td><?=h($r?dmy($r['tanggal_pengecekan']??''):'')?></td><td><?=h($r?(($r['jenis_transaksi']??'')==='registrasi_alat'?'Registrasi':'Kalibrasi'):'')?></td><td><?=h($r?normStatus($r['status_kalibrasi']??''):'')?></td><td><?=h($r?($r['operator']??$r['created_by']??''):'')?></td><td><?=h($r?($r['nama_pemeriksa']??''):'')?></td><td><?= $r?'INTERNAL':'' ?></td><td><?=h($r?($r['keterangan']??''):'')?></td></tr><?php endfor;?>
  </tbody></table>
  <div class="doc">STIS-CMFG4-01/R4</div>
+ </div>
 </div>
 <?php endif; ?>
+<script>
+// Saat cetak, perkecil isi HANYA bila riwayat panjang melebihi satu halaman A4.
+// Tidak memotong baris dan tidak mengubah tampilan layar atau data BBRAU.
+(function(){
+  var sheet=document.querySelector('.sheet');
+  var inner=sheet && sheet.querySelector('.sheet-content');
+  if(!inner)return;
+  function fitPrint(){
+    inner.style.setProperty('--bbrau-fit','1');
+    inner.style.setProperty('--bbrau-width','100%');
+    document.documentElement.classList.add('bbrau-print-measuring');
+    var cs=getComputedStyle(sheet);
+    var padding=parseFloat(cs.paddingTop||0)+parseFloat(cs.paddingBottom||0);
+    var available=sheet.clientHeight-padding-8;
+    var required=inner.scrollHeight;
+    document.documentElement.classList.remove('bbrau-print-measuring');
+    if(required>available && available>0){
+      var scale=Math.min(1,available/required);
+      inner.style.setProperty('--bbrau-fit',String(scale));
+      inner.style.setProperty('--bbrau-width',(100/scale)+'%');
+    }
+  }
+  window.addEventListener('beforeprint',fitPrint);
+  window.addEventListener('afterprint',function(){
+    inner.style.removeProperty('--bbrau-fit');
+    inner.style.removeProperty('--bbrau-width');
+  });
+})();
+</script>
 </body></html>

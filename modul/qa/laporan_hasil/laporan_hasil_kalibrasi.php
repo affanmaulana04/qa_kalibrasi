@@ -2,6 +2,8 @@
 session_start();
 if (empty($_SESSION['login'])) { header('Location: ../../../logout.php'); exit; }
 require_once __DIR__.'/../../../inc/inc_koneksi.php';
+require_once __DIR__ . '/../../../inc/qa_rbac.php';
+qaRbacRequire($konek,'laporan_hasil');
 require_once __DIR__.'/../../../inc/qa_daily_report.php';
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 $konek->set_charset('utf8mb4');
@@ -52,6 +54,7 @@ if (isset($_GET['render'])) {
     exit;
 }
 header('Cache-Control: no-store');
+$dailyScriptVersion = substr(hash_file('sha256', __DIR__.'/../../../js/qa_daily_report.js'), 0, 16);
 ?>
 <!doctype html><html lang="id"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -66,6 +69,7 @@ h2{font-size:24px;color:#1e3f66;margin-top:0;font-weight:bold}.daily-filter{disp
 .daily-report{background:white;padding:20px;margin:20px 0;border:1px solid #bbb;overflow:auto}.daily-report h3{text-align:center;font-size:19px;margin:8px 0}.daily-company,.daily-period{text-align:center;margin:6px 0 14px}
 .daily-grid .diagonal-strike-td{background:linear-gradient(to top right,transparent 49.5%,#999 50%,transparent 50.5%)}
 .daily-grid{border-collapse:collapse;width:100%;min-width:1000px;table-layout:fixed;color:#000;font-size:11px}.daily-grid td,.daily-grid th{border:1px solid #777;padding:5px;vertical-align:middle;text-align:center;overflow-wrap:anywhere}.daily-grid th{background:#edf0f3}.daily-grid .daily-meta{text-align:left;background:#f5f5f5;font-size:11px;line-height:1.6}.daily-meta span{display:inline-block;margin-right:18px}.daily-meta strong{font-weight:600}.daily-error{color:#a12622}.daily-render-frame{position:absolute;left:-20000px;width:1400px;height:1000px;border:0}
+.daily-print-frame{display:block;width:100%;height:85vh;min-height:600px;border:1px solid #bbb;background:#525659}
 @media(max-width:600px){.daily-container{padding:0 10px 20px}.daily-card{padding:15px}}
 @media print{@page{size:A4 landscape;margin:8mm}html,body{padding:0;margin:0;background:white;color:black}.no-print{display:none!important}.daily-container{max-width:none;margin:0;padding:0}.daily-report{padding:0;margin:0;border:0;overflow:visible;break-after:page}.daily-report:last-child{break-after:auto}.daily-grid{min-width:0;font-size:8px}.daily-grid td,.daily-grid th{padding:3px}.daily-grid .daily-meta{font-size:8px}.daily-grid thead{display:table-header-group}.daily-grid tbody{break-inside:avoid}.daily-render-frame{display:none}.daily-report h3{font-size:15px}}
 </style></head><body>
@@ -92,5 +96,5 @@ h2{font-size:24px;color:#1e3f66;margin-top:0;font-weight:bold}.daily-filter{disp
 <div id="dailyReports"></div>
 </main>
 <script type="application/json" id="dailyData"><?=json_encode(['records'=>$matching,'formats'=>qaDailyFormats(),'section'=>$section,'date'=>$date],JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_INVALID_UTF8_SUBSTITUTE)?></script>
-<script src="../../../js/qa_daily_report.js"></script>
+<script src="../../../js/qa_daily_report.js?v=<?=$dailyScriptVersion?>"></script>
 </body></html>

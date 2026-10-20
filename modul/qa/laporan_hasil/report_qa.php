@@ -7,6 +7,8 @@ if (empty($_SESSION['login'])) {
 
 $id_pemakai = $_SESSION['userid'] ?? '';
 require_once __DIR__ . '/../../../inc/inc_koneksi.php';
+require_once __DIR__ . '/../../../inc/qa_rbac.php';
+qaRbacRequire($konek,'laporan_hasil');
 
 function e($value) {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');

@@ -1,10 +1,21 @@
-﻿<?php
+<?php
 if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 if (empty($_SESSION['login'])) {
     header('location: ../../../logout.php');
     exit();
 }
 require_once __DIR__ . '/../../../inc/inc_koneksi.php';
+require_once __DIR__ . '/../../../inc/qa_rbac.php';
+// Report format permissions are validated again here (not just on menu/dropdown).
+if (isset($monthlyReportOptions)) {
+    qaRbacRequireAny($konek, ['jadwal_bulanan','jadwal_bulanan_internal','jadwal_bulanan_external']);
+    $requestedMonthlyFormat = (string)($monthlyReportOptions['format'] ?? '1');
+    $requiredMonthlyPermission = qaRbacMonthlyPermission($requestedMonthlyFormat);
+    if (!$requiredMonthlyPermission) { http_response_code(400); exit('Format laporan tidak valid.'); }
+    qaRbacRequire($konek, $requiredMonthlyPermission);
+} else {
+    qaRbacRequire($konek,'masterdata');
+}
 $isMonthlyReport = isset($monthlyReportOptions);
 $isMonthlyPrint = $isMonthlyReport && $monthlyReportOptions['cetak'];
 $nama_petugas = isset($_SESSION['nama_lengkap']) && $_SESSION['nama_lengkap'] !== ''
@@ -375,11 +386,12 @@ if ($filter_waktu === 'harian') {
     $reportMeta = ['jenis'=>'laporan_harian','periode_key'=>$val_harian,'periode_label'=>'Harian '.$val_harian];
 } elseif ($filter_waktu === 'bulanan') {
     /*
-     * HASIL MEETING - JADWAL BULANAN
-     * R dan H hanya muncul setelah Update Hasil Kalibrasi dilakukan.
-     * Tanggal R selalu mengikuti tanggal aktual kalibrasi, sehingga R dan H tidak pernah beda tanggal.
-     * Registrasi alat tidak membentuk Rencana pada jadwal bulanan.
+     * Jadwal tahun berjalan: R dan H terjadi pada tanggal aktual Update Hasil Kalibrasi.
+     * Jadwal tepat tahun depan: hanya jumlah alat yang jatuh tempo ditampilkan di
+     * kolom TOTAL baris R, per kombinasi nama alat + seksi. Tanggal dan H kosong.
+     * Registrasi saja tidak dihitung sebagai jadwal jatuh tempo.
      */
+    $showNextYearDueInfo = $selectedYear === ((int)date('Y') + 1);
     $groups = [];
     $actualSeen = [];
     $latestCalibrationNextByNo = [];
@@ -390,15 +402,17 @@ if ($filter_waktu === 'harian') {
         $nextDate = substr((string)($e['next_date'] ?? ''), 0, 10);
 
         if ($no !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $nextDate)) {
-            // actualEvents sudah berurutan berdasarkan tanggal/id; nilai terakhir menjadi jadwal berikut terbaru.
+            // Riwayat urut tanggal/id; ambil jadwal kalibrasi berikutnya yang terakhir.
             $latestCalibrationNextByNo[$no] = $nextDate;
         }
 
+        // Tahun depan adalah rencana per bulan, bukan realisasi pada tanggal tertentu.
+        if ($showNextYearDueInfo) continue;
         if (substr($actualDate, 0, 7) !== $val_bulanan) continue;
         if ($filter_seksi !== 'ALL' && strtoupper($e['seksi']) !== strtoupper($filter_seksi)) continue;
         if (!statusMatches($e['status'], $filter_status)) continue;
 
-        // Satu nomor alat dihitung satu kali per tanggal walaupun ada penyimpanan/update ulang di hari yang sama.
+        // Hindari menghitung ulang nomor alat yang dicek berkali-kali di hari yang sama.
         $actualKey = strtoupper($no).'|'.$actualDate;
         if (isset($actualSeen[$actualKey])) continue;
         $actualSeen[$actualKey] = true;
@@ -406,14 +420,10 @@ if ($filter_waktu === 'harian') {
         $gk = strtoupper(trim($e['seksi'])).'|'.strtoupper(trim($e['nama_part']));
         if (!isset($groups[$gk])) {
             $groups[$gk] = [
-                'seksi'=>$e['seksi'],
-                'nama_part'=>$e['nama_part'],
-                'petugas'=>[],
-                'R'=>array_fill(1,$daysInMonth,0),
-                'H'=>array_fill(1,$daysInMonth,0)
+                'seksi'=>$e['seksi'], 'nama_part'=>$e['nama_part'], 'petugas'=>[],
+                'R'=>array_fill(1,$daysInMonth,0), 'H'=>array_fill(1,$daysInMonth,0)
             ];
         }
-
         $d = (int)substr($actualDate, 8, 2);
         if ($d >= 1 && $d <= $daysInMonth) {
             $groups[$gk]['R'][$d]++;
@@ -422,50 +432,38 @@ if ($filter_waktu === 'harian') {
         if (($e['petugas'] ?? '-') !== '-') $groups[$gk]['petugas'][] = $e['petugas'];
     }
 
+    if ($showNextYearDueInfo) {
+        foreach ($masterByNo as $no => $m) {
+            // Hanya alat aktif yang sudah pernah menjalani Update Hasil Kalibrasi.
+            if (($m['_table'] ?? '') !== 'qa_part') continue;
+            if (!isset($latestCalibrationNextByNo[$no])) continue;
+            if (substr($latestCalibrationNextByNo[$no], 0, 7) !== $val_bulanan) continue;
+            $seksiAlat = trim((string)($m['seksi_pemilik'] ?? ''));
+            $namaAlat = trim((string)($m['nama_part'] ?? ''));
+            if ($filter_seksi !== 'ALL' && strtoupper($seksiAlat) !== strtoupper($filter_seksi)) continue;
+            if (!statusMatches(displayMasterStatus($m, $latestByNo, $registryByNo), $filter_status)) continue;
+
+            $gk = strtoupper($seksiAlat).'|'.strtoupper($namaAlat);
+            if (!isset($groups[$gk])) {
+                $groups[$gk] = [
+                    'seksi'=>$seksiAlat, 'nama_part'=>$namaAlat, 'petugas'=>[],
+                    'R'=>array_fill(1,$daysInMonth,0), 'H'=>array_fill(1,$daysInMonth,0),
+                    'jumlah_rencana'=>0
+                ];
+            }
+            // Satu nomor alat = satu unit rencana, meski nama dan seksinya sama.
+            $groups[$gk]['jumlah_rencana']++;
+        }
+    }
+
     foreach ($groups as &$g) {
-        $g['totalR'] = array_sum($g['R']);
-        $g['totalH'] = array_sum($g['H']);
-        $g['petugas'] = implode(', ', array_values(array_unique(array_filter($g['petugas']))));
+        $g['totalR'] = $showNextYearDueInfo ? (int)($g['jumlah_rencana'] ?? 0) : array_sum($g['R']);
+        $g['totalH'] = $showNextYearDueInfo ? '' : array_sum($g['H']);
+        $g['petugas'] = $showNextYearDueInfo ? '' : implode(', ', array_values(array_unique(array_filter($g['petugas']))));
     }
     unset($g);
     uasort($groups, fn($a,$b)=>strtoupper($a['seksi'].$a['nama_part']) <=> strtoupper($b['seksi'].$b['nama_part']));
     $reportRows = $groups;
-
-    /*
-     * Informasi rencana kalibrasi masa depan hanya ditampilkan untuk tahun depan.
-     * Data diringkas per seksi saja, tanpa nama alat dan tanpa menentukan tanggal kerja.
-     * Hanya alat yang sudah pernah Update Hasil Kalibrasi yang masuk perhitungan.
-     */
-    $showNextYearDueInfo = $selectedYear === ((int)date('Y') + 1);
-    $dueGroups = [];
-
-    if ($showNextYearDueInfo) {
-        foreach ($masterByNo as $no => $m) {
-            if (($m['_table'] ?? '') !== 'qa_part') continue;
-            if (!isset($latestCalibrationNextByNo[$no])) continue;
-
-            $nextDate = $latestCalibrationNextByNo[$no];
-            if (substr($nextDate, 0, 7) !== $val_bulanan) continue;
-            if ($filter_seksi !== 'ALL' && strtoupper((string)$m['seksi_pemilik']) !== strtoupper($filter_seksi)) continue;
-
-            $display = displayMasterStatus($m, $latestByNo, $registryByNo);
-            if (!statusMatches($display, $filter_status)) continue;
-
-            $gk = strtoupper(trim((string)$m['seksi_pemilik']));
-            if (!isset($dueGroups[$gk])) {
-                $dueGroups[$gk] = [
-                    'seksi'=>(string)$m['seksi_pemilik'],
-                    'jumlah'=>0
-                ];
-            }
-            $dueGroups[$gk]['jumlah']++;
-        }
-    }
-
-    uasort($dueGroups, fn($a,$b)=>strtoupper($a['seksi']) <=> strtoupper($b['seksi']));
-    $monthlyDueRows = array_values($dueGroups);
-    $monthlyDueTotal = array_sum(array_column($monthlyDueRows, 'jumlah'));
-
     $reportMeta=['jenis'=>'laporan_bulanan','periode_key'=>$val_bulanan,'periode_label'=>'Bulanan '.date('F Y',strtotime($val_bulanan.'-01'))];
 } elseif ($filter_waktu === 'tahunan') {
     $year=(int)$val_tahunan;
@@ -529,7 +527,7 @@ if ($isMonthlyReport) {
     }
     $monthNames = [1=>'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
     $monthlyTitle = $monthNames[$selectedMonth].' '.$selectedYear;
-    $monthlyDisplayFormat = isset($_GET['format']) && in_array((string)$_GET['format'], ['1','2','3'], true) ? (string)$_GET['format'] : '1';
+    $monthlyDisplayFormat = (string)$monthlyReportOptions['format'];
     $monthlyPlanRows = [];
     if (!$monthlyReportOptions['errors']) {
         foreach ($planEvents as $event) {
@@ -545,6 +543,7 @@ if ($isMonthlyReport) {
             ?: strnatcasecmp($a['no_part'], $b['no_part']);
     });
     if ($isMonthlyPrint) {
+        if ($monthlyDisplayFormat !== '1') { http_response_code(400); exit('Gunakan tampilan Jadwal Bulanan untuk mencetak Format Internal/External.'); }
         require __DIR__ . '/../jadwal_bulanan/cetak_jadwal_bulanan_format1.php';
         return;
     }
@@ -570,11 +569,11 @@ if ($isMonthlyReport) {
         <style>
             body{background:#f4f6f9}
             .monthly-controls h3{margin-top:0;font-weight:700;color:#1e3f66}
-            .monthly-filters,.monthly-print-controls{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px}
+            .monthly-filters{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px}
             .monthly-filters .form-group{margin:0;min-width:150px}
             .monthly-filters .form-group:first-child{min-width:240px}
-            .monthly-filters .btn,.monthly-print-controls .btn{height:34px}
-            .monthly-print-controls{border-top:1px solid #e5e7eb;margin-top:18px;padding-top:16px}
+            .monthly-filters .monthly-format-select{min-width:295px}
+            .monthly-filters .btn{height:34px}
             #monthlyPrintHelp{margin:10px 0 0}
             #monthlyFilterNotice{margin-top:10px}
             .monthly-sheet{background:#fff;border:1px solid #ddd;border-radius:4px;padding:20px;margin-bottom:25px}
@@ -582,6 +581,7 @@ if ($isMonthlyReport) {
             .monthly-heading h2{font-size:20px;font-weight:700;margin:8px 0}
             .monthly-sheet .table-jadwal{min-width:1200px}
             .monthly-sheet [hidden]{display:none!important}
+            .monthly-preview-frame{width:100%;height:1040px;border:1px solid #ddd;background:#fff;display:block}
             .monthly-format1 .section-table{width:100%;border-collapse:collapse;table-layout:fixed;margin-bottom:18px;font-size:14px}
             .monthly-format1 .section-table th,.monthly-format1 .section-table td{border:1px solid #000;padding:10px 8px;vertical-align:middle;overflow-wrap:anywhere}
             .monthly-format1 .section-table th{text-align:center;font-weight:normal;height:48px}
@@ -595,8 +595,7 @@ if ($isMonthlyReport) {
             .monthly-format1 .error{color:#a94442}
             @media(max-width:600px){
                 .monthly-report-page>.container-fluid{padding:0 12px!important}
-                .monthly-filters .form-group,.monthly-filters .form-group:first-child{width:100%;min-width:0}
-                .monthly-print-controls>div{width:100%}
+                .monthly-filters .form-group,.monthly-filters .form-group:first-child,.monthly-filters .monthly-format-select{width:100%;min-width:0}
                 .monthly-sheet{padding:12px}
             }
             @page{size:A4 portrait;margin:0}
@@ -687,24 +686,24 @@ if ($isMonthlyReport) {
                             <label for="monthlyYear">Tahun</label>
                             <input type="number" class="form-control" id="monthlyYear" name="tahun" min="1900" max="9999" step="1" value="<?=$selectedYear?>" required>
                         </div>
-                        <button class="btn btn-primary" type="submit"><i class="fa fa-search"></i> Tampilkan</button>
-                    </form>
-                    <div class="monthly-print-controls">
-                        <div>
+                        <div class="form-group monthly-format-select">
                             <label for="monthlyPrintFormat">Format tampilan &amp; cetak</label>
-                            <select class="form-control" id="monthlyPrintFormat" name="format" form="formFilter" aria-describedby="monthlyPrintHelp">
+                            <select class="form-control" id="monthlyPrintFormat" name="format">
+                                <?php if (qaRbacCan($konek, qaRbacMonthlyPermission('1'))): ?>
                                 <option value="1" <?=$monthlyDisplayFormat==='1'?'selected':''?>>Format 1 — Daftar Rencana Kalibrasi</option>
+                                <?php endif; ?>
+                                <?php if (qaRbacCan($konek, qaRbacMonthlyPermission('2'))): ?>
                                 <option value="2" <?=$monthlyDisplayFormat==='2'?'selected':''?>>Format 2 — Jadwal Kalibrasi Internal</option>
+                                <?php endif; ?>
+                                <?php if (qaRbacCan($konek, qaRbacMonthlyPermission('3'))): ?>
                                 <option value="3" <?=$monthlyDisplayFormat==='3'?'selected':''?>>Format 3 — Jadwal Kalibrasi External</option>
+                                <?php endif; ?>
                             </select>
                         </div>
-                        <button class="btn btn-primary" type="button" id="monthlyPrintButton"><i class="fa fa-eye"></i> Tampilkan</button>
-                        <?php if ($monthlyDisplayFormat === '1'): ?>
-                        <button class="btn btn-success" type="button" id="monthlyPrintNowButton" onclick="qaPrintMonthlyFormat1()" <?=!$monthlyPlanRows?'disabled':''?>> <i class="fa fa-print"></i> Print</button>
-                        <?php endif; ?>
-                    </div>
-                    <p id="monthlyPrintHelp" class="text-muted">Pilih format lalu klik Tampilkan. Setelah tampilan laporan muncul, gunakan tombol Print. Format Internal menampilkan R + H; Format External menampilkan R dan baris H kosong.</p>
-                    <?php if (!$monthlyPlanRows && !$monthlyReportOptions['errors']): ?>
+                        <button class="btn btn-primary" type="submit" id="monthlyPrintButton"><i class="fa fa-eye"></i> Tampilkan</button>
+                        <button class="btn btn-success" type="button" id="monthlyPrintNowButton" onclick="qaPrintMonthlySelected()"><i class="fa fa-print"></i> Print</button>
+                    </form>
+                    <?php if ($monthlyDisplayFormat === '1' && !$monthlyPlanRows && !$monthlyReportOptions['errors']): ?>
                     <p class="text-muted">Tidak ada rencana kalibrasi untuk Format 1 pada seksi dan periode ini.</p>
                     <?php endif; ?>
                     <p id="monthlyFilterNotice" class="text-warning" hidden>Filter atau format berubah. Klik Tampilkan untuk memuat tampilan terbaru.</p>
@@ -713,11 +712,13 @@ if ($isMonthlyReport) {
                     <?php endif; ?>
                 </div>
                 <section class="monthly-sheet" aria-label="Jadwal kalibrasi bulanan">
+                    <?php if ($monthlyDisplayFormat === '1'): ?>
                     <header class="monthly-heading">
                         <div>PT. SURYA TOTO INDONESIA Tbk.</div>
                         <h2>LAPORAN JADWAL KALIBRASI BULANAN</h2>
                         <p><?=h($monthlyTitle)?> &middot; Seksi: <?=h($filter_seksi==='ALL'?'Semua Seksi':$filter_seksi)?></p>
                     </header>
+                    <?php endif; ?>
                 <?php else: ?>
                 <div class="filter-box">
                     <h4 style="margin-top:0;font-weight:bold">
@@ -1074,9 +1075,22 @@ if ($isMonthlyReport) {
 </div>
 <?php elseif($filter_waktu==='bulanan'): ?>
     <?php if ($isMonthlyReport): ?>
+    <?php if ($monthlyDisplayFormat === '1'): ?>
     <div id="monthlyFormat1" class="monthly-format1">
         <?php require __DIR__ . '/../jadwal_bulanan/jadwal_bulanan_format1_tabel.php'; ?>
     </div>
+    <?php else: ?>
+    <?php
+       $monthlyFrameParams = [
+           'bulan' => $val_bulanan,
+           'seksi' => $filter_seksi,
+           'status' => 'ALL',
+           'mode' => $monthlyDisplayFormat === '2' ? 'internal' : 'external',
+           'embed' => '1'
+       ];
+    ?>
+    <iframe class="monthly-preview-frame" id="monthlyPreviewFrame" title="Pratinjau Jadwal Kalibrasi <?= $monthlyDisplayFormat === '2' ? 'Internal' : 'External' ?>" src="../jadwal_bulanan/cetak_jadwal_bulanan.php?<?=h(http_build_query($monthlyFrameParams))?>"></iframe>
+    <?php endif; ?>
     <?php else: ?>
     <div class="filter-box">
         <b>
@@ -1148,7 +1162,7 @@ if ($isMonthlyReport) {
             </b>
         </td>
         <td rowspan="2">
-            <?=h($g['petugas']?:'-')?>
+            <?= $showNextYearDueInfo ? '' : h($g['petugas']?:'-') ?>
         </td>
     </tr>
     <tr class="h-row">
@@ -1191,34 +1205,6 @@ if ($isMonthlyReport) {
     </b>
     = Hasil/Aktual kalibrasi pada tanggal yang sama.
 </div>
-<?php if (!empty($showNextYearDueInfo)): ?>
-<div class="filter-box" style="margin-top:18px">
-    <b>INFORMASI RENCANA KALIBRASI BULAN <?=h(strtoupper(date('F Y',strtotime($val_bulanan.'-01'))))?></b>
-    <div style="font-size:12px;color:#666;margin:5px 0 12px">
-        Informasi tahun depan hanya menunjukkan jumlah alat per seksi yang jatuh tempo pada bulan tersebut. Tanggal pelaksanaan ditentukan secara fleksibel oleh QA.
-    </div>
-    <div class="table-wrap">
-        <table class="table-jadwal" style="max-width:650px">
-            <thead>
-                <tr><th style="width:55px">NO</th><th>SEKSI</th><th style="width:150px">JUMLAH ALAT</th></tr>
-            </thead>
-            <tbody>
-                <?php $dueNo=0; foreach(($monthlyDueRows ?? []) as $due): $dueNo++; ?>
-                <tr>
-                    <td><?=$dueNo?></td>
-                    <td class="text-left"><?=h($due['seksi'])?></td>
-                    <td><b><?=(int)$due['jumlah']?></b></td>
-                </tr>
-                <?php endforeach; if($dueNo===0): ?>
-                <tr><td colspan="3" class="text-center">Belum ada alat hasil kalibrasi sebelumnya yang jatuh tempo pada bulan ini.</td></tr>
-                <?php else: ?>
-                <tr style="font-weight:bold;background:#f5f5f5"><td colspan="2" class="text-right">TOTAL ALAT BULAN INI</td><td><?=(int)($monthlyDueTotal ?? 0)?></td></tr>
-                <?php endif; ?>
-            </tbody>
-        </table>
-    </div>
-</div>
-<?php endif; ?>
 <?php endif; ?>
 <?php elseif($filter_waktu==='tahunan'): ?>
     <div class="filter-box">
@@ -1326,11 +1312,7 @@ if ($isMonthlyReport) {
     var formatSelect=document.getElementById('monthlyPrintFormat');
     var initialFormat=<?=json_encode($monthlyDisplayFormat)?>;
     var printNowButton=document.getElementById('monthlyPrintNowButton');
-    var hasData={
-        '1':<?=!!$monthlyPlanRows?'true':'false'?>,
-        '2':<?=!!$reportRows?'true':'false'?>,
-        '3':<?=!!$reportRows?'true':'false'?>
-    };
+    var hasData={'1':true, '2':true, '3':true};
     function updateDisplayButton(){
         var changed=$(form).find('[name]').serialize()!==initialValues || formatSelect.value!==initialFormat;
         displayButton.disabled=!hasData[formatSelect.value];
@@ -1339,21 +1321,21 @@ if ($isMonthlyReport) {
     }
     $(form).on('input change',updateDisplayButton);
     $(formatSelect).on('change',updateDisplayButton);
-    displayButton.addEventListener('click',function(){
-        var format=formatSelect.value;
-        var seksi=document.getElementById('monthlySection').value;
-        var bulan=document.getElementById('monthlyMonth').value;
-        var tahun=document.getElementById('monthlyYear').value;
-        if(format==='1'){
-            window.location.href='../jadwal_bulanan/laporan_jadwal_bulanan.php?seksi='+encodeURIComponent(seksi)+'&bulan='+encodeURIComponent(bulan)+'&tahun='+encodeURIComponent(tahun)+'&format=1';
-            return;
-        }
-        var monthValue=String(tahun)+'-'+String(bulan).padStart(2,'0');
-        var mode=format==='2'?'internal':'external';
-        window.location.href='../jadwal_bulanan/cetak_jadwal_bulanan.php?bulan='+encodeURIComponent(monthValue)+'&seksi='+encodeURIComponent(seksi)+'&status=ALL&mode='+encodeURIComponent(mode);
-    });
     updateDisplayButton();
 })();
+function qaPrintMonthlySelected(){
+    var frame=document.getElementById('monthlyPreviewFrame');
+    if(frame){
+        if(frame.contentWindow && typeof frame.contentWindow.qaPrintMonthlyReport==='function'){
+            frame.contentWindow.qaPrintMonthlyReport();
+        } else if(frame.contentWindow){
+            frame.contentWindow.focus();
+            frame.contentWindow.print();
+        }
+        return;
+    }
+    qaPrintMonthlyFormat1();
+}
 function qaPrintMonthlyFormat1(){
     var oldTitle=document.title;
     document.title='';

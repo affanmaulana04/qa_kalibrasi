@@ -31,6 +31,25 @@ if (empty($_SESSION['login'])) {
 }
 
 $action        = isset($_GET['action']) ? $_GET['action'] : '';
+
+require_once __DIR__ . '/../../../inc/qa_rbac.php';
+// Authorization is checked on EACH HTTP/AJAX request, using the current DB role.
+$qaActionPermissions = [
+ 'validasi_pemeriksa' => ['approval_pemeriksa'],
+ 'validasi_penyetuju' => ['approval_penyetuju'],
+ 'validasi_laporan_pemeriksa' => ['approval_pemeriksa'],
+ 'validasi_laporan_penyetuju' => ['approval_penyetuju'],
+ 'get_transaksi_detail' => ['approval_pemeriksa','approval_penyetuju'],
+ 'get_riwayat_validasi' => ['approval_pemeriksa','approval_penyetuju'],
+ 'get_riwayat_laporan_validasi' => ['approval_pemeriksa','approval_penyetuju'],
+ 'get_bbrau' => ['laporan_bbrau','kalibrasi'],
+ 'get_history_print' => ['kalibrasi','laporan_hasil'],
+ 'simpan_laporan_transaksi' => ['masterdata'],
+ 'simpan_master_seksi' => ['pengguna'],
+ 'hapus_master_seksi' => ['pengguna'],
+];
+qaRbacRequireAny($konek, $qaActionPermissions[$action] ?? ['kalibrasi'], true);
+
 $id_pemakai     = isset($_SESSION['userid']) ? $_SESSION['userid'] : '';
 $nama_petugas   = isset($_SESSION['username']) && $_SESSION['username'] !== '' ? $_SESSION['username'] : (isset($_SESSION['nama_lengkap']) && $_SESSION['nama_lengkap'] !== '' ? $_SESSION['nama_lengkap'] : ($id_pemakai ?: 'SISTEM'));
 
@@ -205,9 +224,9 @@ function qaUserFlags($konek)
         'penyetuju' => strtoupper((string)($row['penyetuju'] ?? 'N')) === 'Y'
     ];
 }
-function qaCanPembuat($konek){ $f=qaUserFlags($konek); return qaIsAdmin() || $f['pembuat']; }
-function qaCanPemeriksa($konek){ $f=qaUserFlags($konek); return qaIsAdmin() || $f['pemeriksa']; }
-function qaCanPenyetuju($konek){ $f=qaUserFlags($konek); return qaIsAdmin() || $f['penyetuju']; }
+function qaCanPembuat($konek){ return qaRbacCanAny($konek,['kalibrasi','masterdata']); }
+function qaCanPemeriksa($konek){ return qaRbacCan($konek,'approval_pemeriksa'); }
+function qaCanPenyetuju($konek){ return qaRbacCan($konek,'approval_penyetuju'); }
 
 function qaEnsureRegistryTable($konek){
     mysqli_query($konek, "CREATE TABLE IF NOT EXISTS qa_alat_registry (

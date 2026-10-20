@@ -1,10 +1,12 @@
-﻿<?php
+<?php
 session_start();
 if ($_SESSION['login'] == 0) {
     header('location: ../../../logout.php');
     exit();
 }
-require_once __DIR__ . '/../../../inc/inc_koneksi.php'; 
+require_once __DIR__ . '/../../../inc/inc_koneksi.php';
+require_once __DIR__ . '/../../../inc/qa_rbac.php';
+qaRbacRequire($konek,'kalibrasi'); 
 
 $tanggal_hari_ini = date('Y-m-d');
 $sql = "SELECT p.no_part, p.nama_part, COALESCE(sp.kode_pemilik, '-') AS seksi_pemilik, p.jadwal_kalibrasi

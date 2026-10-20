@@ -9,7 +9,7 @@ function qaCsvFields(): array {
         'periode_kalibrasi'=>'Periode Kalibrasi (hari)', 'jadwal_kalibrasi'=>'Jadwal Kalibrasi',
         'spesifikasi'=>'Spesifikasi', 'ukuran'=>'Ukuran', 'resolusi'=>'Resolusi',
         'merk'=>'Merk', 'type'=>'Tipe', 'no_seri'=>'No. Seri', 'no_fa'=>'No. Aset',
-        'lokasi'=>'Lokasi', 'no_laporan'=>'No. Laporan', 'format_laporan'=>'Format Laporan',
+        'lokasi'=>'Lokasi', 'format_laporan'=>'Format Laporan',
         'satuan'=>'Satuan', 'toleransi_global'=>'Toleransi', 'metode_uji'=>'Metode Uji',
         'standar_uji'=>'Standar Uji', 'traceability'=>'Traceability',
         'kls'=>'Kelas', 'fungsi'=>'Fungsi', 'buatan'=>'Buatan', 'keterangan'=>'Keterangan',
@@ -24,8 +24,8 @@ function qaCsvTemplateHeaders(): array {
 }
 function qaCsvTemplateExamples(): array {
     return [
-        ['SK gauge','SK-571','CONTOH-001','~','1 Tahun','16 - 10 - 2026','QA'],
-        ['Jangka sorong','0–150 mm','CONTOH-002','0.01 mm','180 Hari','17 - 10 - 2026','INJ'],
+        ['SK gauge','SK-571','CONTOH-001','~','365','16 - 10 - 2026','QA'],
+        ['Jangka sorong','0–150 mm','CONTOH-002','0.01 mm','180','17 - 10 - 2026','INJ'],
         ['Micrometer','0–25 mm','CONTOH-003','0.001 mm','365','18 - 10 - 2026','TECH'],
     ];
 }
@@ -65,8 +65,8 @@ function qaCsvSchema(mysqli $db): array {
     $engines = qaCsvFetch($db, "SHOW TABLE STATUS WHERE Name IN ('qa_part','qa_alat_registry')");
     if (count($engines) !== 2) throw new RuntimeException('Tabel master atau registry alat belum tersedia.');
     foreach ($engines as $table) {
-        if (strcasecmp($table['Engine'], 'InnoDB') !== 0) {
-            throw new RuntimeException('Import membutuhkan tabel qa_part dan qa_alat_registry berjenis InnoDB agar kegagalan dapat dibatalkan seluruhnya.');
+        if (strcasecmp($table['Engine'], 'MyISAM') !== 0) {
+            throw new RuntimeException('Import CSV membutuhkan qa_part dan qa_alat_registry berjenis MyISAM sesuai database QA.');
         }
     }
     return $schema;
@@ -162,7 +162,7 @@ function qaCsvParse(string $text, array $schema): array {
             $seen[$data['no_part']] = $record;
             $period = qaCsvPeriod($data['periode_kalibrasi']);
             if ($period === null) {
-                $errors[] = 'Periode kalibrasi harus bilangan bulat positif dalam hari atau tahun, misalnya 180 atau 1 Tahun.';
+                $errors[] = 'Isi periode kalibrasi dengan angka bulat positif dalam satuan hari, misalnya 180 atau 365.';
             } else { $data['periode_kalibrasi'] = $period; }
             $date = qaCsvDate($data['jadwal_kalibrasi']);
             if (!$date) $errors[] = 'Jadwal tidak valid. Gunakan YYYY-MM-DD atau DD-MM-YYYY.';
@@ -189,7 +189,8 @@ function qaCsvParse(string $text, array $schema): array {
 function qaCsvContext(mysqli $db, array $rows, bool $lock): array {
     $numbers = array_values(array_unique(array_filter(array_map(static function($r){return $r['data']['no_part'] ?? '';}, $rows))));
     $context = ['master'=>[], 'registry'=>[], 'archive'=>[], 'history'=>[], 'sections'=>[]];
-    $suffix = $lock ? ' FOR UPDATE' : '';
+    // MyISAM uses table-level locking (in qaCsvApply), not SELECT ... FOR UPDATE.
+    $suffix = '';
     foreach (qaCsvFetch($db, 'SELECT nama_seksi FROM qa_seksi_master ORDER BY nama_seksi'.$suffix) as $section) $context['sections'][strtoupper(trim($section['nama_seksi']))] = $section['nama_seksi'];
     if (!$numbers) return $context;
     $in = implode(',', array_fill(0, count($numbers), '?'));
@@ -244,38 +245,47 @@ function qaCsvPlan(mysqli $db, array $rows, bool $lock = false): array {
 }
 function qaCsvApply(mysqli $db, array $rows, string $signature, string $actor): array {
     qaCsvSchema($db);
-    // Reject conversion/truncation warnings instead of silently accepting partial values.
+    // MyISAM does not implement BEGIN/COMMIT/ROLLBACK. Validate first, then
+    // hold table locks while rechecking the plan and executing each statement.
+    // A server or disk failure mid-write may still leave a partial batch.
     $db->query("SET SESSION sql_mode = CONCAT_WS(',', @@SESSION.sql_mode, 'STRICT_ALL_TABLES')");
-    $db->begin_transaction();
+    $db->query('LOCK TABLES `qa_part` WRITE, `qa_alat_registry` WRITE, `qa_seksi_master` READ, `qa_pengecekan` READ, `qa_alat_ng` READ, `qa_alat_rusak` READ, `qa_alat_discontinue` READ, `qa_alat_ditarik` READ');
     try {
-        $plan = qaCsvPlan($db, $rows, true);
-        if ($plan['counts']['error'] || !hash_equals($signature, $plan['signature'])) throw new RuntimeException('Data berubah saat upload diproses. Tidak ada perubahan yang disimpan. Unggah ulang CSV untuk memeriksa data terbaru.');
+        $plan = qaCsvPlan($db, $rows);
+        if ($plan['counts']['error'] || !hash_equals($signature, $plan['signature'])) {
+            throw new RuntimeException('Data berubah sebelum import disimpan atau ada baris tidak valid. Tidak ada data yang disimpan; upload kembali untuk memeriksa data terbaru.');
+        }
+        $written = 0;
         foreach ($plan['items'] as $item) {
             if ($item['action'] === 'unchanged') continue;
             $values = $item['data']; $registryId = $item['registry_id'];
-            if (!$registryId) {
-                qaCsvWrite($db, "INSERT INTO qa_alat_registry (no_part,status_alat,created_by) VALUES (?,'AKTIF',?)", [$values['no_part'],$actor]);
-                $registryId = $db->insert_id;
+            try {
+                if (!$registryId) {
+                    qaCsvWrite($db, "INSERT INTO qa_alat_registry (no_part,status_alat,created_by) VALUES (?,'AKTIF',?)", [$values['no_part'],$actor]);
+                    $registryId = $db->insert_id;
+                }
+                if ($item['action'] === 'new') {
+                    $values['alat_registry_id'] = $registryId;
+                    $columns = '`'.implode('`,`', array_keys($values)).'`';
+                    qaCsvWrite($db, 'INSERT INTO qa_part ('.$columns.') VALUES ('.implode(',', array_fill(0,count($values),'?')).')', array_values($values));
+                    $masterId = $db->insert_id;
+                } else {
+                    $masterId = $item['master_id'];
+                    $updates = [];
+                    foreach ($item['changes'] as $field=>$change) $updates[$field] = $change['new'];
+                    $updates['alat_registry_id'] = $registryId;
+                    $assignments = implode(',', array_map(static function($field){return '`'.$field.'`=?';}, array_keys($updates)));
+                    qaCsvWrite($db, 'UPDATE qa_part SET '.$assignments.' WHERE id=?', array_merge(array_values($updates), [$masterId]));
+                }
+                qaCsvWrite($db, "UPDATE qa_alat_registry SET sumber_tabel='qa_part',sumber_id=? WHERE id=?", [$masterId,$registryId]);
+                $written++;
+            } catch (Throwable $error) {
+                error_log('QA MyISAM CSV gagal pada no_part '.$values['no_part'].': '.$error->getMessage());
+                throw new RuntimeException('Import terhenti pada nomor alat '.$values['no_part'].'. MyISAM tidak menyediakan rollback; '.$written.' alat sebelumnya mungkin sudah tersimpan. Periksa master dan registry sebelum mengulangi upload.', 0, $error);
             }
-            if ($item['action'] === 'new') {
-                $values['alat_registry_id'] = $registryId;
-                $columns = '`'.implode('`,`', array_keys($values)).'`';
-                qaCsvWrite($db, 'INSERT INTO qa_part ('.$columns.') VALUES ('.implode(',', array_fill(0,count($values),'?')).')', array_values($values));
-                $masterId = $db->insert_id;
-            } else {
-                $masterId = $item['master_id'];
-                $updates = [];
-                foreach ($item['changes'] as $field=>$change) $updates[$field] = $change['new'];
-                $updates['alat_registry_id'] = $registryId;
-                $assignments = implode(',', array_map(static function($field){return '`'.$field.'`=?';}, array_keys($updates)));
-                qaCsvWrite($db, 'UPDATE qa_part SET '.$assignments.' WHERE id=?', array_merge(array_values($updates), [$masterId]));
-            }
-            qaCsvWrite($db, "UPDATE qa_alat_registry SET sumber_tabel='qa_part',sumber_id=? WHERE id=?", [$masterId,$registryId]);
         }
-        $db->commit();
         return $plan['counts'];
-    } catch (Throwable $e) {
-        $db->rollback();
-        throw $e;
+    } finally {
+        $db->query('UNLOCK TABLES');
     }
 }

@@ -7,6 +7,8 @@ if (empty($_SESSION['login'])) {
 }
 
 require_once __DIR__ . '/../../inc/inc_koneksi.php';
+require_once __DIR__.'/../../inc/qa_rbac.php';
+qaRbacRequire($konek,'konfigurasi_email');
 
 /** @var mysqli $konek */
 if (!isset($konek) || !($konek instanceof mysqli)) {
@@ -64,7 +66,7 @@ if ($stmtAdmin) {
     $stmtAdmin->close();
 }
 
-if (!$isAdmin) {
+if (!qaRbacCan($konek,'konfigurasi_email')) {
     http_response_code(403);
 
     die(

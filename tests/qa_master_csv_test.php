@@ -102,10 +102,11 @@ qaCsvWrite($konek,"INSERT INTO qa_alat_ng (no_part,nama_part) VALUES (?,?)",['AR
 checkCsv(qaCsvPlan($konek,qaCsvParse($header."\nARCH,Archived,QA,1,2026-10-01",$schema))['counts']['error']===1, 'legacy archived number cannot be recreated');
 qaCsvWrite($konek,"INSERT INTO qa_alat_registry (no_part,status_alat) VALUES (?,'BLOKIR_PERMANEN')",['BLOCKED']);
 checkCsv(qaCsvPlan($konek,qaCsvParse($header."\nBLOCKED,Blocked,QA,1,2026-10-01",$schema))['counts']['error']===1, 'blocked registry cannot be recreated');
-// Force a database failure on the second row; the first row and both registries must roll back.
+// MyISAM cannot roll back a completed write. Force a failure on the second row
+// and verify the error is raised; an operator must reconcile earlier saved rows.
 $konek->query('ALTER TABLE qa_part ADD UNIQUE KEY test_unique_name (nama_part)');
 $rollbackRows=qaCsvParse($header."\nROLL1,Collision test,QA,1,2026-10-01\nROLL2,Collision test,QA,1,2026-10-02",$schema);
 $rollbackPlan=qaCsvPlan($konek,$rollbackRows);
 rejectsCsv(function()use($konek,$rollbackRows,$rollbackPlan){qaCsvApply($konek,$rollbackRows,$rollbackPlan['signature'],'test');}, 'database failure aborts batch');
-checkCsv(count(qaCsvFetch($konek,"SELECT id FROM qa_part WHERE no_part IN ('ROLL1','ROLL2')"))===0 && count(qaCsvFetch($konek,"SELECT id FROM qa_alat_registry WHERE no_part IN ('ROLL1','ROLL2')"))===0, 'failed batch leaves neither partial masters nor orphan registries');
+checkCsv(count(qaCsvFetch($konek,"SELECT id FROM qa_part WHERE no_part='ROLL1'"))===1 && count(qaCsvFetch($konek,"SELECT id FROM qa_part WHERE no_part='ROLL2'"))===0, 'MyISAM failure reports partial batch; first saved row remains');
 echo $checks.' checks passed; temporary tables disappear when this connection closes.'.PHP_EOL;

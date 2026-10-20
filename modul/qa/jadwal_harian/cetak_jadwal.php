@@ -1,7 +1,17 @@
-﻿<?php
+<?php
 session_start();
 if ($_SESSION['login'] == 0) { header('location: ../../../logout.php'); exit(); }
 require_once __DIR__ . '/../../../inc/inc_koneksi.php';
+require_once __DIR__ . '/../../../inc/qa_rbac.php';
+qaRbacRequire($konek,'jadwal_harian');
+
+// Tombol Kembali mengikuti asal navigasi. URL langsung/menu kembali ke Media,
+// sedangkan akses dari Master Data (atau ?from=masterdata) kembali ke Master Data.
+$referrerPath = parse_url((string)($_SERVER['HTTP_REFERER'] ?? ''), PHP_URL_PATH);
+$fromMasterdata = strtolower(trim((string)($_GET['from'] ?? ''))) === 'masterdata'
+    || (is_string($referrerPath) && preg_match('~/modul/qa/masterdata/masterdata\.php$~i', $referrerPath));
+$backUrl = $fromMasterdata ? '../masterdata/masterdata.php' : '../../../media.php';
+$backLabel = $fromMasterdata ? 'Kembali ke Master Data' : 'Kembali ke Menu Utama';
 
 $filter_seksi = isset($_GET['seksi']) ? mysqli_real_escape_string($konek, $_GET['seksi']) : 'ALL';
 $filter_tgl = isset($_GET['tgl']) ? mysqli_real_escape_string($konek, $_GET['tgl']) : date('Y-m-d');
@@ -36,6 +46,7 @@ while($r = mysqli_fetch_assoc($query)) {
         
         .table-excel { width: 100%; border-collapse: collapse; border: 2px solid #000; }
         .table-excel th, .table-excel td { border: 1px solid #000; padding: 4px; page-break-inside: avoid; text-align: center; vertical-align: middle; }
+        .table-excel tbody tr, .table-excel tbody td { height: 20px; }
         
         .text-bold { font-weight: bold; }
         .text-left { text-align: left !important; padding-left: 5px !important; }
@@ -51,14 +62,17 @@ while($r = mysqli_fetch_assoc($query)) {
             @page { size: A4 landscape; margin: 0; } 
             body { background: #fff; padding: 0; margin: 0; } 
             .a4-landscape { box-shadow: none; margin: 0; padding: 10mm; border: none; } 
-            .no-print { display: none !important; } 
+            .no-print { display: none !important; }
+            /* Sel kosong dan sel berisi memakai tinggi baris dan line-height yang sama. */
+            .table-excel tbody tr, .table-excel tbody td { height: 4mm; }
+            .table-excel tbody td { padding: .2mm 1mm; line-height: 3mm; } 
         }
     </style>
 </head>
 <body>
 
     <div class="no-print">
-        <a href="../masterdata/masterdata.php" style="color:#fff; font-weight:bold; text-decoration:none;">&larr; Kembali ke Master Data</a><br>
+        <a href="<?=htmlspecialchars($backUrl, ENT_QUOTES, 'UTF-8')?>" style="color:#fff; font-weight:bold; text-decoration:none;">&larr; <?=htmlspecialchars($backLabel, ENT_QUOTES, 'UTF-8')?></a><br>
         <button class="btn-action" onclick="window.print()">Cetak Jadwal Harian</button>
     </div>
 
@@ -126,9 +140,9 @@ while($r = mysqli_fetch_assoc($query)) {
                                 <td>~</td>
                                 <td>{$periode_txt}</td>
                                 <td>{$tgl_ren}</td>
-                                <td></td>
-                                <td></td>
-                                <td></td>
+                                <td>&nbsp;</td>
+                                <td>&nbsp;</td>
+                                <td>&nbsp;</td>
                             </tr>";
                             $no++;
                         }
@@ -136,7 +150,7 @@ while($r = mysqli_fetch_assoc($query)) {
                         // Fill sisa baris kosong jika kurang dari 30
                         $sisa = 30 - count($chunk);
                         for($i=0; $i<$sisa; $i++) {
-                            echo "<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>";
+                            echo "<tr>" . str_repeat("<td>&nbsp;</td>", 10) . "</tr>";
                         }
                         ?>
                     </tbody>

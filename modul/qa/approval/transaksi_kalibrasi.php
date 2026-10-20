@@ -2,11 +2,13 @@
 session_start();
 if (empty($_SESSION['login'])) { header('location: ../../../logout.php'); exit; }
 require_once __DIR__ . '/../../../inc/inc_koneksi.php';
+require_once __DIR__ . '/../../../inc/qa_rbac.php';
+qaRbacRequireAny($konek,['approval_pemeriksa','approval_penyetuju']);
 
 $uid=$_SESSION['userid']??'';
 $username=$_SESSION['username']??($_SESSION['nama_lengkap']??$uid);
 $role=strtolower(trim((string)($_SESSION['role']??'')));
-$is_admin=strtoupper((string)($_SESSION['admin']??'N'))==='Y'||$role==='admin';
+$is_admin=qaRbacIsAdmin($konek);
 
 function h($v){return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');}
 
@@ -42,8 +44,8 @@ if ($cekJenis && mysqli_num_rows($cekJenis) === 0) { @mysqli_query($konek, "ALTE
 $flags=['pembuat'=>false,'pemeriksa'=>false,'penyetuju'=>false];
 $stmt=$konek->prepare("SELECT pembuat,pemeriksa,penyetuju FROM `user` WHERE uid=? OR uname=? LIMIT 1");
 if($stmt){$stmt->bind_param('ss',$uid,$username);$stmt->execute();$r=$stmt->get_result()->fetch_assoc();$stmt->close();if($r){$flags['pembuat']=strtoupper((string)$r['pembuat'])==='Y';$flags['pemeriksa']=strtoupper((string)$r['pemeriksa'])==='Y';$flags['penyetuju']=strtoupper((string)$r['penyetuju'])==='Y';}}
-$canPemeriksa=$is_admin||$flags['pemeriksa'];
-$canPenyetuju=$is_admin||$flags['penyetuju'];
+$canPemeriksa=qaRbacCan($konek,'approval_pemeriksa');
+$canPenyetuju=qaRbacCan($konek,'approval_penyetuju');
 if(!$canPemeriksa && !$canPenyetuju){
     http_response_code(403);
     echo '<div style="padding:30px;font-family:Arial"><h3>Akses ditolak</h3><p>User ini bukan Pemeriksa/Penyetuju.</p></div>';

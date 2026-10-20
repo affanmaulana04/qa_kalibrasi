@@ -31,6 +31,7 @@ header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
 
 require_once __DIR__ . '/../../../inc/inc_koneksi.php';
+require_once __DIR__ . '/../../../inc/qa_rbac.php';
 
 /** @var mysqli $konek */
 if (!isset($konek) || !($konek instanceof mysqli)) {
@@ -126,11 +127,11 @@ if (strtoupper(trim((string)($row['block'] ?? 'N'))) === 'Y') {
 $jenisValidasi = strtolower(trim((string)$row['jenis_validasi']));
 
 if ($jenisValidasi === 'pemeriksaan') {
-    if (strtoupper(trim((string)($row['pemeriksa'] ?? 'N'))) !== 'Y') {
+    if (!qaRbacCanForUser($konek,(string)$row['uid'],'approval_pemeriksa')) {
         qaMagicLoginFail('Akun ini tidak lagi memiliki hak sebagai Pemeriksa.', 403);
     }
 } elseif ($jenisValidasi === 'persetujuan') {
-    if (strtoupper(trim((string)($row['penyetuju'] ?? 'N'))) !== 'Y') {
+    if (!qaRbacCanForUser($konek,(string)$row['uid'],'approval_penyetuju')) {
         qaMagicLoginFail('Akun ini tidak lagi memiliki hak sebagai Penyetuju.', 403);
     }
 } else {
