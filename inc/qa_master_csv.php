@@ -24,8 +24,8 @@ function qaCsvTemplateHeaders(): array {
 }
 function qaCsvTemplateExamples(): array {
     return [
-        ['SK gauge','SK-571','CONTOH-001','~','1 Tahun','16 - 10 - 2026','QA'],
-        ['Jangka sorong','0–150 mm','CONTOH-002','0.01 mm','180 Hari','17 - 10 - 2026','INJ'],
+        ['SK gauge','SK-571','CONTOH-001','~','365','16 - 10 - 2026','QA'],
+        ['Jangka sorong','0–150 mm','CONTOH-002','0.01 mm','180','17 - 10 - 2026','INJ'],
         ['Micrometer','0–25 mm','CONTOH-003','0.001 mm','365','18 - 10 - 2026','TECH'],
     ];
 }
@@ -162,7 +162,7 @@ function qaCsvParse(string $text, array $schema): array {
             $seen[$data['no_part']] = $record;
             $period = qaCsvPeriod($data['periode_kalibrasi']);
             if ($period === null) {
-                $errors[] = 'Periode kalibrasi harus bilangan bulat positif dalam hari atau tahun, misalnya 180 atau 1 Tahun.';
+                $errors[] = 'Isi periode kalibrasi dengan angka bulat positif dalam satuan hari, misalnya 180 atau 365.';
             } else { $data['periode_kalibrasi'] = $period; }
             $date = qaCsvDate($data['jadwal_kalibrasi']);
             if (!$date) $errors[] = 'Jadwal tidak valid. Gunakan YYYY-MM-DD atau DD-MM-YYYY.';

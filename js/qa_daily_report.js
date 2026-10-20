@@ -18,23 +18,27 @@
     }
     choices.forEach(c => c.addEventListener('change',invalidate));
     all.addEventListener('change',() => { choices.forEach(c => c.checked = all.checked); invalidate(); });
-    print.addEventListener('click',() => { if (!print.disabled) window.print(); });
+    print.addEventListener('click',() => { if (!print.disabled && output.firstElementChild) { output.firstElementChild.contentWindow.focus(); output.firstElementChild.contentWindow.print(); } });
     function node(tag,text,className) {
         const el = document.createElement(tag);
         if (text !== undefined) el.textContent = text;
         if (className) el.className = className;
         return el;
     }
-    // Import table markup only; never copy scripts or event attributes from history.
+    // Copy the original report's layout, never its scripts or event handlers.
     function safeCopy(original) {
         if (original.nodeType === Node.TEXT_NODE) return document.createTextNode(original.textContent);
         if (original.nodeType !== Node.ELEMENT_NODE) return document.createTextNode('');
         const tag = original.tagName.toLowerCase();
-        if (!['table','thead','tbody','tr','td','th','colgroup','col','span','div','br','b','strong','i','sub','sup'].includes(tag)) return document.createTextNode(original.textContent);
+        if (!['table','thead','tbody','tfoot','tr','td','th','colgroup','col','span','div','br','b','strong','i','sub','sup','p','small','u','em','hr'].includes(tag)) return document.createTextNode('');
         const el = document.createElement(tag);
-        if (original.classList.contains('diagonal-strike-td')) el.classList.add('diagonal-strike-td');
+        el.className = original.className;
         for (const attr of ['rowspan','colspan','span']) if (/^[1-9]\d*$/.test(original.getAttribute(attr) || '')) el.setAttribute(attr,original.getAttribute(attr));
-        for (const prop of ['width','textAlign','verticalAlign','fontWeight']) if (original.style[prop]) el.style[prop] = original.style[prop];
+        // Inline properties are template layout only. No URL-bearing CSS is copied.
+        for (const prop of original.style) {
+            const value = original.style.getPropertyValue(prop);
+            if (!/url\s*\(|expression\s*\(/i.test(value)) el.style.setProperty(prop,value,original.style.getPropertyPriority(prop));
+        }
         original.childNodes.forEach(child => el.appendChild(safeCopy(child)));
         return el;
     }
@@ -46,9 +50,10 @@
             const timer = setTimeout(() => { frame.remove(); reject(new Error('Waktu pemuatan transaksi habis. Coba kembali.')); },20000);
             frame.onload = () => {
                 try {
-                    const tables = Array.from(frame.contentDocument.querySelectorAll('#report '+selectors[record.payload.format]));
-                    if (!tables.length) throw new Error('Rincian transaksi '+record.id+' tidak dapat ditampilkan atau sudah berubah. Tampilkan ulang daftar transaksi.');
-                    const result = tables.map(safeCopy);
+                    const doc = frame.contentDocument;
+                    const original = doc.querySelector('#report > .report');
+                    if (!original || !original.querySelector(selectors[record.payload.format])) throw new Error('Rincian transaksi '+record.id+' tidak dapat ditampilkan atau sudah berubah. Tampilkan ulang daftar transaksi.');
+                    const result = {report:safeCopy(original),styles:Array.from(doc.querySelectorAll('style'),s=>s.textContent).join('\n'),landscape:doc.body.classList.contains('print-landscape')};
                     clearTimeout(timer); frame.remove(); resolve(result);
                 } catch (err) { clearTimeout(timer); frame.remove(); reject(err); }
             };
@@ -56,16 +61,103 @@
             document.body.appendChild(frame);
         });
     }
-    function metadata(record,columns) {
-        const p = record.payload;
-        const tr = node('tr'),td = node('td',undefined,'daily-meta'); td.colSpan = columns;
-        const lines = [
-            [['Transaksi',p.nomor_pengecekan || '#'+record.id],['No. laporan',p.no_laporan],['Dibuat',record.created_at],['Tanggal periksa',p.tanggal_periksa],['Status',record.status]],
-            [['Nama alat',p.nama_part],['Petugas',p.operator],['Metode',p.metode],['Standar uji',p.standar_uji],['Traceability',p.traceability],['Suhu',p.suhu],['Kelembapan',p.kelembapan]],
-            [['Pemeriksa',p.pemeriksa ? p.pemeriksa+' ('+p.tanggal_validasi_pemeriksa+')' : '—'],['Penyetuju',p.penyetuju ? p.penyetuju+' ('+p.tanggal_validasi_penyetuju+')' : '—'],['Keterangan',p.keterangan]]
-        ];
-        lines.forEach(fields => { const line=node('div'); fields.forEach(([label,value]) => { if (value !== '' && value != null) { const span=node('span');span.append(node('strong',label+': '),document.createTextNode(String(value)));line.append(span); } }); td.append(line); });
-        tr.append(td); return tr;
+    function prepare(rendered,record) {
+        const report=rendered.report,selector=selectors[record.payload.format],tables=Array.from(report.querySelectorAll(selector));
+        if (tables.length!==1) throw new Error('Susunan tabel format '+record.payload.format+' tidak dapat digabung.');
+        const table=tables[0],body=node('tbody');body.dataset.transaction=record.id;
+        for (const oldBody of Array.from(table.tBodies)) {
+            let remaining=0;
+            for (const row of Array.from(oldBody.rows)) {
+                if (!remaining && !row.textContent.trim()) continue; // Template padding, not a measurement.
+                remaining=Math.max(remaining-1,...Array.from(row.cells,c=>c.rowSpan-1));
+                body.append(row);
+            }
+            oldBody.remove();
+        }
+        if (!body.rows.length) throw new Error('Hasil transaksi '+record.id+' kosong.');
+        table.dataset.dailyResults='';
+        const fields={};
+        function field(el,key,label) {
+            if (!el) return;
+            if (!label && /^\s*:/.test(el.textContent)) el.dataset.dailyPrefix=': ';
+            fields[key]=el.textContent.replace(label || /^\s*:\s*/, '').trim();
+            el.dataset.dailyField=key;el.replaceChildren();
+        }
+        // Only these values may be collected across tools. The rest of the original
+        // header (standards, method, environment, approvals) must match exactly.
+        for (const cell of report.querySelectorAll('td,th')) {
+            if (cell.querySelector('table') || cell.closest('[data-daily-results]')) continue;
+            const label=cell.textContent.trim().replace(/[.:]/g,'').replace(/\s+/g,' ').toUpperCase();
+            if (label==='NO LAPORAN') field(cell.nextElementSibling,'report');
+            if (label==='NAMA ALAT') field(cell.nextElementSibling,'name');
+            if (label==='KETERANGAN') field(cell.nextElementSibling,'note');
+        }
+        const note=report.querySelector('.excel-note,.ket-h,.ket-i,.ket-j,.ket-o,.ket-p,.ket-q,.ket-t');
+        if (note) field(note,'note',/^\s*KETERANGAN\s*:\s*/i);
+        const key=record.payload.format+'|'+record.status+'|'+report.outerHTML;
+        return {...rendered,key,body,fields,record};
+    }
+    function fillFields(report,entries,headerEntries) {
+        for (const el of report.querySelectorAll('[data-daily-field]')) {
+            const key=el.dataset.dailyField;
+            const single=key==='name' || key==='report';
+            const candidates=single?headerEntries:entries;
+            const values=Array.from(new Set(candidates.map(e=>e.fields[key]).filter(Boolean)));
+            if (single) values.splice(1);
+            el.replaceChildren();
+            if (el.dataset.dailyPrefix) el.append(document.createTextNode(el.dataset.dailyPrefix));
+            if (key==='note' && (/^ket-/.test(el.className) || el.classList.contains('excel-note'))) el.append(node('b','KETERANGAN :'),node('br'));
+            // One name and report number identify the combined report on every page.
+            values.forEach((value,i)=>{if(i)el.append(node('br'));el.append(document.createTextNode(value));});
+        }
+    }
+    function buildDocument(groups,styles) {
+        const frame=node('iframe',undefined,'daily-print-frame');frame.title='Pratinjau format laporan kalibrasi';
+        output.append(frame);
+        const doc=frame.contentDocument;
+        doc.open();doc.write('<!doctype html><html lang="id"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'"><title>Laporan Kalibrasi Multi-Alat</title></head><body></body></html>');doc.close();
+        const css=doc.createElement('style');css.textContent=styles+`
+            @page portraitA4 { size:A4 portrait; margin:0; }
+            .daily-sheet { width:210mm; margin:0 auto 20px; background:white; display:flow-root; }
+            .daily-sheet.landscape { width:297mm; }
+            .daily-sheet.landscape > .report { width:293mm!important; min-height:206mm!important; margin:2mm auto!important; }
+            .daily-sheet.portrait > .report { max-width:none; }
+            [data-daily-results] tbody { break-inside:avoid; }
+            @media print {
+                .daily-sheet { margin:0; break-after:page; page:portraitA4; }
+                .daily-sheet.landscape { page:landscapeA4; }
+                .daily-sheet:last-child { break-after:auto; }
+            }
+        `;doc.head.append(css);
+        for (const group of groups.values()) {
+            let current;const pages=[];
+            function newPage() {
+                const sheet=doc.createElement('section');sheet.className='daily-sheet '+(group.landscape?'landscape':'portrait');
+                const report=group.report.cloneNode(true);sheet.append(report);doc.body.append(sheet);
+                current={sheet,report,entries:[]};pages.push(current);
+            }
+            newPage();
+            for (const entry of group.entries) {
+                const body=entry.body;
+                current.entries.push(entry);current.report.querySelector('[data-daily-results]').append(body);
+                fillFields(current.report,current.entries,group.entries);
+                // Keep each transaction's rowspans together and repeat the original
+                // full header/footer on continuation pages.
+                const maxHeight=(group.landscape?210:297)*96/25.4;
+                if (current.entries.length>1 && current.sheet.getBoundingClientRect().height>maxHeight+1) {
+                    current.entries.pop();body.remove();fillFields(current.report,current.entries,group.entries);
+                    newPage();current.entries.push(entry);current.report.querySelector('[data-daily-results]').append(body);fillFields(current.report,current.entries,group.entries);
+                }
+            }
+            pages.forEach((page,index)=>{
+                const walker=doc.createTreeWalker(page.report,NodeFilter.SHOW_TEXT);
+                while(walker.nextNode()) {
+                    const text=walker.currentNode;
+                    if (/HAL\s*:\s*1\s*\/\s*1/i.test(text.textContent)) text.textContent=text.textContent.replace(/HAL\s*:\s*1\s*\/\s*1/i,'HAL : '+(index+1)+' / '+pages.length);
+                }
+            });
+        }
+        return frame;
     }
     preview.addEventListener('click',async () => {
         invalidate();
@@ -74,42 +166,28 @@
         const records = source.records.filter(r => selected.has(r.id));
         if (!records.length) { progress.textContent = 'Pilih minimal satu transaksi.'; return; }
         preview.disabled = true; progress.classList.remove('daily-error');
-        const groups = new Map();
+        const groups = new Map();let styles='';
         try {
             for (let i=0;i<records.length;i++) {
-                const record=records[i],format=record.payload.format;
-                progress.textContent = 'Memuat '+(i+1)+' / '+records.length+' transaksi…';
-                const tables = await load(record);
+                const record=records[i];
+                progress.textContent = 'Memuat '+(i+1)+' / '+records.length+' transaksi...';
+                const entry=prepare(await load(record),record);
                 if (run !== generation) return;
-                let group=groups.get(format);
-                if (!group) {
-                    const report=node('section',undefined,'daily-report');
-                    report.append(node('div','PT. SURYA TOTO INDONESIA Tbk.','daily-company'),node('h3','LAPORAN HASIL KALIBRASI — FORMAT '+format),node('div',source.formats[format]+' · Seksi: '+source.section+' · Tanggal kalibrasi: '+source.date,'daily-period'));
-                    const table=node('table',undefined,'daily-grid');
-                    for (const child of tables[0].children) if (['COLGROUP','THEAD'].includes(child.tagName)) table.append(child.cloneNode(true));
-                    const header=table.querySelector('thead');
-                    if (!header) throw new Error('Header format '+format+' tidak tersedia.');
-                    const columns = Math.max(...Array.from(header.rows).map(row => Array.from(row.cells).reduce((n,c)=>n+c.colSpan,0)));
-                    report.append(table); group={report,table,columns,number:0}; groups.set(format,group);
-                }
-                const body=node('tbody'); body.append(metadata(record,group.columns));
-                for (const table of tables) {
-                    let remaining=0;
-                    for (const oldBody of table.tBodies) for (const row of Array.from(oldBody.rows)) {
-                        if (remaining === 0 && !row.textContent.trim()) continue;
-                        if (remaining>0) remaining--;
-                        else if (row.cells[0] && /^\d+$/.test(row.cells[0].textContent.trim())) {
-                            row.cells[0].textContent=String(++group.number);remaining=row.cells[0].rowSpan-1;
-                        }
-                        body.append(row);
+                styles=entry.styles;
+                let group=groups.get(entry.key);
+                if (!group) { group={...entry,entries:[],number:0};groups.set(entry.key,group); }
+                let remaining=0;
+                for (const row of entry.body.rows) {
+                    if (remaining>0) remaining--;
+                    else if (row.cells[0] && /^\d+$/.test(row.cells[0].textContent.trim())) {
+                        row.cells[0].textContent=String(++group.number);remaining=row.cells[0].rowSpan-1;
                     }
                 }
-                if (body.rows.length===1) throw new Error('Hasil transaksi '+record.id+' kosong.');
-                group.table.append(body);
+                group.entries.push(entry);
             }
             if (run !== generation) return;
-            Array.from(groups.keys()).sort().forEach(key => output.append(groups.get(key).report));
-            print.disabled=false;progress.textContent=records.length+' transaksi digabung dalam '+groups.size+' format.';
+            buildDocument(groups,styles);
+            print.disabled=false;progress.textContent=records.length+' transaksi ditampilkan dengan format laporan asli.';
         } catch (err) { if (run === generation) { output.replaceChildren();progress.textContent=err.message;progress.classList.add('daily-error'); } }
         finally { preview.disabled=false; }
     });

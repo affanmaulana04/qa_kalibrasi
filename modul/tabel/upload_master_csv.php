@@ -141,7 +141,7 @@ $items = $validation ? array_slice($validation['items'], ($page-1)*100, 100) : [
         <p id="csvFileHelp" class="text-muted" style="margin-top:10px">CSV UTF-8, maksimal 2 MB / 1.000 baris. Pemisah koma, titik koma, atau tab dikenali otomatis.</p>
         <p>Baris pertama berisi tujuh judul kolom; isi alat mulai baris kedua. Isi <b>Seksi</b> pada setiap baris, di kolom setelah <b>Rencana Kalibrasi</b>, menggunakan nama seksi yang terdaftar. Satu file boleh berisi beberapa seksi.</p>
         <p><b>Nama Alat, No. Alat, Periode Kalibrasi, Rencana Kalibrasi, dan Seksi wajib diisi.</b> Spesifikasi dan Resolusi boleh kosong; saat memperbarui alat, isian kosong mempertahankan nilai lama.</p>
-        <p>Periode dapat ditulis <b>180</b>, <b>180 Hari</b>, atau <b>1 Tahun</b> (disimpan sebagai <b>365 hari</b> per tahun). Tanggal dapat ditulis <b>16 - 09 - 2026</b>, <b>16-09-2026</b>, atau <b>2026-09-16</b>. Simpan file sebagai CSV UTF-8 setelah mengisi template.</p>
+        <p>Isi <b>Periode Kalibrasi</b> dengan angka dalam <b>satuan hari</b>, misalnya <b>180</b> atau <b>365</b>. Tanggal dapat ditulis <b>16 - 09 - 2026</b>, <b>16-09-2026</b>, atau <b>2026-09-16</b>. Simpan file sebagai CSV UTF-8 setelah mengisi template.</p>
     </section>
     <?php if ($validation): ?>
     <section class="csv-card" id="csvErrors">

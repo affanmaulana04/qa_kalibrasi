@@ -1349,6 +1349,10 @@ html, body {
         });
     }
 
+<?php if (isset($qaReportPayload)): ?>
+    // The multi-tool Excel layout consumes the same normalized historical values.
+    window.qaExcelPrintData = data;
+<?php endif; ?>
 /* ================================================================
  * RENDER CLEANUP
  * - Empty input -> blank cell with one diagonal strike.
@@ -4629,5 +4633,10 @@ html, body {
     // Jangan langsung membuka dialog print agar user bisa mengecek tampilan dulu.
 })();
 </script>
+<?php if (isset($qaReportPayload)): ?>
+<script>
+<?php readfile(__DIR__.'/../../js/qa_excel_report.js'); ?>
+</script>
+<?php endif; ?>
 </body>
 </html>
