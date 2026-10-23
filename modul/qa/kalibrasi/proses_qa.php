@@ -1,21 +1,4 @@
 <?php
-/**
- * proses_qa.php
- * ---------------------------------------------------------------------
- * QA Tool Calibration System - Backend Logic & AJAX Endpoints
- *
- * Perubahan dari versi sebelumnya (lihat catatan di kepala tiap fungsi):
- *   - [MEETING] Kolom "operator" (petugas yang benar-benar mengecek alat)
- *   - [MEETING] Alur Validator 2 tahap: Pemeriksa -> Penyetuju
- *   - [MEETING] Keterangan validator OPSIONAL (tidak wajib)
- *   - [MEETING] No. alat berstatus "Bad" tidak bisa dipakai ulang secara langsung
- *   - [MEETING] Status "NOT GOOD" dibakukan menjadi "Bad" di seluruh sistem
- *   - [FIX] Normalisasi no_part (trim + uppercase) di semua query pencarian
- *   - [FIX] Validasi periode_kalibrasi harus integer positif
- *   - [FIX] Proses status Bad dibungkus transaction (all-or-nothing)
- *   - [FIX] Auto-migration kolom baru agar tidak perlu ALTER TABLE manual
- * ---------------------------------------------------------------------
- */
 
 session_start();
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
@@ -56,9 +39,6 @@ $nama_petugas   = isset($_SESSION['username']) && $_SESSION['username'] !== '' ?
 /* =====================================================================
  * HELPER: normalisasi payload hasil JSON sekaligus menyimpan snapshot
  * header/footer pada saat pengecekan.
- * ---------------------------------------------------------------------
- * Tidak menambah tabel/kolom baru. Snapshot disimpan di qa_pengecekan.hasil_json
- * sehingga histori lama tetap immutable walaupun master qa_part diedit.
  * =================================================================== */
 function build_hasil_snapshot_json($rawJson, $meta)
 {
@@ -132,13 +112,80 @@ function normalisasi_no_part($konek, $raw)
 }
 function esc($konek, $value) { return mysqli_real_escape_string($konek, (string)$value); }
 
-/* Jenis nomor laporan mengikuti judul renderer cetak.
- * Format L/M/R/U/V = Laporan Kalibrasi. Format lain masuk Laporan Periksa.
- * Format J (Verifikasi) masuk kelompok Periksa karena sistem nomor hanya punya 2 kategori. */
+function qaFormatXNumber($value): ?float
+{
+    if (!is_scalar($value)) return null;
+    $str = str_replace(',', '.', trim((string)$value));
+    if ($str === '' || !preg_match('/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/', $str)) return null;
+    $number = (float)$str;
+    return is_finite($number) ? $number : null;
+}
+/**
+ * Jumlah baris Format X fleksibel: 1..20 per bagian.
+ * Urutan standar disimpan KESTABILAN -> MAJU -> MUNDUR.
+ * Setiap baris Kestabilan mempunyai lima pembacaan.
+ */
+function qaFormatXStandards($input): ?array
+{
+    if (!is_array($input) || count($input) < 3 || count($input) > 60
+        || array_keys($input) !== range(0, count($input)-1)) return null;
+    $sections = ['KESTABILAN'=>0, 'MAJU'=>1, 'MUNDUR'=>2];
+    $counts = array_fill_keys(array_keys($sections), 0);
+    $lastSection = 0;
+    $rows = [];
+    foreach ($input as $row) {
+        if (!is_array($row)) return null;
+        $section = strtoupper(trim((string)($row['bagian'] ?? '')));
+        if (!isset($sections[$section]) || $sections[$section] < $lastSection
+            || $sections[$section] > $lastSection + 1
+            || qaFormatXNumber($row['standar'] ?? null) === null) return null;
+        $lastSection = $sections[$section];
+        if (++$counts[$section] > 20) return null;
+        $rows[] = ['bagian'=>$section, 'standar'=>trim((string)$row['standar'])];
+    }
+    foreach ($counts as $count) if ($count < 1) return null;
+    return $rows;
+}
+function qaFormatXActual($raw, array $standards): ?array
+{
+    $rows = json_decode((string)$raw, true);
+    if (!is_array($rows) || count($rows) !== count($standards)
+        || array_keys($rows) !== range(0, count($rows)-1)) return null;
+    $canonical = [];
+    foreach ($rows as $i => $row) {
+        $master = $standards[$i];
+        $section = $master['bagian'];
+        if (!is_array($row) || strtoupper(trim((string)($row['bagian'] ?? ''))) !== $section) return null;
+        $standard = (string)$master['standar'];
+        if ($section === 'KESTABILAN') {
+            $entry = ['bagian'=>$section,'standar'=>$standard];
+            $values = [];
+            for ($j=1; $j<=5; $j++) {
+                $key = 'hasil_'.$j;
+                $value = qaFormatXNumber($row[$key] ?? null);
+                if ($value === null) return null;
+                $values[] = $value;
+                $entry[$key] = trim((string)$row[$key]);
+            }
+            $entry['max'] = number_format(max($values), 6, '.', '');
+            $entry['min'] = number_format(min($values), 6, '.', '');
+            $entry['selisih'] = number_format(max($values) - min($values), 6, '.', '');
+        } else {
+            $actual = qaFormatXNumber($row['hasil'] ?? null);
+            if ($actual === null) return null;
+            $entry = ['bagian'=>$section, 'standar'=>$standard,
+                'hasil'=>trim((string)$row['hasil']),
+                'koreksi'=>number_format(qaFormatXNumber($standard) - $actual, 6, '.', '')];
+        }
+        $canonical[] = $entry;
+    }
+    return $canonical;
+}
+
 function qaJenisLaporanDariFormat($format)
 {
     $format = strtoupper(trim((string)$format));
-    return in_array($format, ['L','M','R','U','V'], true) ? 'kalibrasi' : 'periksa';
+    return in_array($format, ['L','M','R','U','V','X'], true) ? 'kalibrasi' : 'periksa';
 }
 
 function qaBulanRomawi($bulan)
@@ -813,12 +860,23 @@ elseif ($action == 'simpan_alat') {
         $titik_standar_json = mysqli_real_escape_string($konek, $titik_standar_raw);
         // No. Laporan dibuat otomatis setelah format dan tanggal laporan tervalidasi.
 
-        // FORMAT W DB V1 - validasi registrasi menerima format A sampai W
+        // Registrasi mendukung Format A sampai X
         $format_laporan = strtoupper(trim((string)$format_laporan));
-        $format_valid = str_split('ABCDEFGHIJKLMNOPQRSTUVW');
+        $format_valid = str_split('ABCDEFGHIJKLMNOPQRSTUVWX');
         if (!in_array($format_laporan, $format_valid)) {
             echo json_encode(['status' => 'error', 'message' => 'Format laporan tidak valid.']);
             exit;
+        }
+
+        if ($format_laporan === 'X') {
+            $standardsX = qaFormatXStandards(json_decode($titik_standar_raw, true));
+            if ($standardsX === null) {
+                echo json_encode(['status'=>'error','message'=>'Format X harus memiliki 1 sampai 20 baris standar pada setiap bagian (Kestabilan, Maju, Mundur), berurutan dan berisi angka valid.']);
+                exit;
+            }
+            // Pertahankan hanya standar/bagian yang valid; data hasil ukur tidak boleh masuk ke master.
+            $titik_standar_raw = json_encode($standardsX, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            $titik_standar_json = mysqli_real_escape_string($konek, $titik_standar_raw);
         }
 
         $tgl_start        = !empty($tgl_manual) ? $tgl_manual : date('Y-m-d');
@@ -964,8 +1022,8 @@ elseif ($action == 'simpan_qa') {
         $format_laporan   = isset($_POST['format_laporan']) ? strtoupper(trim($_POST['format_laporan'])) : '';
         $hasil_raw        = isset($_POST['hasil_json']) ? $_POST['hasil_json'] : '[]';
 
-        // FORMAT W DB V1 - validasi update kalibrasi menerima format A sampai W
-        if (!in_array($format_laporan, str_split('ABCDEFGHIJKLMNOPQRSTUVW'), true)) {
+        // Update hasil mendukung Format A sampai X
+        if (!in_array($format_laporan, str_split('ABCDEFGHIJKLMNOPQRSTUVWX'), true)) {
             echo json_encode(['status' => 'error', 'message' => 'Format laporan tidak valid.']);
             exit;
         }
@@ -986,6 +1044,19 @@ elseif ($action == 'simpan_qa') {
         }
         $registryId=(int)($d_part['alat_registry_id']??0); if($registryId<=0){$regTmp=qaGetRegistry($konek,$no_part);$registryId=(int)($regTmp['id']??0);} if($registryId<=0){echo json_encode(['status'=>'error','message'=>'Registry nomor alat belum tersedia. Jalankan migration registry terlebih dahulu.']);exit;}
         $regCurrent=qaGetRegistry($konek,$no_part); if($regCurrent && strtoupper((string)$regCurrent['status_alat'])!=='AKTIF'){echo json_encode(['status'=>'error','message'=>'Nomor alat sedang tidak aktif dan tidak dapat digunakan untuk update hasil.']);exit;}
+        if ($format_laporan === 'X') {
+            if (strtoupper(trim((string)($d_part['format_laporan'] ?? ''))) !== 'X') {
+                echo json_encode(['status'=>'error','message'=>'Format X tidak sesuai dengan format yang terdaftar untuk nomor alat.']);
+                exit;
+            }
+            $standardsX = qaFormatXStandards(json_decode((string)($d_part['titik_standar_json'] ?? ''), true));
+            $actualX = $standardsX !== null ? qaFormatXActual($hasil_raw, $standardsX) : null;
+            if ($actualX === null) {
+                echo json_encode(['status'=>'error','message'=>'Format X: lengkapi semua hasil ukur (5 pembacaan per baris Kestabilan, serta hasil setiap baris Maju/Mundur). Jumlah baris dan standar harus sesuai registrasi.']);
+                exit;
+            }
+            $hasil_raw = json_encode($actualX, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        }
         $no_laporan_raw = qaGenerateNoLaporan($konek, $jenis_laporan, $tgl_pengecekan);
         $no_laporan = esc($konek, $no_laporan_raw);
 

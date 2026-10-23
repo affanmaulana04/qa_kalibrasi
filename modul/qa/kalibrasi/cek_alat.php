@@ -333,6 +333,7 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                                         <option value="U">Format U - Laporan Kalibrasi</option>
                                         <option value="V">Format V - Laporan Kalibrasi (Outside / Inside / Depth)</option>
                                         <option value="W">Format W - Laporan Pemeriksaan Sudut</option>
+                                        <option value="X">Format X - Kestabilan / Pembacaan Maju / Mundur</option>
                                     </select>
                                     <button type="button" id="btn-lanjut-format" class="btn btn-warning btn-block" style="margin-top:15px; font-weight:bold; font-size: 16px; height: 50px;">Lanjut Registrasi <i class="fa fa-arrow-right"></i></button>
                                 </div>
@@ -1565,8 +1566,8 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                     format = String(format || 'A').toUpperCase();
                     // Ketidakpastian tidak dipakai pada Format N, tetapi Confidence Level tetap dipakai.
                     // FORMAT U UPDATE V3 - TAMPILKAN KETIDAKPASTIAN + CONFIDENCE LEVEL
-                    const showUncertainty = ['L','M','F','U','V'].includes(format);
-                    const showConfidence = ['L','M','F','N','U','V'].includes(format);
+                    const showUncertainty = ['L','M','F','U','V','X'].includes(format);
+                    const showConfidence = ['L','M','F','N','U','V','X'].includes(format);
                     $('#qa_ketidakpastian').closest('.col-md-6').toggle(showUncertainty);
                     $('#qa_confidence').closest('.col-md-6').toggle(showConfidence);
                     if(!showUncertainty){
@@ -2343,6 +2344,7 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                         case 'V': return n(['bagian','standar'],['Bagian','Standar'],[{bagian:'OUTSIDE',standar:''},{bagian:'INSIDE',standar:''},{bagian:'DEPTH',standar:''}]);
                         // FORMAT W V2 - MASTER STANDAR KOSONG; USER TAMBAH/ISI SENDIRI
                         case 'W': return n(['standar'],['Standar (derajat)'],[{standar:''}]);
+                        case 'X': return n(['bagian','standar'],['Bagian','Standar (mm)'],[{bagian:'KESTABILAN',standar:''},...Array.from({length:6},()=>({bagian:'MAJU',standar:''})),...Array.from({length:6},()=>({bagian:'MUNDUR',standar:''}))]);
                     }
                     return n(['standar','toleransi'],['Standar','Toleransi'],[{}]);
                 }
@@ -2356,9 +2358,9 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
 
                     // Conditional Hiding based on Whitelists
                     // FORMAT W INPUT V3 - RESOLUSI + STANDAR TOLERANSI WAJIB TERSEDIA UNTUK MASTER/PRINTING W
-                    if(!['C','D','E','F','G','K','L','M','N','R','U','V','W'].includes(format)) qaCommonGroup('#reg_resolusi').hide();
-                    if(!['A','B','C','D','E','G','K','L','M','N','T','U','V','W'].includes(format)) qaCommonGroup('#reg_toleransi').hide();
-                    if(!['B','C','E','F','G','L','M','N','O','U','V'].includes(format)) qaCommonGroup('#reg_satuan').hide();
+                    if(!['C','D','E','F','G','K','L','M','N','R','U','V','W','X'].includes(format)) qaCommonGroup('#reg_resolusi').hide();
+                    if(!['A','B','C','D','E','G','K','L','M','N','T','U','V','W','X'].includes(format)) qaCommonGroup('#reg_toleransi').hide();
+                    if(!['B','C','E','F','G','L','M','N','O','U','V','X'].includes(format)) qaCommonGroup('#reg_satuan').hide();
 
                     const hiddenBase={
                         I:['#reg_spesifikasi'],
@@ -2384,8 +2386,8 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                     ['#qa_spesifikasi','#qa_resolusi','#qa_metode','#qa_standar_uji','#qa_toleransi'].forEach(x=>qaCommonGroup(x).show());
                     
                     // FORMAT W UPDATE V3 - TAMPILKAN RESOLUSI + STANDAR TOLERANSI AGAR SNAPSHOT PRINT TERISI
-                    if(!['C','D','E','F','G','K','L','M','N','R','U','V','W'].includes(format)) qaCommonGroup('#qa_resolusi').hide();
-                    if(!['A','B','C','D','E','F','G','K','L','M','N','T','W'].includes(format)) qaCommonGroup('#qa_toleransi').hide();
+                    if(!['C','D','E','F','G','K','L','M','N','R','U','V','W','X'].includes(format)) qaCommonGroup('#qa_resolusi').hide();
+                    if(!['A','B','C','D','E','F','G','K','L','M','N','T','W','X'].includes(format)) qaCommonGroup('#qa_toleransi').hide();
                     if(format==='F'){ $('.qa-tol-label-normal, .qa-tol-group-normal').hide(); $('.qa-tol-group-f').show(); } else { $('.qa-tol-group-f').hide(); $('.qa-tol-label-normal, .qa-tol-group-normal').show(); }
 
                     const hiddenBase={
@@ -2425,6 +2427,30 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                 qaRenderRegTable=function(format,presetRows){
                     format=String(format||'').toUpperCase(); qaRegVisibility(format);
                     const sc=qaRegSchema(format); let rows=(presetRows&&presetRows.length)?presetRows:sc.rows;
+                    // Format X: setiap bagian bisa menambah/menghapus baris saat registrasi.
+                    // Standar yang tersimpan menentukan jumlah baris Update Hasil dan cetak.
+                    if(format==='X'){
+                        const sections=['KESTABILAN','MAJU','MUNDUR'];
+                        const current=Array.isArray(rows)?rows:[];
+                        let html='';
+                        sections.forEach(function(part){
+                            const entries=current.filter(p=>String(p.bagian||'').toUpperCase()===part);
+                            if(!entries.length) entries.push({bagian:part,standar:''});
+                            html+='<tr class="qa-x-heading" style="background:#eaf2f8"><td colspan="4" style="font-weight:bold;text-align:center">'+
+                                (part==='KESTABILAN'?'KESTABILAN':'PEMBACAAN '+part)+
+                                ' <button type="button" class="btn btn-xs btn-success qa-x-add" data-bagian="'+part+'" style="float:right"><i class="fa fa-plus"></i> Tambah Baris</button></td></tr>';
+                            entries.forEach(function(p,i){
+                                html+='<tr class="qa-x-master-row" data-bagian="'+part+'"><td class="text-center qa-x-number">'+(i+1)+'</td>'+
+                                    '<td><b>'+part+'</b></td><td><input class="form-control qa-reg-field" data-key="standar" type="number" step="any" required value="'+qaEsc(p.standar??'')+'" placeholder="Standar (mm)"></td>'+
+                                    '<td class="text-center"><button type="button" class="btn btn-xs btn-danger qa-x-remove" data-bagian="'+part+'" title="Hapus baris" '+(entries.length<=1?'disabled':'')+'><i class="fa fa-trash"></i></button></td></tr>';
+                            });
+                        });
+                        $('#tabel_reg_standar thead').html('<tr><th width="8%">No</th><th width="22%">Bagian</th><th>Standar (mm) — registrasi</th><th width="12%">Aksi</th></tr>');
+                        $('#body_reg_standar').html(html);
+                        $('#tabel_reg_standar').data('qa-format','X');
+                        $('#container_btn_bagian').hide();
+                        return;
+                    }
                     const nHasBagian = false; // Format N rollback: tanpa Bagian/Periksa Kesejajaran
                     if(format==='N') rows=(rows||[]).filter(function(r){ return String(r.meta||r.jenis||'').toUpperCase()!=='N_KESEJAJARAN'; });
                     if(format==='F') rows=(rows||[]).filter(r=>r.meta!=='F');
@@ -2627,6 +2653,64 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                     $('#body_reg_standar').html(b); $('#tabel_reg_standar').data('qa-format',format);
                     $('#container_btn_bagian').hide(); // Format N rollback: tidak ada tombol Bagian
                 };
+                /* FORMAT L: pilihan UJI SKALA disimpan bersama standar registrasi.
+                 * Tidak menambah tabel/kolom dan Format L lama tetap mode ARAH. */
+                let qaLRegisterMode = 'arah';
+                let qaLPreviousDirections = [];
+                const qaRenderRegTableOriginalL = qaRenderRegTable;
+                qaRenderRegTable = function(format, presetRows) {
+                    if (String(format || '').toUpperCase() !== 'L') {
+                        return qaRenderRegTableOriginalL(format, presetRows);
+                    }
+                    const source = (Array.isArray(presetRows) && presetRows.length) ? presetRows : qaRegSchema('L').rows;
+                    qaLRegisterMode = source.some(r => String(r.uji_skala_mode || '').toLowerCase() === 'nomor' || /^\d+$/.test(String(r.arah || '').trim())) ? 'nomor' : 'arah';
+                    const rows = source.map((r, i) => Object.assign({}, r, {
+                        uji_skala_mode: qaLRegisterMode,
+                        arah: qaLRegisterMode === 'nomor' ? String(i + 1) : (/^(NAIK|TURUN)$/i.test(String(r.arah || '')) ? String(r.arah).toUpperCase() : 'NAIK')
+                    }));
+                    qaRenderRegTableOriginalL('L', rows);
+                    const isNomor = qaLRegisterMode === 'nomor';
+                    $('#tabel_reg_standar thead').html(
+                        '<tr><th colspan="5" style="text-align:left;background:#eef5fb;padding:10px;">'+
+                        '<span style="margin-right:12px;">Mode Uji Skala:</span>'+
+                        '<button type="button" class="btn btn-sm '+(isNomor?'btn-success':'btn-default')+' qa-l-mode" '+
+                        'aria-label="Aktifkan atau nonaktifkan mode nomor Uji Skala" aria-pressed="'+isNomor+'" '+
+                        'title="Klik untuk mengganti mode Uji Skala">'+
+                        (isNomor?'Mode Nomor':'Mode Arah')+
+                        '</button></th></tr>'+
+                        '<tr><th width="7%">No</th><th width="22%">UJI SKALA</th><th>APPLIED VALUE</th><th>TOLERANSI</th><th width="16%">'+
+                        '<button type="button" class="btn btn-sm btn-success" id="btn_add_reg_row"><i class="fa fa-plus"></i> Tambah Baris</button></th></tr>'
+                    );
+                    if (isNomor) {
+                        $('#body_reg_standar tr').each(function(i) {
+                            $(this).find('.qa-reg-field[data-key="arah"]').replaceWith(
+                                '<input type="text" class="form-control qa-reg-field qa-readonly" data-key="arah" readonly value="'+(i + 1)+'">'
+                            );
+                        });
+                    }
+                };
+                $(document).off('click.qaLMode', '.qa-l-mode').on('click.qaLMode', '.qa-l-mode', function() {
+                    if (String($('#reg_pilih_format').val() || '').toUpperCase() !== 'L') return;
+                    const next = qaLRegisterMode === 'nomor' ? 'arah' : 'nomor';
+                    const rows = qaCollectReg('L'); // Pertahankan semua Applied Value dan Toleransi.
+                    if (next === 'nomor') qaLPreviousDirections = rows.map(r => String(r.arah || 'NAIK').toUpperCase());
+                    rows.forEach(function(row, i) {
+                        row.uji_skala_mode = next;
+                        row.arah = next === 'nomor' ? String(i + 1) :
+                            (/^(NAIK|TURUN)$/.test(qaLPreviousDirections[i] || '') ? qaLPreviousDirections[i] :
+                                (i < Math.ceil(rows.length / 2) ? 'NAIK' : 'TURUN'));
+                    });
+                    qaRenderRegTable('L', rows);
+                });
+                $(document).off('click.qaLNumbering', '.btn-hapus-std').on('click.qaLNumbering', '.btn-hapus-std', function() {
+                    if (String($('#reg_pilih_format').val() || '').toUpperCase() !== 'L' || qaLRegisterMode !== 'nomor') return;
+                    setTimeout(function() {
+                        $('#body_reg_standar tr').each(function(i) {
+                            $(this).find('.row-num').text(i + 1);
+                            $(this).find('.qa-reg-field[data-key="arah"]').val(String(i + 1));
+                        });
+                    }, 0);
+                });
                 // Re-bind tombol Bagian setelah renderer registrasi patch terpasang.
                 // Handler lama dibuat sebelum qaRenderRegTable tersedia, sehingga pada Format N
                 // tombol bisa terlihat tetapi tidak merender kolom Bagian.
@@ -2686,6 +2770,12 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
 
                 qaCollectReg=function(format){
                     format=String(format||'').toUpperCase(); const rows=[];
+                    if(format==='X'){
+                        $('#body_reg_standar .qa-x-master-row').each(function(){
+                            rows.push({bagian:String($(this).data('bagian')||''),standar:String($(this).find('[data-key="standar"]').val()||'').trim()});
+                        });
+                        return rows;
+                    }
                     if(format==='O'){
                         const o={}; $('#body_reg_standar .qa-reg-field').each(function(){o[$(this).data('key')]=$(this).val();});
                         return Object.keys(o).length?[o]:[];
@@ -2737,6 +2827,18 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                     if(format==='F'){ rows.unshift({meta:'F',std_sec1:$('#reg_f_std_sec1').val().trim(),std_sec3:$('#reg_f_std_sec3').val().trim()}); }
                     return rows;
                 };
+                const qaCollectRegOriginalL = qaCollectReg;
+                qaCollectReg = function(format) {
+                    const rows = qaCollectRegOriginalL(format);
+                    if (String(format || '').toUpperCase() === 'L') {
+                        rows.forEach(function(row, i) {
+                            row.uji_skala_mode = qaLRegisterMode;
+                            row.arah = qaLRegisterMode === 'nomor' ? String(i + 1) :
+                                (/^(NAIK|TURUN)$/i.test(String(row.arah || '')) ? String(row.arah).toUpperCase() : 'NAIK');
+                        });
+                    }
+                    return rows;
+                };
                 $(document).off('click.qaAddMRow').on('click.qaAddMRow','.btn-add-m-row',function(){
                     const kind=String($(this).data('kind')||'AXIS').toUpperCase(), rows=qaCollectReg('M');
                     rows.push(kind==='ANGLE'?{jenis:'ANGLE',std_angle:'',toleransi_angle:$('#reg_m_tol_angle').val()||''}:{jenis:'AXIS',std_mm:'',std_x:'',std_y:'',toleransi_axis:$('#reg_m_tol_axis').val()||''});
@@ -2783,6 +2885,29 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                             if(plusTxt!==''||minusTxt!=='') pv+=(plusTxt!==''?(' '+(plusTxt.charAt(0)==='-'?'':'+')+plusTxt):'')+'/'+(minusTxt!==''?((minusTxt.charAt(0)==='-'?'':'+')+minusTxt):'');
                         } else { const t=qaNum(tolTxt); if(Number.isFinite(std)&&Number.isFinite(t)){min=std-Math.abs(t);max=std+Math.abs(t);} if(tolTxt)pv+=' ±'+tolTxt; }
                         $r.find('.qa-p-preview').text(pv+(Number.isFinite(min)&&Number.isFinite(max)?(' ('+qaFmt(min,3)+' - '+qaFmt(max,3)+')'):''));
+                    });
+
+                // Format X: perubahan jumlah baris hanya pada standar registrasi.
+                // Pengisian Update Hasil harus mengikuti standar terdaftar (tidak boleh diubah diam-diam).
+                $(document).off('click.qaXRows', '.qa-x-add, .qa-x-remove')
+                    .on('click.qaXRows', '.qa-x-add, .qa-x-remove', function(){
+                        if(String($('#reg_pilih_format').val()||'').toUpperCase()!=='X') return;
+                        const part=String($(this).data('bagian')||'').toUpperCase();
+                        if(!['KESTABILAN','MAJU','MUNDUR'].includes(part)) return;
+                        let rows=qaCollectReg('X');
+                        const indices=rows.map((r,i)=>String(r.bagian||'').toUpperCase()===part?i:-1).filter(i=>i>=0);
+                        if($(this).hasClass('qa-x-add')){
+                            if(indices.length>=20){BootstrapDialog.alert('Maksimal 20 baris untuk setiap bagian Format X.');return;}
+                            rows.splice(indices[indices.length-1]+1,0,{bagian:part,standar:''});
+                        }else{
+                            if(indices.length<=1){BootstrapDialog.alert('Setiap bagian minimal harus punya 1 baris.');return;}
+                            // Hapus hanya baris yang ditekan, tanpa mengubah standar baris lainnya.
+                            const rowIndex=$('#body_reg_standar .qa-x-master-row').index($(this).closest('.qa-x-master-row'));
+                            if(rowIndex<0)return;
+                            rows.splice(rowIndex,1);
+                        }
+                        qaRenderRegTable('X',rows);
+                        if($(this).hasClass('qa-x-add')) $('#body_reg_standar .qa-x-master-row[data-bagian="'+part+'"] .qa-reg-field').last().focus();
                     });
 
                 $(document).off('click.qaFormatT').on('click.qaFormatT','.qa-t-del-group',function(){
@@ -3010,6 +3135,7 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                     $('#qa_status_final').val('');
 
                     $('#qa_hasil_json').val('');
+                    if(format==='X') $('#qa_jenis_laporan').val('kalibrasi');
 
 
                     /*
@@ -3022,6 +3148,64 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
 
                 qaRenderUpdateTable=function(format,points){
                     format=String(format||'A').toUpperCase(); qaApplyUpdateMetaVisibility(format); const $th=$('#tabel_input_kalibrasi thead'),$tb=$('#tabel_input_kalibrasi tbody'); let h='',b=''; points=Array.isArray(points)?points:[];
+                    // Hapus listener khusus X bila user beralih ke alat/format lain.
+                    $('#qa_toleransi').off('input.qaX');
+                    if(format==='X'){
+                        const sections=['KESTABILAN','MAJU','MUNDUR'];
+                        const satuan=qaEsc(currentAlatData?.satuan||'mm');
+                        let html='';
+                        let globalIndex=0;
+                        sections.forEach(function(part){
+                            const section=points.filter(p=>String(p.bagian||'').toUpperCase()===part);
+                            html+='<tr class="qa-x-section"><th colspan="9">'+(part==='KESTABILAN'?'KESTABILAN':'PEMBACAAN '+part)+'</th></tr>';
+                            if(part==='KESTABILAN'){
+                                html+='<tr><th>TITIK UKUR</th><th colspan="5">HASIL UKUR ('+satuan+')</th><th>MAX</th><th>MIN</th><th>SELISIH</th></tr>';
+                                section.forEach(function(p,i){
+                                    html+='<tr class="qa-x-stability" data-index="'+(globalIndex++)+'" data-standard="'+qaEsc(p.standar||'')+'"><td>'+(i+1)+' <small>(Std: '+qaEsc(p.standar||'')+')</small></td>';
+                                    for(let j=1;j<=5;j++) html+='<td>'+qaField('','hasil_'+j,' inputmode="decimal"')+'</td>';
+                                    html+='<td class="qa-x-max"></td><td class="qa-x-min"></td><td class="qa-x-selisih"></td></tr>';
+                                });
+                            }else{
+                                html+='<tr><th>NO</th><th colspan="4">STANDAR ('+satuan+')</th><th colspan="2">HASIL</th><th colspan="2">KOREKSI</th></tr>';
+                                section.forEach(function(p,i){
+                                    html+='<tr class="qa-x-reading" data-index="'+(globalIndex++)+'" data-bagian="'+part+'" data-standard="'+qaEsc(p.standar||'')+'"><td>'+(i+1)+'</td><td colspan="4">'+qaReadonly(p.standar)+'</td><td colspan="2">'+qaField('','hasil',' inputmode="decimal"')+'</td><td colspan="2" class="qa-x-koreksi"></td></tr>';
+                                });
+                            }
+                        });
+                        $th.empty();$tb.html(html);
+                        $('#tabel_input_kalibrasi').addClass('qa-patched-table');
+                        $('#btn_add_update_row,#btn_add_n_column,#qa_n_column_help').hide();
+                        $('#qa_status_final').val('');
+                        const calculate=function(){
+                            const read=(v)=>{const t=String(v??'').trim().replace(',','.');return t!=='' && /^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(t)?Number(t):NaN;};
+                            const fmt=(n)=>Number.isFinite(n)?(Math.abs(n)<0.0005?0:n).toFixed(3):'';
+                            let valid=$('.qa-x-stability').length>0,within=true;
+                            const tolerance=qaTolValue($('#qa_toleransi').val());
+                            $('.qa-x-stability').each(function(){
+                                const $tr=$(this);
+                                const stability=$tr.find('.qa-update-field').map(function(){return read($(this).val());}).get();
+                                const full=stability.length===5&&stability.every(Number.isFinite);
+                                const maximum=full?Math.max(...stability):NaN, minimum=full?Math.min(...stability):NaN;
+                                const selisih=full?maximum-minimum:NaN;
+                                $tr.find('.qa-x-max').text(fmt(maximum));$tr.find('.qa-x-min').text(fmt(minimum));$tr.find('.qa-x-selisih').text(fmt(selisih));
+                                if(!full)valid=false;
+                                if(full&&Number.isFinite(tolerance)&&selisih>Math.abs(tolerance)+1e-9)within=false;
+                            });
+                            $('.qa-x-reading').each(function(){
+                                const std=read($(this).attr('data-standard')), actual=read($(this).find('[data-key="hasil"]').val());
+                                const corr=Number.isFinite(std)&&Number.isFinite(actual)?std-actual:NaN;
+                                $(this).find('.qa-x-koreksi').text(fmt(corr));
+                                if(!Number.isFinite(corr))valid=false;
+                                else if(Number.isFinite(tolerance)&&Math.abs(corr)>Math.abs(tolerance)+1e-9)within=false;
+                            });
+                            if(valid&&Number.isFinite(tolerance))$('#qa_status_final').val(within?'OK':'NOT GOOD');
+                            else $('#qa_status_final').val('');
+                        };
+                        $('#tabel_input_kalibrasi').off('input.qaCalc change.qaCalc').on('input.qaCalc change.qaCalc','.qa-update-field',calculate);
+                        $('#qa_toleransi').off('input.qaX').on('input.qaX',calculate);
+                        return;
+                    }
+
                     const rowStart=(i)=>'<tr data-index="'+i+'">', rowEnd='</tr>';
                     if(format==='A'){
                         h='<tr><th>No</th><th>Posisi</th><th>STD Spesifikasi</th><th>STD No Alat</th><th>STD OUT Ø</th><th>STD PITCH Ø</th><th>OUT 1</th><th>OUT 2</th><th>OUT 3</th><th>PITCH 1</th><th>PITCH 2</th><th>PITCH 3</th><th>Status</th></tr>';
@@ -3074,7 +3258,16 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                     } else if(format==='K'){
                         h='<tr><th>No</th><th>Nilai Ditentukan</th><th>Nilai Pengukuran</th><th>Selisih</th><th>Status</th>'; points.forEach((p,i)=>{b+=rowStart(i)+'<td>'+(i+1)+'</td><td>'+qaReadonly(p.nilai_ditentukan)+'</td><td>'+qaField('','nilai_pengukuran')+'</td><td class="qa-selisih"></td><td class="qa-row-status">-</td>'+rowEnd;}); h+='</tr>';
                     } else if(format==='L'){
-                        h='<tr><th>No</th><th>Uji</th><th>Applied</th><th>Indicated</th><th>Correction</th><th>Status</th>'; points.forEach((p,i)=>{b+=rowStart(i)+'<td>'+(i+1)+'</td><td>'+qaSelect(p.arah||'NAIK','arah',['NAIK','TURUN'])+'</td><td>'+qaField(p.applied_value,'applied_value')+'</td><td>'+qaField('','indicated_value')+'</td><td class="qa-koreksi"></td><td class="qa-row-status">-</td>'+rowEnd;}); h+='</tr>';
+                        // Pilihan mode berasal dari master titik_standar_json, bukan input petugas saat update.
+                        const nomorMode=points.some(p=>String(p.uji_skala_mode||'').toLowerCase()==='nomor' || /^\d+$/.test(String(p.arah||'').trim()));
+                        h='<tr><th>No</th><th>Uji Skala</th><th>Applied</th><th>Indicated</th><th>Correction</th><th>Status</th>';
+                        points.forEach((p,i)=>{
+                            const uji=nomorMode
+                                ? '<input type="text" readonly class="form-control qa-update-field qa-readonly" data-key="arah" value="'+(i+1)+'">'
+                                : qaSelect(p.arah||'NAIK','arah',['NAIK','TURUN']);
+                            b+=rowStart(i)+'<td>'+(i+1)+'</td><td>'+uji+'</td><td>'+qaField(p.applied_value,'applied_value')+'</td><td>'+qaField('','indicated_value')+'</td><td class="qa-koreksi"></td><td class="qa-row-status">-</td>'+rowEnd;
+                        });
+                        h+='</tr>';
                     } else if(format==='M'){
                         const ax=points.filter(p=>String(p.jenis||'').toUpperCase()==='AXIS'), an=points.filter(p=>String(p.jenis||'').toUpperCase()==='ANGLE');
                         const tolAxis=(ax[0]&&(ax[0].toleransi_axis||ax[0].toleransi_x||ax[0].toleransi_y))||'';
@@ -3337,6 +3530,21 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
 
                 qaCollectUpdate=function(format){
                     format=String(format||'').toUpperCase(); const rows=[];
+                    if(format==='X'){
+                        $('#tabel_input_kalibrasi .qa-x-stability').each(function(){
+                            const $tr=$(this);
+                            const result={bagian:'KESTABILAN',standar:String($tr.attr('data-standard')||'')};
+                            for(let i=1;i<=5;i++)result['hasil_'+i]=String($tr.find('[data-key="hasil_'+i+'"]').val()||'');
+                            result.max=$tr.find('.qa-x-max').text();result.min=$tr.find('.qa-x-min').text();result.selisih=$tr.find('.qa-x-selisih').text();
+                            rows.push(result);
+                        });
+                        $('#tabel_input_kalibrasi .qa-x-reading').each(function(){
+                            rows.push({bagian:String($(this).data('bagian')||''),standar:String($(this).attr('data-standard')||''),
+                                hasil:String($(this).find('[data-key="hasil"]').val()||''),koreksi:String($(this).find('.qa-x-koreksi').text()||'')});
+                        });
+                        return rows;
+                    }
+
                     if(format==='F'){
                         const meta=(qaStandardPoints(currentAlatData)||[]).find(x=>x.meta==='F')||{}; const out={format:'F',sec1:{},sec2:[],sec3:{}};
                         const sec1=$('#tabel_input_kalibrasi [data-key="sec1_hasil"]').val(); out.sec1={standar:meta.std_sec1||'',hasil:sec1||'',deviasi:(sec1!==''&&Number.isFinite(qaNum(sec1)))?qaFmt(qaNum(sec1)-qaNum(meta.std_sec1)):''};
@@ -3354,7 +3562,13 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                         else if(format==='H'){const idx=$tr.data('index');const master=(qaStandardPoints(currentAlatData)||[])[idx]||{};o.posisi_ukur=$tr.find('td:eq(1)').text();o.std_out=$tr.find('[data-key="std_out"]').val()||'';o.std_pitch=$tr.find('[data-key="std_pitch"]').val()||'';o.out={dep:o.out_dep||'',ten:o.out_ten||'',bel:o.out_bel||''};o.pitch={dep:o.pitch_dep||'',ten:o.pitch_ten||'',bel:o.pitch_bel||''};o.tol_out=master.tol_out||'';o.range_out=master.range_out||'';o.tol_pitch=master.tol_pitch||'';o.range_pitch=master.range_pitch||'';o.std_spesifikasi=master.std_spesifikasi||'';o.std_no_alat=master.std_no_alat||'';o.kode_warna=$('#qa_kode_warna').val()||'';}
                         else if(format==='I'){const master=(qaStandardPoints(currentAlatData)||[])[$tr.data('index')]||{};o.spesifikasi_alat=master.spesifikasi_alat||'';o.std_spesifikasi=master.std_spesifikasi||'';o.std_no_alat=master.std_no_alat||'';o.putusan=o.status||'';}
                         else if(format==='K'){o.selisih=$tr.find('.qa-selisih').text();}
-                        else if(format==='L'){o.correction=$tr.find('.qa-koreksi').text();}
+                        else if(format==='L'){
+                            const master=(qaStandardPoints(currentAlatData)||[])[$tr.data('index')]||{};
+                            const nomorMode=String(master.uji_skala_mode||'').toLowerCase()==='nomor' || /^\d+$/.test(String(master.arah||'').trim());
+                            o.uji_skala_mode=nomorMode?'nomor':'arah';
+                            o.arah=nomorMode?String($tr.data('index')+1):(o.arah||master.arah||'NAIK');
+                            o.correction=$tr.find('.qa-koreksi').text();
+                        }
                         else if(format==='M'){o.correction=($tr.find('.qa-m-angle-corr').text()||''); if($tr.find('.qa-m-corr-xl').length){o.x_left_correction=$tr.find('.qa-m-corr-xl').text();o.x_right_correction=$tr.find('.qa-m-corr-xr').text();o.y_front_correction=$tr.find('.qa-m-corr-yf').text();o.y_back_correction=$tr.find('.qa-m-corr-yb').text();o.std_x=$tr.find('td:eq(0) input').val()||'';o.toleransi_x=$tr.find('td:eq(1) input').val()||'';o.std_y=$tr.find('td:eq(6) input').val()||'';o.toleransi_y=$tr.find('td:eq(7) input').val()||'';o.std_mm=o.std_x;} else {o.std_degree=$tr.find('td:eq(0) input').val()||'';o.std_angle=o.std_degree;o.hasil_degree=$tr.find('[data-key="hasil_degree"]').val()||'';o.hasil_minute=$tr.find('[data-key="hasil_minute"]').val()||'';o.hasil_second=$tr.find('[data-key="hasil_second"]').val()||'';o.toleransi_angle=(qaStandardPoints(currentAlatData)||[]).find(x=>String(x.jenis||'').toUpperCase()==='ANGLE')?.toleransi_angle||'';}}
                         else if(format==='N'){const idx=$('#tabel_input_kalibrasi tbody tr[data-index]').index($tr),masters=(qaStandardPoints(currentAlatData)||[]).filter(x=>String(x.meta||x.jenis||'').toUpperCase()!=='N_KESEJAJARAN'),master=masters[idx]||{};o.standar=$tr.find('[data-n-key="standar"]').val()||master.standar||'';o.toleransi=$tr.find('[data-n-key="toleransi"]').val()||master.toleransi||'';o.hasil=$tr.find('[data-n-result="0"]').val()||'';o.koreksi=$tr.find('.qa-koreksi').text();}
                         else if(format==='O'){
@@ -3434,6 +3648,23 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
 
                 qaValidateUpdate=function(format,rows){
                     format=String(format||'').toUpperCase();
+                    if(format==='X'){
+                        if(!Array.isArray(rows)||rows.length<3||rows.length>60)return false;
+                        const numeric=v=>/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(String(v??'').trim().replace(',','.'));
+                        const sections=['KESTABILAN','MAJU','MUNDUR'];let last=0;
+                        const counts={KESTABILAN:0,MAJU:0,MUNDUR:0};
+                        for(const row of rows){
+                            const part=String(row?.bagian||'').toUpperCase(),index=sections.indexOf(part);
+                            if(index<last||index>last+1||index<0||!numeric(row.standar))return false;
+                            last=index;
+                            if(++counts[part]>20)return false;
+                            if(part==='KESTABILAN'){
+                                if(![1,2,3,4,5].every(i=>numeric(row['hasil_'+i])))return false;
+                            }else if(!numeric(row.hasil))return false;
+                        }
+                        return sections.every(section=>counts[section]>0);
+                    }
+
                     if(format==='F') return rows.length===1;
                     if(format==='O'){
                         const row=Array.isArray(rows)&&rows.length?rows[0]:null;
@@ -3521,7 +3752,7 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                 $('#btn-simpan-alat').off('click').on('click',function(){
                     const format=String($('#reg_pilih_format').val()||'').toUpperCase(), regNo=$('#reg_nomor_alat').val().trim().toUpperCase();
                     const base={no:regNo,nama:$('#reg_nama_alat').val().trim(),seksi:$('#reg_seksi').val(),periode:$('#reg_periode').val().trim(),lokasi:$('#reg_lokasi').val().trim(),merk:$('#reg_merk').val().trim(),buatan:$('#reg_buatan').val().trim(),fungsi:$('#reg_fungsi').val().trim(),type:$('#reg_type').val().trim()};
-                    const required={A:['spesifikasi','tol','metode','standar','trace'],B:['spesifikasi','tol','satuan','metode','standar','trace'],C:['spesifikasi','resolusi','tol','satuan','metode','standar','trace'],D:['spesifikasi','resolusi','tol','metode','standar','trace'],E:['spesifikasi','resolusi','tol','satuan','metode','standar','trace'],F:['spesifikasi','resolusi','tol','satuan','metode','standar','trace'],G:['spesifikasi','resolusi','tol','satuan','metode','standar','trace'],H:['spesifikasi','trace'],I:['metode','standar','trace'],J:['spesifikasi','metode'],K:['spesifikasi','resolusi','tol','metode','standar','trace'],L:['spesifikasi','resolusi','tol','satuan','metode','standar','trace'],M:['spesifikasi','resolusi','tol','satuan','metode','standar','trace'],N:['spesifikasi','resolusi','tol','satuan','metode','standar','trace'],O:['satuan','metode','standar','trace'],P:['metode','standar','trace'],Q:['spesifikasi','metode','standar','trace'],R:['resolusi','metode','standar','trace'],T:['spesifikasi','metode','standar','trace']};
+                    const required={A:['spesifikasi','tol','metode','standar','trace'],B:['spesifikasi','tol','satuan','metode','standar','trace'],C:['spesifikasi','resolusi','tol','satuan','metode','standar','trace'],D:['spesifikasi','resolusi','tol','metode','standar','trace'],E:['spesifikasi','resolusi','tol','satuan','metode','standar','trace'],F:['spesifikasi','resolusi','tol','satuan','metode','standar','trace'],G:['spesifikasi','resolusi','tol','satuan','metode','standar','trace'],H:['spesifikasi','trace'],I:['metode','standar','trace'],J:['spesifikasi','metode'],K:['spesifikasi','resolusi','tol','metode','standar','trace'],L:['spesifikasi','resolusi','tol','satuan','metode','standar','trace'],M:['spesifikasi','resolusi','tol','satuan','metode','standar','trace'],N:['spesifikasi','resolusi','tol','satuan','metode','standar','trace'],O:['satuan','metode','standar','trace'],P:['metode','standar','trace'],Q:['spesifikasi','metode','standar','trace'],R:['resolusi','metode','standar','trace'],T:['spesifikasi','metode','standar','trace'],X:['spesifikasi','resolusi','tol','satuan','metode','standar','trace']};
                     Object.assign(base,{spesifikasi:$('#reg_spesifikasi').val().trim(),resolusi:$('#reg_resolusi').val().trim(),tol:$('#reg_toleransi').val().trim(),satuan:$('#reg_satuan').val().trim(),metode:$('#reg_metode').val().trim(),standar:$('#reg_standar_uji').val().trim(),trace:$('#reg_trace').val().trim()});
                     if(format === 'F') {
                         const bw = $('#reg_f_batas_bawah').val().trim(), at = $('#reg_f_batas_atas').val().trim();
@@ -3531,6 +3762,22 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                     const missing=(required[format]||[]).filter(k=>!base[k]); if(missing.length){BootstrapDialog.alert('Field wajib belum lengkap: '+missing.join(', '));return;}
                     if(format==='F'&&(!$('#reg_f_std_sec1').val().trim()||!$('#reg_f_std_sec3').val().trim())){BootstrapDialog.alert('Standar Repeatability dan Center Loading wajib diisi untuk Format F.');return;}
                     const arr=qaCollectReg(format); if(!arr.length){BootstrapDialog.alert('Minimal ada satu konfigurasi standar untuk Format '+format+'.');return;}
+                    if(format==='X'){
+                        const numeric=v=>/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(String(v??'').trim().replace(',','.'));
+                        const parts=['KESTABILAN','MAJU','MUNDUR'];
+                        const counts={KESTABILAN:0,MAJU:0,MUNDUR:0};
+                        let last=0,valid=arr.length>=3&&arr.length<=60;
+                        arr.forEach(function(r){
+                            const idx=parts.indexOf(String(r.bagian||'').toUpperCase());
+                            if(idx<last||idx>last+1||idx<0||!numeric(r.standar))valid=false;
+                            if(idx>=0){last=idx;counts[parts[idx]]++;}
+                        });
+                        if(parts.some(part=>counts[part]<1||counts[part]>20))valid=false;
+                        if(!valid){
+                            BootstrapDialog.alert('Format X: setiap bagian (Kestabilan, Maju, Mundur) wajib memiliki 1–20 baris standar dengan angka valid.');
+                            return;
+                        }
+                    }
                     if(format==='O'){
                         const o=arr[0]||{};
                         const requiredO=['spesifikasi','tol_plus','tol_minus','go_std','go_tol_near','go_tol_far','notgo_std','notgo_tol'];

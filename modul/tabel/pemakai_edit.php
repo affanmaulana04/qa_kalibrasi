@@ -49,7 +49,7 @@ $selectedCustomRole=qaRbacRoleForUser($konek,(string)$user['uid']);
 <style>
 body{padding-top:70px;background:#f4f6f9}.navbar-brand img{height:25px;margin-top:-3px}
 .card{background:#fff;border:1px solid #ddd;border-radius:10px;padding:24px;margin-bottom:20px}
-.form-title{font-weight:700;color:#1E3F66;margin-top:0}.flag-box{padding:15px;background:#f7f9fb;border:1px solid #d9e2ec;border-radius:8px}.btn-row{margin-top:25px}
+.form-title{font-weight:700;color:#1E3F66;margin-top:0}.btn-row{margin-top:25px}
 </style>
 </head>
 <body>
@@ -77,15 +77,7 @@ body{padding-top:70px;background:#f4f6f9}.navbar-brand img{height:25px;margin-to
 <div class="form-group"><label>E-mail</label><input type="email" class="form-control" name="input_email" value="<?php echo htmlspecialchars($user['email_pembuat'] ?? '', ENT_QUOTES); ?>"></div>
 </div>
 <div class="col-md-6">
-<div class="flag-box">
-<h4 style="margin-top:0">Status User</h4>
-<label class="checkbox"><input type="checkbox" name="input_admin" value="Y" <?php echo strtoupper((string)$user['admin'])==='Y'?'checked':''; ?>> <b>Admin QA</b></label>
-<details><summary>Hak QA lama (untuk user tanpa Custom Role)</summary><label class="checkbox"><input type="checkbox" name="input_pembuat" value="Y" <?php echo strtoupper((string)$user['pembuat'])==='Y'?'checked':''; ?>> <b>Pembuat</b> — Check / Update QA</label>
-<label class="checkbox"><input type="checkbox" name="input_pemeriksa" value="Y" <?php echo strtoupper((string)$user['pemeriksa'])==='Y'?'checked':''; ?>> <b>Pemeriksa</b> — validasi tahap pemeriksa</label>
-<label class="checkbox"><input type="checkbox" name="input_penyetuju" value="Y" <?php echo strtoupper((string)$user['penyetuju'])==='Y'?'checked':''; ?>> <b>Penyetuju</b> — validasi tahap penyetuju</label>
-</details><label class="checkbox"><input type="checkbox" name="input_block" value="Y" <?php echo strtoupper((string)$user['block'])==='Y'?'checked':''; ?>> <b>Block</b> — tidak dapat login</label>
-</div>
-<div class="form-group" style="margin-top:15px"><label>Custom Role (Hak Akses Halaman)</label><select class="form-control" name="input_custom_role"><option value="0" <?=$selectedCustomRole===0?'selected':''?>>-- Belum memakai Custom Role (akses legacy) --</option><?php foreach($customRoles as $r): ?><option value="<?=(int)$r['id']?>" <?=(int)$r['id']===$selectedCustomRole?'selected':''?>><?=htmlspecialchars($r['nama_role'],ENT_QUOTES,'UTF-8')?></option><?php endforeach; ?></select><p class="help-block">Role mengatur halaman yang bisa dibuka. <a href="../akses/roles.php">Kelola role</a>.</p></div><input type="hidden" name="input_role" value="QA">
+<div class="form-group" style="margin-top:15px"><label>Custom Role (Hak Akses Halaman) *</label><select class="form-control" name="input_custom_role" required><option value="" <?=$selectedCustomRole===0?'selected':''?>>-- Pilih Role --</option><?php foreach($customRoles as $r): ?><option value="<?=(int)$r['id']?>" <?=(int)$r['id']===$selectedCustomRole?'selected':''?>><?=htmlspecialchars($r['nama_role'],ENT_QUOTES,'UTF-8')?></option><?php endforeach; ?></select><p class="help-block">Hak akses pengguna mengikuti Custom Role yang dipilih. <a href="../akses/roles.php">Kelola role</a>.</p></div>
 <div class="btn-row"><button type="button" id="simpan" class="btn btn-primary"><i class="fa fa-save"></i> Simpan</button> <button type="button" id="batal" class="btn btn-default"><i class="fa fa-arrow-left"></i> Kembali</button></div>
 </div>
 </div>

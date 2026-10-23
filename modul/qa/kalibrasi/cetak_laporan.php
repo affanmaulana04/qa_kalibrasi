@@ -475,6 +475,51 @@ html, body {
 
 /* ================= FORM V - OUTSIDE / INSIDE / DEPTH ================= */
 
+
+/* ================= FORMAT X — KESTABILAN, MAJU, MUNDUR ================= */
+.report-x { width:206mm; min-height:293mm; margin:2mm auto; padding:0 0 1.5mm;
+    border:0.5mm solid #000; background:#fff; color:#000; font:8pt Arial,sans-serif;
+    display:flex; flex-direction:column; }
+.report-x * { box-sizing:border-box; }
+.x-company { text-align:center; font:bold 8pt Arial,sans-serif; padding:1mm 0 1.2mm; }
+.x-title { font:14pt Arial,sans-serif; text-align:center; margin:5mm auto 4mm; }
+.x-content { width:176mm; margin:0 auto; display:flex; flex:1; flex-direction:column; }
+.x-info,.x-result,.x-details,.x-sign { border-collapse:collapse; width:100%; table-layout:fixed; }
+.x-info td,.x-result td,.x-result th,.x-details td,.x-sign td,.x-sign th {
+    border:0.25mm solid #000; padding:0.65mm 0.75mm; vertical-align:middle; overflow-wrap:anywhere;
+}
+.x-info td:nth-child(1),.x-info td:nth-child(3) { width:20%; }
+.x-info td:nth-child(2),.x-info td:nth-child(4) { width:30%; }
+.x-info tr { height:5.4mm; }
+.x-section { border:0.25mm solid #000; border-top:0; text-align:center; font-weight:bold; padding:1mm 0; }
+.x-result { font-size:8pt; text-align:center; }
+.x-result th { font-weight:normal; }
+.x-result tr.x-head th { height:18mm; }
+.x-result td { height:5.6mm; }
+.x-result .x-dotted td,.x-result .x-dotted td:not(:first-child) { border-top-style:dotted; }
+.x-stable-table th { height:15mm; }
+.x-stable-table td { height:7mm; }
+.x-read-table td:first-child { width:10%; }
+.x-details td:nth-child(1),.x-details td:nth-child(3) { width:20%; }
+.x-details td:nth-child(2),.x-details td:nth-child(4) { width:30%; }
+.x-details td { height:5.6mm; }
+.x-details .x-note { height:25mm; vertical-align:top; }
+.x-footer { margin-top:auto; padding-top:3mm; }
+.x-city { width:96mm; margin:0 0 0 auto; padding:1mm 0; text-align:left; font-size:8pt; }
+.x-sign { width:96mm; margin-left:auto; text-align:center; }
+.x-sign th,.x-sign td { font-weight:normal; padding:0.6mm; }
+.x-sign tr.x-sign-names td { height:27mm; vertical-align:bottom; }
+.x-sign tr.x-sign-roles td { height:6mm; }
+.x-doc-code { font:7pt Arial,sans-serif; text-align:right; margin:3mm 1mm 0; }
+@media print {
+    .report-x { margin:2mm auto!important; break-inside:avoid; page-break-inside:avoid; }
+    /* Jika pengguna menambah banyak baris, izinkan lanjut halaman agar tidak terpotong. */
+    .report-x.x-long-report { min-height:0; break-inside:auto; page-break-inside:auto; display:block; }
+    .report-x.x-long-report .x-content { display:block; }
+    .report-x.x-long-report .x-footer { margin-top:3mm; }
+    .report-x.x-long-report .x-result tr { break-inside:avoid; page-break-inside:avoid; }
+}
+
 /* FORMAT W PRINT V1 - LAPORAN PEMERIKSAAN SUDUT SESUAI REFERENSI */
 .report-w{width:206mm;min-height:293mm;margin:2mm auto;padding:0 0 2mm;border:.5mm solid #000;background:#fff;color:#000;font:8pt Arial,sans-serif}.report-w *{box-sizing:border-box}.company-w{text-align:center;font-weight:bold;height:7mm;padding-top:1mm}.title-w{text-align:center;font:15pt Arial,sans-serif;padding:7mm 0 5mm}.info-w,.hasil-w,.detail-w{width:176mm;margin:0 auto;border-collapse:collapse;table-layout:fixed}.info-w td,.detail-w td{border:.25mm solid #000;padding:.7mm 1mm;height:6mm;vertical-align:middle}.hasil-title-w{width:176mm;margin:0 auto;border:.25mm solid #000;border-bottom:0;height:6mm;text-align:center;padding:1mm}.hasil-w th,.hasil-w td{border:.25mm solid #000;text-align:center;vertical-align:middle;padding:.55mm 1mm;height:6mm;font-weight:normal}.hasil-w thead th{height:20mm}.hasil-w .blank-w td{border-top-style:dotted;border-bottom-style:dotted}.detail-w .ket-w{height:20mm;vertical-align:top}.diag-w{position:relative;overflow:hidden}.diag-w:after{content:'';position:absolute;left:0;top:0;width:142%;border-top:.25mm solid #000;transform:rotate(14deg);transform-origin:0 0}/* FORMAT W PRINT V2 - GARIS DIAGONAL KONSISTEN DARI POJOK KIRI ATAS */.city-date-w{width:106mm;margin:5mm 15mm 0 auto;padding:1mm 0}.sign-w{width:106mm;margin:0 15mm 0 auto;border-collapse:collapse;table-layout:fixed}.sign-w th,.sign-w td{border:.25mm solid #000;text-align:center;padding:1mm;font-weight:normal}.sign-w .space-w td{height:25mm;vertical-align:bottom;font-style:italic}.sign-w .role-w td{height:6mm}.doc-w{text-align:right;font-size:7pt;margin:2mm 1mm 0}.report-w,.report-w table,.report-w th,.report-w td{background:#fff!important;background-color:#fff!important;color:#000!important}
 
@@ -1435,6 +1480,79 @@ html, body {
     qaReportObserver.observe(document.getElementById('report'), { childList:true, subtree:true });
 
 
+    // ================= FORMAT X — KESTABILAN / PEMBACAAN MAJU & MUNDUR =================
+    if (data.format === 'X') {
+        const safe = qaEscText;
+        const raw = v => String(v == null ? '' : v).trim();
+        const number = v => {
+            const t = raw(v).replace(',','.');
+            return /^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(t) ? Number(t) : NaN;
+        };
+        const fmt = n => Number.isFinite(n) ? (Math.abs(n)<0.0005 ? 0 : n).toFixed(3) : '';
+        const printable = v => raw(v) ? safe(v) : '';
+        const date = (v, long=false) => {
+            const t = raw(v), m=t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if(!m)return safe(t);
+            const months=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+            return long ? m[3]+' '+months[Number(m[2])-1]+' '+m[1] : m[3]+' - '+m[2]+' - '+m[1];
+        };
+        const rows = Array.isArray(data.hasil_array) ? data.hasil_array : [];
+        // Cetak tepat sebanyak standar/hasil yang terdaftar; jangan dipotong atau dipaksa 6 baris.
+        const stabilityRows=rows.filter(x=>String(x?.bagian||'').toUpperCase()==='KESTABILAN');
+        const stableBody=stabilityRows.map((stable,i)=>{
+            const readings=[1,2,3,4,5].map(j=>number(stable['hasil_'+j]));
+            const ready=readings.every(Number.isFinite);
+            const maximum=ready?Math.max(...readings):NaN, minimum=ready?Math.min(...readings):NaN;
+            return '<tr><td>'+(i+1)+'</td>'+readings.map(n=>'<td>'+fmt(n)+'</td>').join('')+
+                '<td>'+fmt(maximum)+'</td><td>'+fmt(minimum)+'</td><td>'+fmt(ready?maximum-minimum:NaN)+'</td></tr>';
+        }).join('');
+        const sectionRows=part=>{
+            const list=rows.filter(x=>String(x?.bagian||'').toUpperCase()===part);
+            return list.map((r,i)=>{
+                const std=number(r.standar),hasil=number(r.hasil);
+                const correction=Number.isFinite(std)&&Number.isFinite(hasil)?std-hasil:NaN;
+                return '<tr class="'+(i%2?'x-dotted':'')+'"><td>'+(i+1)+'</td><td colspan="4">'+printable(r.standar)+'</td><td colspan="2">'+fmt(hasil)+'</td><td colspan="2">'+fmt(correction)+'</td></tr>';
+            }).join('');
+        };
+        const satuan=printable(data.satuan||'mm'),kep=printable(data.keputusan||data.status_final);
+        const title = qaJudulLaporan || 'LAPORAN KALIBRASI';
+        document.getElementById('report').innerHTML=`
+          <div class="report-x${rows.length>13?' x-long-report':''}">
+            <div class="x-company">PT. SURYA TOTO INDONESIA Tbk.</div>
+            <div class="x-content">
+              <div class="x-title">${safe(title)}</div>
+              <table class="x-info">
+                <tr><td>NO LAPORAN</td><td>${printable(data.no_laporan)}</td><td>SEKSI</td><td style="font-weight:bold;text-align:center">${printable(data.seksi_pemilik||data.seksi)}</td></tr>
+                <tr><td>NAMA ALAT</td><td>${printable(data.nama_part||data.nama_alat)}</td><td>PETUGAS KALIBRASI</td><td style="text-align:center">${qaSignatureName(data.operator||data.petugas)}</td></tr>
+                <tr><td>NOMOR ALAT</td><td>${printable(data.no_part||data.no_alat)}</td><td rowspan="2">TANGGAL KALIBRASI</td><td rowspan="2" style="text-align:center">${date(data.tanggal_periksa)}</td></tr>
+                <tr><td>SPESIFIKASI</td><td>${printable(data.spesifikasi)}</td></tr>
+                <tr><td>RESOLUSI</td><td>${printable(data.resolusi)}</td><td></td><td></td></tr>
+              </table>
+              <div class="x-section">KESTABILAN</div>
+              <table class="x-result x-stable-table"><thead><tr class="x-head"><th rowspan="2" style="width:10%">TITIK<br>UKUR</th><th colspan="5">HASIL UKUR<br>( ${satuan} )</th><th colspan="2">HASIL</th><th rowspan="2" style="width:17%">SELISIH<br>( ${satuan} )</th></tr><tr><th colspan="5"></th><th>MAX</th><th>MIN</th></tr></thead><tbody>${stableBody}</tbody></table>
+              <div class="x-section">PEMBACAAN MAJU</div>
+              <table class="x-result x-read-table"><thead><tr><th style="width:10%">NO</th><th colspan="4">STANDAR<br>( ${satuan} )</th><th colspan="2">HASIL<br>( ${satuan} )</th><th colspan="2">KOREKSI<br>( ${satuan} )</th></tr></thead><tbody>${sectionRows('MAJU')}</tbody></table>
+              <div class="x-section">PEMBACAAN MUNDUR</div>
+              <table class="x-result x-read-table"><tbody>${sectionRows('MUNDUR')}</tbody></table>
+              <table class="x-details">
+                <tr><td>METODE</td><td>${printable(data.metode||data.metode_uji)}</td><td>KELEMBABAN RUANGAN</td><td>${printable(data.kelembapan)}</td></tr>
+                <tr><td>STANDAR UJI</td><td>${printable(data.standar_uji)}</td><td>KETIDAKPASTIAN</td><td>${printable(data.ketidakpastian)}</td></tr>
+                <tr><td>TRACEABILITY</td><td>${printable(data.traceability)}</td><td>STANDAR TOLERANSI</td><td>${printable(data.toleransi_global||data.toleransi)}</td></tr>
+                <tr><td>CONFIDENCE LEVEL</td><td>${printable(data.confidence_level||data.confidence)}</td><td>KEPUTUSAN</td><td style="text-align:center;font-weight:bold">${kep}</td></tr>
+                <tr><td>SUHU RUANGAN</td><td>${printable(data.suhu)}</td><td>KALIBRASI BERIKUTNYA</td><td>${date(data.jadwal_berikutnya||data.periode_berikutnya)}</td></tr>
+                <tr><td colspan="4" class="x-note"><b>KETERANGAN :</b><br>${qaKeterangan(data.keterangan)}</td></tr>
+              </table>
+              <div class="x-footer">
+                <div class="x-city">TANGERANG, ${date(data.tanggal_periksa,true)}</div>
+                <table class="x-sign"><thead><tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr></thead>
+                  <tbody><tr class="x-sign-names"><td>${qaSignatureName(data.operator||data.petugas)}<br>${qaApprovalDate('pembuat')}</td><td>${qaSignatureName(data.pemeriksa||data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td><td>${qaSignatureName(data.penyetuju||data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td></tr><tr class="x-sign-roles"><td>PETUGAS</td><td>FOREMAN</td><td>SUPERVISOR</td></tr></tbody>
+                </table>
+              </div>
+            </div><div class="x-doc-code">STIS-CMFG4-03/R4</div>
+          </div>`;
+        return;
+    }
+
 // ================= FORM W (PEMERIKSAAN SUDUT) =================
     if (String(data.format || '').toUpperCase() === 'W') {
         // FORMAT W PRINT V1 - STANDAR DERAJAT / HASIL DERAJAT-MENIT / KOREKSI MENIT
@@ -2222,10 +2340,17 @@ html, body {
         const naik=rows.filter(r=>String(r.arah||'').toUpperCase()==='NAIK');
         const turun=rows.filter(r=>String(r.arah||'').toUpperCase()==='TURUN');
         const fmtCorr=v=>{const n=parseFloat(String(v??'').replace(',','.'));return Number.isFinite(n)?n.toFixed(4):e(v)};
-        // Format L: kelompokkan UJI SKALA berdasarkan pilihan arah saat registrasi.
-        // Satu cell NAIK/TURUN membentang sepanjang jumlah data pada section tersebut.
+        // Mode disimpan bersama standar dan hasil Format L. Data lama tanpa mode tetap ARAH.
+        const masterL=Array.isArray(data.standard_points)?data.standard_points:[];
+        const numbered=rows.some(r=>String(r.uji_skala_mode||'').toLowerCase()==='nomor') ||
+            masterL.some(r=>String(r.uji_skala_mode||'').toLowerCase()==='nomor') ||
+            (rows.length>0 && rows.every(r=>/^\d+$/.test(String(r.arah||'').trim())));
         const mk=(arr,arah)=>arr.map((r,i)=>`<tr>${i===0?`<td rowspan="${arr.length}" style="font-weight:bold;vertical-align:middle;text-align:center;writing-mode:vertical-rl;text-orientation:upright;letter-spacing:2px;">${e(arah)}</td>`:''}<td>${e(r.applied_value)}</td><td>${e(r.indicated_value)}</td><td>${fmtCorr(r.correction)}</td></tr>`).join('');
-        const body=mk(naik,'NAIK')+mk(turun,'TURUN');
+        // Mode NOMOR: satu nomor per baris, tanpa menggabungkan cell (rowspan).
+        // Mode ARAH: pertahankan kelompok NAIK/TURUN seperti cetakan sebelumnya.
+        const body=numbered
+            ? rows.map((r,i)=>`<tr><td>${i+1}</td><td>${e(r.applied_value)}</td><td>${e(r.indicated_value)}</td><td>${fmtCorr(r.correction)}</td></tr>`).join('')
+            : mk(naik,'NAIK')+mk(turun,'TURUN');
         const kr=String(data.keputusan||'').toUpperCase();
         const kep=(kr==='GOOD'||kr==='OK')?'OK':((kr==='NOT GOOD'||kr==='NOT GOOD')?'NOT GOOD':e(data.keputusan));
 
