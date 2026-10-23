@@ -1,4 +1,21 @@
 <?php
+/**
+ * proses_qa.php
+ * ---------------------------------------------------------------------
+ * QA Tool Calibration System - Backend Logic & AJAX Endpoints
+ *
+ * Perubahan dari versi sebelumnya (lihat catatan di kepala tiap fungsi):
+ *   - [MEETING] Kolom "operator" (petugas yang benar-benar mengecek alat)
+ *   - [MEETING] Alur Validator 2 tahap: Pemeriksa -> Penyetuju
+ *   - [MEETING] Keterangan validator OPSIONAL (tidak wajib)
+ *   - [MEETING] No. alat berstatus "Bad" tidak bisa dipakai ulang secara langsung
+ *   - [MEETING] Status "NOT GOOD" dibakukan menjadi "Bad" di seluruh sistem
+ *   - [FIX] Normalisasi no_part (trim + uppercase) di semua query pencarian
+ *   - [FIX] Validasi periode_kalibrasi harus integer positif
+ *   - [FIX] Proses status Bad dibungkus transaction (all-or-nothing)
+ *   - [FIX] Auto-migration kolom baru agar tidak perlu ALTER TABLE manual
+ * ---------------------------------------------------------------------
+ */
 
 session_start();
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
@@ -39,6 +56,9 @@ $nama_petugas   = isset($_SESSION['username']) && $_SESSION['username'] !== '' ?
 /* =====================================================================
  * HELPER: normalisasi payload hasil JSON sekaligus menyimpan snapshot
  * header/footer pada saat pengecekan.
+ * ---------------------------------------------------------------------
+ * Tidak menambah tabel/kolom baru. Snapshot disimpan di qa_pengecekan.hasil_json
+ * sehingga histori lama tetap immutable walaupun master qa_part diedit.
  * =================================================================== */
 function build_hasil_snapshot_json($rawJson, $meta)
 {
@@ -112,6 +132,13 @@ function normalisasi_no_part($konek, $raw)
 }
 function esc($konek, $value) { return mysqli_real_escape_string($konek, (string)$value); }
 
+/* Jenis nomor laporan mengikuti judul renderer cetak.
+ * Format L/M/R/U/V = Laporan Kalibrasi. Format lain masuk Laporan Periksa.
+ * Format J (Verifikasi) masuk kelompok Periksa karena sistem nomor hanya punya 2 kategori. */
+/**
+ * Format X: nilai standar adalah master registrasi, hasil aktual disimpan per transaksi.
+ * Perhitungan tidak menerima angka koreksi / MAX / MIN dari browser sebagai sumber final.
+ */
 function qaFormatXNumber($value): ?float
 {
     if (!is_scalar($value)) return null;
@@ -178,6 +205,48 @@ function qaFormatXActual($raw, array $standards): ?array
                 'koreksi'=>number_format(qaFormatXNumber($standard) - $actual, 6, '.', '')];
         }
         $canonical[] = $entry;
+    }
+    return $canonical;
+}
+
+/**
+ * Format Y: standar dan toleransi per baris SUHU (°C), HUMIDITY (%).
+ * Standar selalu milik registrasi. Untuk setiap aktual backend menghitung:
+ * KOREKSI = STANDAR - HASIL; keputusan OK jika |KOREKSI| <= TOLERANSI.
+ */
+function qaFormatYStandards($input): ?array
+{
+    if (!is_array($input) || count($input)<2 || count($input)>40
+        || array_keys($input)!==range(0,count($input)-1)) return null;
+    $order=['SUHU'=>0,'HUMIDITY'=>1];$count=['SUHU'=>0,'HUMIDITY'=>0];$previous=0;$result=[];
+    foreach ($input as $row) {
+        if(!is_array($row))return null;
+        $part=strtoupper(trim((string)($row['bagian']??'')));
+        $std=qaFormatXNumber($row['standar']??null);
+        $tol=qaFormatXNumber($row['toleransi']??null);
+        if(!isset($order[$part])||$order[$part]<$previous||$order[$part]>$previous+1
+            ||$std===null||$tol===null||$tol<0||++$count[$part]>20)return null;
+        $previous=$order[$part];
+        $result[]=['bagian'=>$part,'standar'=>trim((string)$row['standar']),'toleransi'=>trim((string)$row['toleransi'])];
+    }
+    return $count['SUHU']>0&&$count['HUMIDITY']>0?$result:null;
+}
+function qaFormatYActual($raw, array $standards): ?array
+{
+    $input=json_decode((string)$raw,true);
+    if(!is_array($input)||count($input)!==count($standards)
+        ||array_keys($input)!==range(0,count($input)-1))return null;
+    $canonical=[];
+    foreach($standards as $i=>$master){
+        $row=$input[$i];
+        if(!is_array($row)||strtoupper(trim((string)($row['bagian']??'')))!==$master['bagian'])return null;
+        $actual=qaFormatXNumber($row['hasil']??null);
+        if($actual===null)return null;
+        $std=qaFormatXNumber($master['standar']);$tol=qaFormatXNumber($master['toleransi']);
+        $diff=$std-$actual;
+        $canonical[]=['bagian'=>$master['bagian'],'standar'=>$master['standar'],'toleransi'=>$master['toleransi'],
+            'hasil'=>trim((string)$row['hasil']),'koreksi'=>number_format($diff,6,'.',''),
+            'status'=>abs($diff)<=abs($tol)+1e-9?'OK':'NOT GOOD'];
     }
     return $canonical;
 }
@@ -860,14 +929,23 @@ elseif ($action == 'simpan_alat') {
         $titik_standar_json = mysqli_real_escape_string($konek, $titik_standar_raw);
         // No. Laporan dibuat otomatis setelah format dan tanggal laporan tervalidasi.
 
-        // Registrasi mendukung Format A sampai X
+        // Registrasi mendukung Format A sampai Y
         $format_laporan = strtoupper(trim((string)$format_laporan));
-        $format_valid = str_split('ABCDEFGHIJKLMNOPQRSTUVWX');
+        $format_valid = str_split('ABCDEFGHIJKLMNOPQRSTUVWXY');
         if (!in_array($format_laporan, $format_valid)) {
             echo json_encode(['status' => 'error', 'message' => 'Format laporan tidak valid.']);
             exit;
         }
 
+        if ($format_laporan === 'Y') {
+            $standardsY = qaFormatYStandards(json_decode($titik_standar_raw, true));
+            if ($standardsY === null) {
+                echo json_encode(['status'=>'error','message'=>'Format Y harus memiliki 1–20 baris SUHU dan HUMIDITY, masing-masing dengan Standar dan Toleransi numerik.']);
+                exit;
+            }
+            $titik_standar_raw=json_encode($standardsY,JSON_UNESCAPED_UNICODE|JSON_INVALID_UTF8_SUBSTITUTE);
+            $titik_standar_json=mysqli_real_escape_string($konek,$titik_standar_raw);
+        }
         if ($format_laporan === 'X') {
             $standardsX = qaFormatXStandards(json_decode($titik_standar_raw, true));
             if ($standardsX === null) {
@@ -1022,8 +1100,8 @@ elseif ($action == 'simpan_qa') {
         $format_laporan   = isset($_POST['format_laporan']) ? strtoupper(trim($_POST['format_laporan'])) : '';
         $hasil_raw        = isset($_POST['hasil_json']) ? $_POST['hasil_json'] : '[]';
 
-        // Update hasil mendukung Format A sampai X
-        if (!in_array($format_laporan, str_split('ABCDEFGHIJKLMNOPQRSTUVWX'), true)) {
+        // Update hasil mendukung Format A sampai Y
+        if (!in_array($format_laporan, str_split('ABCDEFGHIJKLMNOPQRSTUVWXY'), true)) {
             echo json_encode(['status' => 'error', 'message' => 'Format laporan tidak valid.']);
             exit;
         }
@@ -1044,6 +1122,19 @@ elseif ($action == 'simpan_qa') {
         }
         $registryId=(int)($d_part['alat_registry_id']??0); if($registryId<=0){$regTmp=qaGetRegistry($konek,$no_part);$registryId=(int)($regTmp['id']??0);} if($registryId<=0){echo json_encode(['status'=>'error','message'=>'Registry nomor alat belum tersedia. Jalankan migration registry terlebih dahulu.']);exit;}
         $regCurrent=qaGetRegistry($konek,$no_part); if($regCurrent && strtoupper((string)$regCurrent['status_alat'])!=='AKTIF'){echo json_encode(['status'=>'error','message'=>'Nomor alat sedang tidak aktif dan tidak dapat digunakan untuk update hasil.']);exit;}
+        if ($format_laporan === 'Y') {
+            if(strtoupper(trim((string)($d_part['format_laporan']??'')))!=='Y'){
+                echo json_encode(['status'=>'error','message'=>'Format Y tidak sesuai dengan format terdaftar.']);exit;
+            }
+            $standardsY=qaFormatYStandards(json_decode((string)($d_part['titik_standar_json']??''),true));
+            $actualY=$standardsY!==null?qaFormatYActual($hasil_raw,$standardsY):null;
+            if($actualY===null){
+                echo json_encode(['status'=>'error','message'=>'Format Y: lengkapi hasil SUHU dan HUMIDITY untuk semua baris sesuai standar dan toleransi registrasi.']);exit;
+            }
+            $hasil_raw=json_encode($actualY,JSON_UNESCAPED_UNICODE|JSON_INVALID_UTF8_SUBSTITUTE);
+            // Keputusan dari angka master + aktual, bukan label hasil dari browser.
+            $status_qa=count(array_filter($actualY,static function($row){return $row['status']==='NOT GOOD';}))?'NOT GOOD':'OK';
+        }
         if ($format_laporan === 'X') {
             if (strtoupper(trim((string)($d_part['format_laporan'] ?? ''))) !== 'X') {
                 echo json_encode(['status'=>'error','message'=>'Format X tidak sesuai dengan format yang terdaftar untuk nomor alat.']);

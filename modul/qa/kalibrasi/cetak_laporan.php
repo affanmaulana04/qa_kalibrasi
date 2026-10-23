@@ -476,6 +476,36 @@ html, body {
 /* ================= FORM V - OUTSIDE / INSIDE / DEPTH ================= */
 
 
+/* ================= FORMAT Y — SUHU / HUMIDITY ================= */
+.report-y{width:206mm;min-height:293mm;margin:2mm auto;padding:0 0 1.5mm;border:.5mm solid #000;background:#fff;color:#000;font:8pt Arial,sans-serif;display:flex;flex-direction:column}
+.report-y *{box-sizing:border-box}
+.y-company{text-align:center;font-weight:bold;padding:1mm 0 1.2mm}
+.y-content{width:176mm;margin:0 auto;display:flex;flex-direction:column;flex:1}
+.y-title{text-align:center;font:14pt Arial,sans-serif;margin:5mm 0 4mm}
+.y-info,.y-grid,.y-details,.y-sign{width:100%;border-collapse:collapse;table-layout:fixed}
+.y-info td,.y-grid th,.y-grid td,.y-details td,.y-sign th,.y-sign td{border:.25mm solid #000;padding:.7mm .85mm;vertical-align:middle;overflow-wrap:anywhere}
+.y-info tr{height:5.4mm}.y-info td:nth-child(1),.y-info td:nth-child(3){width:20%}.y-info td:nth-child(2),.y-info td:nth-child(4){width:30%}
+.y-results-heading{text-align:center;border:.25mm solid #000;border-bottom:0;padding:1mm;font:11pt "Times New Roman",serif}
+.y-grid{text-align:center;font:9pt "Times New Roman",serif}
+.y-grid th{font-weight:normal}.y-grid thead tr:first-child th{height:7mm}.y-grid thead tr:nth-child(2) th{height:10mm}
+.y-grid .y-section td{text-align:left;padding:1mm .6mm;height:5mm;border-top:.6mm double #000;font-weight:normal}
+.y-grid .y-result td{height:7mm;border-top-style:dotted;border-bottom-style:dotted}
+.y-grid .y-standard{text-align:center;padding:0}
+.y-grid .y-standard .y-standard-inner{display:grid;grid-template-columns:1fr 1fr;align-items:center;min-height:6mm}
+.y-grid .y-standard .y-standard-inner span{padding:0 .5mm}
+.y-grid .y-spacer td{height:6mm}
+.y-details td:nth-child(1),.y-details td:nth-child(3){width:20%}.y-details td:nth-child(2),.y-details td:nth-child(4){width:30%}
+.y-details td{height:5.8mm}.y-details .y-note{height:20mm;vertical-align:top}
+.y-footer{margin-top:auto;padding-top:3mm}.y-city{width:96mm;margin-left:auto;padding:1mm 0}
+.y-sign{width:96mm;margin-left:auto;text-align:center}.y-sign th,.y-sign td{font-weight:normal}
+.y-sign .y-sign-names td{height:26mm;vertical-align:bottom}.y-sign .y-sign-roles td{height:6mm}
+.y-doc-code{text-align:right;margin:3mm 1mm 0;font-size:7pt}
+@media print{.report-y{margin:2mm auto!important;break-inside:avoid;page-break-inside:avoid}
+ .report-y.y-long-report{min-height:0;display:block;break-inside:auto;page-break-inside:auto}
+ .report-y.y-long-report .y-content{display:block}
+ .report-y.y-long-report .y-footer{margin-top:3mm}
+ .report-y.y-long-report .y-grid tr{break-inside:avoid;page-break-inside:avoid}}
+
 /* ================= FORMAT X — KESTABILAN, MAJU, MUNDUR ================= */
 .report-x { width:206mm; min-height:293mm; margin:2mm auto; padding:0 0 1.5mm;
     border:0.5mm solid #000; background:#fff; color:#000; font:8pt Arial,sans-serif;
@@ -1479,6 +1509,68 @@ html, body {
     const qaReportObserver = new MutationObserver(() => setTimeout(qaCleanReport, 0));
     qaReportObserver.observe(document.getElementById('report'), { childList:true, subtree:true });
 
+
+    // ================= FORMAT Y — SUHU / HUMIDITY =================
+    if (data.format === 'Y') {
+        const esc=qaEscText;
+        const raw=v=>String(v??'').trim();
+        const num=v=>{const t=raw(v).replace(',','.');return /^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(t)?Number(t):NaN;};
+        const display=v=>Number.isFinite(v)?String(Number(v.toFixed(6))):'';
+        const print=v=>raw(v)?esc(v):'';
+        const formatDate=(v,long=false)=>{
+            const m=raw(v).match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if(!m)return esc(raw(v));
+            const months=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+            return long?m[3]+' '+months[Number(m[2])-1]+' '+m[1]:m[3]+' - '+m[2]+' - '+m[1];
+        };
+        const rows=Array.isArray(data.hasil_array)?data.hasil_array:[];
+        const parts=['SUHU','HUMIDITY'];
+        let body='';
+        parts.forEach(part=>{
+            body+='<tr class="y-section"><td colspan="4">'+(part==='HUMIDITY'?'HUMIDITY ( % )':'SUHU')+'</td></tr>';
+            rows.filter(r=>String(r?.bagian||'').toUpperCase()===part).forEach((r,i)=>{
+                const std=num(r.standar),hasil=num(r.hasil),diff=Number.isFinite(std)&&Number.isFinite(hasil)?std-hasil:NaN;
+                body+='<tr class="y-result"><td>'+(i+1)+'</td><td class="y-standard"><div class="y-standard-inner"><span>'+print(r.standar)+'</span><span>±'+print(r.toleransi)+'</span></div></td><td>'+print(r.hasil)+'</td><td>'+display(diff)+'</td></tr>';
+            });
+            body+='<tr class="y-spacer"><td></td><td></td><td></td><td></td></tr>';
+        });
+        const title=qaJudulLaporan||'LAPORAN PEMERIKSAAN';
+        const keputusan=print(data.keputusan||data.status_final);
+        document.getElementById('report').innerHTML=`
+          <div class="report-y${rows.length>20?' y-long-report':''}">
+            <div class="y-company">PT. SURYA TOTO INDONESIA Tbk.</div>
+            <div class="y-content">
+              <div class="y-title">${esc(title)}</div>
+              <table class="y-info">
+                <tr><td>NO LAPORAN</td><td>${print(data.no_laporan)}</td><td>SEKSI</td><td>${print(data.seksi_pemilik||data.seksi)}</td></tr>
+                <tr><td>NAMA ALAT</td><td>${print(data.nama_part||data.nama_alat)}</td><td>PETUGAS PERIKSA</td><td>${qaSignatureName(data.operator||data.petugas)}</td></tr>
+                <tr><td>NOMOR ALAT</td><td>${print(data.no_part||data.no_alat)}</td><td>TANGGAL PERIKSA</td><td>${formatDate(data.tanggal_periksa)}</td></tr>
+                <tr><td>SPESIFIKASI</td><td>${print(data.spesifikasi)}</td><td>RESOLUSI</td><td>${print(data.resolusi)}</td></tr>
+              </table>
+              <div class="y-results-heading">HASIL PEMERIKSAAN</div>
+              <table class="y-grid">
+                <thead><tr><th rowspan="2" style="width:9%">NO</th><th style="width:30%">STANDAR</th><th style="width:33%">HASIL</th><th style="width:28%">KOREKSI</th></tr>
+                  <tr><th>( °C )</th><th>( °C )</th><th>( °C )</th></tr></thead>
+                <tbody>${body}</tbody>
+              </table>
+              <table class="y-details">
+                <tr><td>METODE</td><td>${print(data.metode||data.metode_uji)}</td><td>STANDAR UJI</td><td>${print(data.standar_uji)}</td></tr>
+                <tr><td>TRACEABILITY</td><td>${print(data.traceability)}</td><td>KEPUTUSAN</td><td style="font-weight:bold;text-align:center">${keputusan}</td></tr>
+                <tr><td>SUHU RUANGAN</td><td>${print(data.suhu)}</td><td>KELEMBAPAN RUANGAN</td><td>${print(data.kelembapan)}</td></tr>
+                <tr><td>PEMERIKSAAN BERIKUTNYA</td><td>${formatDate(data.jadwal_berikutnya||data.periode_berikutnya)}</td><td></td><td></td></tr>
+                <tr><td colspan="4" class="y-note"><b>KETERANGAN :</b><br>${qaKeterangan(data.keterangan)}</td></tr>
+              </table>
+              <div class="y-footer">
+                <div class="y-city">TANGERANG, ${formatDate(data.tanggal_periksa,true)}</div>
+                <table class="y-sign"><thead><tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr></thead><tbody>
+                  <tr class="y-sign-names"><td>${qaSignatureName(data.operator||data.petugas)}<br>${qaApprovalDate('pembuat')}</td><td>${qaSignatureName(data.pemeriksa||data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td><td>${qaSignatureName(data.penyetuju||data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td></tr>
+                  <tr class="y-sign-roles"><td>PETUGAS</td><td>FOREMAN</td><td>SUPERVISOR</td></tr>
+                </tbody></table>
+              </div>
+            </div>
+          </div>`;
+        return;
+    }
 
     // ================= FORMAT X — KESTABILAN / PEMBACAAN MAJU & MUNDUR =================
     if (data.format === 'X') {
