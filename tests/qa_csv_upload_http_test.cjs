@@ -17,12 +17,16 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 if (parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) !== '/modul/tabel/upload_master_csv.php') return false;
 require ${phpString(path.join(root, 'inc/inc_koneksi.php'))};
 require ${phpString(path.join(root, 'inc/qa_master_csv.php'))};
+require ${phpString(path.join(root, 'inc/qa_master_workbook.php'))};
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 $konek->set_charset('utf8mb4');
+$konek->query("CREATE TEMPORARY TABLE \`user\` (uid VARCHAR(100) PRIMARY KEY,admin CHAR(1),role VARCHAR(30),block CHAR(1),pembuat CHAR(1),pemeriksa CHAR(1),penyetuju CHAR(1))");
+$konek->query("INSERT INTO \`user\` VALUES ('test-admin','Y','user','N','N','N','N'),('test-user','N','user','N','N','N','N')");
 foreach (['qa_part','qa_alat_registry','qa_seksi_master','qa_pengecekan','qa_alat_ng','qa_alat_rusak','qa_alat_discontinue','qa_alat_ditarik'] as $table) {
     $ddl=$konek->query("SHOW CREATE TABLE \`$table\`")->fetch_row()[1];
     $konek->query(preg_replace('/^CREATE TABLE/','CREATE TEMPORARY TABLE',$ddl));
 }
+$konek->query(file_get_contents(${phpString(path.join(root, 'database/migrations/20261026_qa_master_excel.sql'))}));
 qaCsvWrite($konek,'INSERT INTO qa_seksi_master (nama_seksi) VALUES (?)',['QA']);
 if (!isset($_GET['empty'])) {
     qaCsvWrite($konek,"INSERT INTO qa_alat_registry (no_part,status_alat,sumber_tabel) VALUES (?,'AKTIF','qa_part')",['EXIST001']);
@@ -32,14 +36,14 @@ if (!isset($_GET['empty'])) {
 }
 if (isset($_GET['fail'])) $konek->query('ALTER TABLE qa_part ADD UNIQUE KEY test_unique_name (nama_part)');
 if ($_SERVER['REQUEST_METHOD']==='POST') register_shutdown_function(function()use($konek){
-    $state=['master'=>qaCsvFetch($konek,'SELECT no_part,nama_part,merk FROM qa_part ORDER BY no_part'), 'registry'=>qaCsvFetch($konek,'SELECT no_part FROM qa_alat_registry ORDER BY no_part')];
+    $state=['master'=>qaCsvFetch($konek,'SELECT no_part,nama_part,merk,fungsi,buatan,metode_uji,titik_standar_json FROM qa_part ORDER BY no_part'), 'registry'=>qaCsvFetch($konek,'SELECT no_part FROM qa_alat_registry ORDER BY no_part'),'transactional'=>qaCsvTransactional($konek)];
     file_put_contents(${phpString(log)},json_encode($state).PHP_EOL,FILE_APPEND);
 });
 require ${phpString(path.join(root, 'modul/tabel/upload_master_csv.php'))};
 return true;
 `);
     const session = path.join(dir, 'session.php');
-    fs.writeFileSync(session, "<?php session_save_path($argv[1]);session_id($argv[2]);session_start();$_SESSION=['login'=>1,'userid'=>'test-admin','admin'=>$argv[3],'role'=>'user'];session_write_close();");
+    fs.writeFileSync(session, "<?php session_save_path($argv[1]);session_id($argv[2]);session_start();$_SESSION=['login'=>1,'userid'=>$argv[3]==='Y'?'test-admin':'test-user','admin'=>$argv[3],'role'=>'user'];session_write_close();");
     for (const [id, admin] of [['directadmin', 'Y'], ['directuser', 'N']]) cp.execFileSync(php, [session, dir, id, admin], { windowsHide: true });
     const port = await new Promise(resolve => { const s=net.createServer();s.listen(0,'127.0.0.1',()=>{const p=s.address().port;s.close(()=>resolve(p));}); });
     const server = cp.spawn(php, ['-d', 'session.save_path='+dir, '-S', '127.0.0.1:'+port, '-t', root, router], { windowsHide: true, stdio: 'ignore' });
@@ -48,10 +52,14 @@ return true;
     function check(ok, message) { if (!ok) throw Error(message); count++; console.log('PASS: '+message); }
     const request = (options={},suffix='',id='directadmin') => fetch(url+suffix,{redirect:'manual',...options,headers:{Cookie:'PHPSESSID='+id}});
     const state = () => JSON.parse(fs.readFileSync(log,'utf8').trim().split('\n').pop());
-    const tokenFrom = html => html.match(/name="csrf" value="([^"]+)"/)[1];
+    const tokenFrom = html => { const match=html.match(/name="csrf" value="([^"]+)"/); if(!match)throw Error('Upload form did not render: '+html.slice(0,1600)); return match[1]; };
     const header = 'no_part,nama_part,seksi_pemilik,periode_kalibrasi,jadwal_kalibrasi';
     function upload(token, csv, suffix='') {
         const body=new FormData();body.append('csrf',token);body.append('action','upload');body.append('csv_file',new Blob([csv],{type:'text/csv'}),'tools.csv');
+        return request({method:'POST',body},suffix);
+    }
+    function uploadExcel(token, bytes, suffix='') {
+        const body=new FormData();body.append('csrf',token);body.append('action','upload');body.append('csv_file',new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),'tools.xlsx');
         return request({method:'POST',body},suffix);
     }
     try {
@@ -60,15 +68,24 @@ return true;
         check((await request({},'','directuser')).status===403,'admin access required');
         let html=await(await request()).text(),token=tokenFrom(html);
         check(html.includes('Upload &amp; Simpan')&&!html.includes('Periksa &amp; Pratinjau'),'single upload button replaces preview');
-        const templateResponse=await request({},'?template=1');
-        const template=await templateResponse.text();
-        const templateLines=template.trim().split(/\r?\n/);
-        check(templateResponse.headers.get('content-type').includes('text/csv') && templateLines.length===4 && templateLines[0].endsWith(',SEKSI') && template.includes('CONTOH-001') && template.includes('CONTOH-003') && !template.includes('SEKSI:'),'download has section as last column and three example tools');
+        check(html.includes('href="?template=xlsx"')&&!html.includes('templateFormat')&&!html.includes('Template CSV Lama')&&!html.includes('csv-template'),'one universal download has no format selector or legacy template preview');
+        for(const alias of ['1','csv']) {
+            const oldTemplate=await request({},'?template='+alias);
+            check(oldTemplate.status===302&&oldTemplate.headers.get('location').includes('template=xlsx'),'old template URL '+alias+' redirects to universal Excel');
+        }
+        const excelResponse=await request({},'?template=xlsx');
+        const excel=Buffer.from(await excelResponse.arrayBuffer());
+        check(excelResponse.status===200&&excelResponse.headers.get('content-type').includes('spreadsheetml')&&excel.subarray(0,2).toString()==='PK','Excel template downloads as native XLSX');
+        check(html.includes('masing-masing pada tab terpisah')&&html.includes('A - Gauge')&&html.includes('F - Timbangan'),'page explains the per-format sheet workflow');
+        const ignoredFormat=await request({},'?template=xlsx&format=Y');
+        const ignoredExcel=Buffer.from(await ignoredFormat.arrayBuffer());
+        check(ignoredExcel.length===excel.length,'old format query no longer restricts the workbook');
+        html=await(await request()).text();token=tokenFrom(html);
         let response=await upload(token,header+'\nGOOD1,Valid,QA,180,2026-12-01\nBAD1,<script>alert(1)</script>,UNKNOWN,0,2026-02-29');
         check(response.status===302&&response.headers.get('location').includes('#csvErrors'),'invalid rows redirect to error details');
         check(state().master.length===1&&state().master[0].nama_part==='Old name','mixed invalid batch writes nothing');
         html=await(await request()).text();
-        check(html.includes('Tidak ada data dari file ini yang disimpan')&&html.includes('&lt;script&gt;')&&!html.includes('<script>alert(1)</script>'),'errors explain failure and escape CSV text');
+        check(html.includes('Data belum disimpan karena validasi')&&html.includes('&lt;script&gt;')&&!html.includes('<script>alert(1)</script>'),'errors explain failure and escape CSV text');
         check(!html.includes('name="preview_id"')&&!html.includes('value="save"'),'no separate save step remains');
         const valid=header+'\nEXIST001,Updated name,QA,365,2026-12-01\nNEW001,New tool,QA,180,2026-12-01';
         response=await upload(token,valid);
@@ -83,9 +100,13 @@ return true;
         check(response.status===302&&state().master.length===1&&state().master[0].no_part==='00012','section template imports directly into empty master');
         html=await(await request()).text();token=tokenFrom(html);
         response=await upload(token,header+'\nROLL1,Same name,QA,1,2026-12-01\nROLL2,Same name,QA,1,2026-12-01','?fail=1');
-        check((await response.text()).includes('Tidak ada perubahan dari batch ini yang disimpan')&&state().master.length===1&&state().registry.length===1,'database error rolls back every write');
+        const failedText=await response.text();
+        check(state().transactional ? failedText.includes('Seluruh perubahan batch dibatalkan')&&state().master.length===1&&state().registry.length===1 : failedText.includes('MyISAM tidak menyediakan rollback')&&state().master.length===2,'database error follows engine rollback behavior');
         response=await request({method:'POST',body:new URLSearchParams({csrf:token,action:'save',preview_id:'legacy'})});
         check((await response.text()).includes('Aksi formulir tidak dikenal'),'old staged save action cannot execute');
+        if (process.env.QA_BROWSER_SCRIPT) {
+            await require(path.resolve(process.env.QA_BROWSER_SCRIPT))({url,dir,root,check});
+        }
         console.log(count+' HTTP checks passed; only temporary tables were written.');
     } finally { server.kill(); }
 })().catch(error => { console.error(error);process.exitCode=1; });

@@ -29,6 +29,10 @@ qaCsvWrite($konek, 'INSERT INTO qa_part (no_part,nama_part,seksi_pemilik,periode
 $masterId = $konek->insert_id;
 qaCsvWrite($konek, 'UPDATE qa_alat_registry SET sumber_id=? WHERE id=?', [$masterId,$registryId]);
 $schema = qaCsvSchema($konek);
+$exportMessage='';
+try { qaCsvParse("NO. ALAT,DATA | NAMA ALAT,TITIK | GRUP\nA-001,Gauge,P1\n",$schema); }
+catch (RuntimeException $e) { $exportMessage=$e->getMessage(); }
+checkCsv(str_contains($exportMessage,'disimpan sebagai CSV') && str_contains($exportMessage,'.xlsx'),'CSV export of per-format Excel gives the correct recovery instruction');
 $header = 'no_part,nama_part,seksi_pemilik,periode_kalibrasi,jadwal_kalibrasi';
 $csv = $header.",merk,no_seri\nEXIST001,Updated,QA,365,31-12-2026,,00991\n00012,New tool,QA,90,2028-02-29,Brand,00002\n";
 $rows = qaCsvParse($csv, $schema);
@@ -108,5 +112,5 @@ $konek->query('ALTER TABLE qa_part ADD UNIQUE KEY test_unique_name (nama_part)')
 $rollbackRows=qaCsvParse($header."\nROLL1,Collision test,QA,1,2026-10-01\nROLL2,Collision test,QA,1,2026-10-02",$schema);
 $rollbackPlan=qaCsvPlan($konek,$rollbackRows);
 rejectsCsv(function()use($konek,$rollbackRows,$rollbackPlan){qaCsvApply($konek,$rollbackRows,$rollbackPlan['signature'],'test');}, 'database failure aborts batch');
-checkCsv(count(qaCsvFetch($konek,"SELECT id FROM qa_part WHERE no_part='ROLL1'"))===1 && count(qaCsvFetch($konek,"SELECT id FROM qa_part WHERE no_part='ROLL2'"))===0, 'MyISAM failure reports partial batch; first saved row remains');
+checkCsv(count(qaCsvFetch($konek,"SELECT id FROM qa_part WHERE no_part='ROLL1'"))===(qaCsvTransactional($konek)?0:1) && count(qaCsvFetch($konek,"SELECT id FROM qa_part WHERE no_part='ROLL2'"))===0, 'database failure rolls back InnoDB or reports partial MyISAM batch');
 echo $checks.' checks passed; temporary tables disappear when this connection closes.'.PHP_EOL;

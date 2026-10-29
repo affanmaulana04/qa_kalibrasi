@@ -13,7 +13,8 @@ function qaCsvFields(): array {
         'satuan'=>'Satuan', 'toleransi_global'=>'Toleransi', 'metode_uji'=>'Metode Uji',
         'standar_uji'=>'Standar Uji', 'traceability'=>'Traceability',
         'kls'=>'Kelas', 'fungsi'=>'Fungsi', 'buatan'=>'Buatan', 'keterangan'=>'Keterangan',
-        'kalibrator'=>'Kalibrator'
+        'kalibrator'=>'Kalibrator', 'titik_standar_json'=>'Titik Standar',
+        'tanggal_registrasi'=>'Tanggal Registrasi'
     ];
 }
 function qaCsvRequired(): array {
@@ -62,14 +63,15 @@ function qaCsvSchema(mysqli $db): array {
     foreach (array_merge(qaCsvRequired(), ['id','alat_registry_id','status']) as $name) {
         if (!isset($schema[$name])) throw new RuntimeException('Struktur master alat belum lengkap: '.$name.'.');
     }
-    $engines = qaCsvFetch($db, "SHOW TABLE STATUS WHERE Name IN ('qa_part','qa_alat_registry')");
-    if (count($engines) !== 2) throw new RuntimeException('Tabel master atau registry alat belum tersedia.');
-    foreach ($engines as $table) {
-        if (strcasecmp($table['Engine'], 'MyISAM') !== 0) {
-            throw new RuntimeException('Import CSV membutuhkan qa_part dan qa_alat_registry berjenis MyISAM sesuai database QA.');
-        }
-    }
+    qaCsvTransactional($db);
     return $schema;
+}
+function qaCsvTransactional(mysqli $db): bool {
+    $tables=qaCsvFetch($db,"SHOW TABLE STATUS WHERE Name IN ('qa_part','qa_alat_registry')");
+    if (count($tables)!==2) throw new RuntimeException('Tabel master atau registry alat belum tersedia.');
+    $engines=array_unique(array_map(static function($t){return strtolower($t['Engine']);},$tables));
+    if (count($engines)!==1 || !in_array(reset($engines),['myisam','innodb'],true)) throw new RuntimeException('Tabel master dan registry harus menggunakan engine yang sama: InnoDB atau MyISAM.');
+    return reset($engines)==='innodb';
 }
 function qaCsvHeader($header): string {
     $header = (string)$header;
@@ -133,10 +135,16 @@ function qaCsvParse(string $text, array $schema): array {
         $record++;
     }
     $headers = array_map('qaCsvHeader', $first);
-    $allowed = array_intersect_key(qaCsvFields(), $schema);
+    // Structured standards and registration dates are validated by the workbook adapter.
+    $allowed = array_diff_key(array_intersect_key(qaCsvFields(), $schema), array_flip(['titik_standar_json','tanggal_registrasi']));
     if (count($headers) !== count(array_unique($headers))) throw new RuntimeException('Nama kolom CSV tidak boleh berulang.');
     foreach ($headers as $header) {
-        if (!isset($allowed[$header])) throw new RuntimeException('Kolom CSV tidak dikenal atau belum tersedia: '.($header ?: '(kosong)').'. Gunakan template.');
+        if (!isset($allowed[$header])) {
+            if (str_starts_with($header, 'data_') || str_starts_with($header, 'titik_')) {
+                throw new RuntimeException('File ini tampaknya berasal dari tab Template Excel yang disimpan sebagai CSV. CSV tidak menyimpan tab format dan kolom DATA/TITIK. Buka template aslinya, hapus baris contoh pada tab yang diisi, lalu simpan seluruh workbook sebagai Excel Workbook (.xlsx) sebelum upload.');
+            }
+            throw new RuntimeException('Kolom CSV tidak dikenal atau belum tersedia: '.($header ?: '(kosong)').'. Gunakan template.');
+        }
     }
     $missing = array_diff(qaCsvRequired(), $headers);
     if ($section !== null) $missing = array_diff($missing, ['seksi_pemilik']);
@@ -169,7 +177,7 @@ function qaCsvParse(string $text, array $schema): array {
             else $data['jadwal_kalibrasi'] = $date;
             if (!empty($data['format_laporan'])) {
                 $data['format_laporan'] = strtoupper($data['format_laporan']);
-                if (!preg_match('/^[A-W]$/', $data['format_laporan'])) $errors[] = 'Format laporan harus A sampai W.';
+                if (!preg_match('/^[A-Y]$/', $data['format_laporan'])) $errors[] = 'Format laporan harus A sampai Y.';
             }
             foreach ($data as $field => $value) {
                 if (preg_match('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', $value)) $errors[] = qaCsvFields()[$field].' mengandung karakter kontrol.';
@@ -189,8 +197,8 @@ function qaCsvParse(string $text, array $schema): array {
 function qaCsvContext(mysqli $db, array $rows, bool $lock): array {
     $numbers = array_values(array_unique(array_filter(array_map(static function($r){return $r['data']['no_part'] ?? '';}, $rows))));
     $context = ['master'=>[], 'registry'=>[], 'archive'=>[], 'history'=>[], 'sections'=>[]];
-    // MyISAM uses table-level locking (in qaCsvApply), not SELECT ... FOR UPDATE.
-    $suffix = '';
+    // InnoDB rechecks state inside a transaction; MyISAM is protected by table locks.
+    $suffix = $lock ? ' FOR UPDATE' : '';
     foreach (qaCsvFetch($db, 'SELECT nama_seksi FROM qa_seksi_master ORDER BY nama_seksi'.$suffix) as $section) $context['sections'][strtoupper(trim($section['nama_seksi']))] = $section['nama_seksi'];
     if (!$numbers) return $context;
     $in = implode(',', array_fill(0, count($numbers), '?'));
@@ -244,14 +252,13 @@ function qaCsvPlan(mysqli $db, array $rows, bool $lock = false): array {
     return ['items'=>$items, 'counts'=>$counts, 'signature'=>hash('sha256', serialize($items))];
 }
 function qaCsvApply(mysqli $db, array $rows, string $signature, string $actor): array {
-    qaCsvSchema($db);
-    // MyISAM does not implement BEGIN/COMMIT/ROLLBACK. Validate first, then
-    // hold table locks while rechecking the plan and executing each statement.
-    // A server or disk failure mid-write may still leave a partial batch.
+    $schema=qaCsvSchema($db);
+    $transactional=qaCsvTransactional($db);
     $db->query("SET SESSION sql_mode = CONCAT_WS(',', @@SESSION.sql_mode, 'STRICT_ALL_TABLES')");
-    $db->query('LOCK TABLES `qa_part` WRITE, `qa_alat_registry` WRITE, `qa_seksi_master` READ, `qa_pengecekan` READ, `qa_alat_ng` READ, `qa_alat_rusak` READ, `qa_alat_discontinue` READ, `qa_alat_ditarik` READ');
+    if ($transactional) $db->begin_transaction();
+    else $db->query('LOCK TABLES `qa_part` WRITE, `qa_alat_registry` WRITE, `qa_seksi_master` READ, `qa_pengecekan` READ, `qa_alat_ng` READ, `qa_alat_rusak` READ, `qa_alat_discontinue` READ, `qa_alat_ditarik` READ');
     try {
-        $plan = qaCsvPlan($db, $rows);
+        $plan = qaCsvPlan($db, $rows, $transactional);
         if ($plan['counts']['error'] || !hash_equals($signature, $plan['signature'])) {
             throw new RuntimeException('Data berubah sebelum import disimpan atau ada baris tidak valid. Tidak ada data yang disimpan; upload kembali untuk memeriksa data terbaru.');
         }
@@ -266,6 +273,7 @@ function qaCsvApply(mysqli $db, array $rows, string $signature, string $actor): 
                 }
                 if ($item['action'] === 'new') {
                     $values['alat_registry_id'] = $registryId;
+                    foreach (['created_at','updated_at'] as $timestamp) if (isset($schema[$timestamp])) $values[$timestamp]=date('Y-m-d H:i:s');
                     $columns = '`'.implode('`,`', array_keys($values)).'`';
                     qaCsvWrite($db, 'INSERT INTO qa_part ('.$columns.') VALUES ('.implode(',', array_fill(0,count($values),'?')).')', array_values($values));
                     $masterId = $db->insert_id;
@@ -280,12 +288,17 @@ function qaCsvApply(mysqli $db, array $rows, string $signature, string $actor): 
                 qaCsvWrite($db, "UPDATE qa_alat_registry SET sumber_tabel='qa_part',sumber_id=? WHERE id=?", [$masterId,$registryId]);
                 $written++;
             } catch (Throwable $error) {
-                error_log('QA MyISAM CSV gagal pada no_part '.$values['no_part'].': '.$error->getMessage());
+                error_log('QA master import gagal pada no_part '.$values['no_part'].': '.$error->getMessage());
+                if ($transactional) throw new RuntimeException('Import gagal pada nomor alat '.$values['no_part'].'. Seluruh perubahan batch dibatalkan; tidak ada data yang disimpan.',0,$error);
                 throw new RuntimeException('Import terhenti pada nomor alat '.$values['no_part'].'. MyISAM tidak menyediakan rollback; '.$written.' alat sebelumnya mungkin sudah tersimpan. Periksa master dan registry sebelum mengulangi upload.', 0, $error);
             }
         }
+        if ($transactional) $db->commit();
         return $plan['counts'];
+    } catch (Throwable $error) {
+        if ($transactional) $db->rollback();
+        throw $error;
     } finally {
-        $db->query('UNLOCK TABLES');
+        if (!$transactional) $db->query('UNLOCK TABLES');
     }
 }
