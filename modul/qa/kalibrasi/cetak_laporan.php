@@ -770,6 +770,51 @@ html, body {
 .report > .header > tbody > tr > td:nth-child(2) { width:42% !important; }
 .report > .header > tbody > tr > td.approval { width:26% !important; }
 </style>
+<style id="qa-sz-only">
+/* Format S and Z only. Leave existing A-Y styling intact. */
+.report-sz{width:206mm;min-height:0;margin:2mm auto;border:.5mm solid #000;padding:0 0 1.5mm;background:#fff;font:8pt Arial,sans-serif;display:flex;flex-direction:column;color:#000}
+.report-sz *{box-sizing:border-box}
+.sz-company{text-align:center;font-weight:bold;padding:1mm 0}
+.sz-content{width:176mm;margin:0 auto;display:flex;flex-direction:column;flex:1}
+.sz-title{text-align:center;font:14pt Arial,sans-serif;margin:5mm 0 4mm}
+.sz-info,.sz-grid,.sz-details,.sz-sign{width:100%;border-collapse:collapse;table-layout:fixed}
+.sz-info td,.sz-grid th,.sz-grid td,.sz-details td,.sz-sign th,.sz-sign td{border:.25mm solid #000;vertical-align:middle;padding:.65mm .8mm;overflow-wrap:anywhere}
+.sz-info td:nth-child(1),.sz-info td:nth-child(3){width:20%}
+.sz-info td:nth-child(2),.sz-info td:nth-child(4){width:30%}
+/* Footer S/Z memakai 4 kolom 20% / 30% / 30% / 20% sesuai form acuan. */
+.sz-details{table-layout:fixed}
+.sz-details td{overflow-wrap:anywhere}
+/* Format S/Z: nilai paling kanan pada footer rata tengah, tanpa mengubah label atau keterangan. */
+.report-sz .sz-details tr > td:nth-child(4){text-align:center}
+.sz-info tr{height:5.3mm}.sz-details tr{height:5.5mm}
+.sz-results-heading{text-align:center;border:.25mm solid #000;border-bottom:0;font:10pt "Times New Roman",serif;padding:.9mm}
+.sz-grid{text-align:center;font:9pt "Times New Roman",serif}
+.sz-grid th{font-weight:normal;height:8mm}
+.sz-grid thead tr:nth-child(2) th{height:10mm}
+.sz-grid td{height:7mm}
+.sz-grid tbody tr + tr td{border-top-style:dotted}
+.sz-grid .sz-standard-cell{padding:0}
+.sz-standard-inner{display:grid;grid-template-columns:1fr 1fr;align-items:center;min-height:6mm}
+.sz-standard-inner span{padding:0 .6mm}
+.sz-grid .sz-vertical{writing-mode:vertical-rl;text-orientation:upright;letter-spacing:1.3mm;font-size:8pt;text-align:center;white-space:nowrap}
+.sz-details .sz-note{height:17mm;vertical-align:top}
+.sz-footer{margin-top:4mm;padding-top:0}
+.sz-city{width:96mm;margin-left:auto;padding:1mm 0}
+.sz-sign{width:96mm;margin-left:auto;text-align:center}
+.sz-sign th,.sz-sign td{font-weight:normal}.sz-sign .sz-sign-names td{height:26mm;vertical-align:bottom}.sz-sign .sz-sign-roles td{height:6mm}
+.sz-doc{text-align:right;margin:3mm 1mm 0;font-size:7pt}
+/* Format S background mengikuti kertas putih polos seperti form acuan. */
+.report-sz.sz-s .sz-results-heading,.report-sz.sz-s .sz-grid th,.report-sz.sz-s .sz-grid td{background:#fff!important;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.sz-s .sz-grid .sz-scale{width:9%}.sz-s .sz-grid .sz-std{width:30%}.sz-s .sz-grid .sz-hasil,.sz-s .sz-grid .sz-koreksi{width:30.5%}
+.sz-z .sz-grid .sz-scale{width:10%}.sz-z .sz-grid .sz-std{width:30%}.sz-z .sz-grid .sz-hasil{width:30%}.sz-z .sz-grid .sz-koreksi{width:30%}
+/* Format Z: label dan satuan dalam satu sel header tanpa garis horizontal. */
+.sz-z .sz-grid thead th{height:20mm}
+@media print{.report-sz{margin:2mm auto!important;break-inside:avoid;page-break-inside:avoid}
+.report-sz.sz-long{min-height:0;display:block;break-inside:auto;page-break-inside:auto}
+.report-sz.sz-long .sz-content{display:block}
+.report-sz.sz-long .sz-footer{margin-top:4mm}
+.report-sz.sz-long .sz-grid tr{break-inside:avoid;page-break-inside:avoid}}
+</style>
 </head>
 <body>
 
@@ -850,17 +895,20 @@ html, body {
     // Layout tiap format tetap dipertahankan; hanya judul utama yang dinormalisasi.
     const qaJenisLaporan = (() => {
         let jenis = String(data.jenis_laporan || '').trim().toLowerCase();
-        if (jenis !== 'periksa' && jenis !== 'kalibrasi') {
+        if (jenis !== 'periksa' && jenis !== 'kalibrasi' && jenis !== 'verifikasi') {
             const noLap = String(data.no_laporan || '').toLowerCase();
             if (noLap.indexOf('/lap/kalibrasi/') !== -1) jenis = 'kalibrasi';
+            else if (noLap.indexOf('/lap/verifikasi/') !== -1) jenis = 'verifikasi';
             else if (noLap.indexOf('/lap/periksa/') !== -1 || noLap.indexOf('/lap/pemeriksaan/') !== -1) jenis = 'periksa';
         }
         return jenis;
     })();
-    const qaJudulLaporan = qaJenisLaporan === 'kalibrasi' ? 'LAPORAN KALIBRASI' : (qaJenisLaporan === 'periksa' ? 'LAPORAN PEMERIKSAAN' : '');
+    const qaJudulLaporan = qaJenisLaporan === 'kalibrasi' ? 'LAPORAN KALIBRASI' : (qaJenisLaporan === 'verifikasi' ? 'LAPORAN VERIFIKASI' : (qaJenisLaporan === 'periksa' ? 'LAPORAN PEMERIKSAAN' : ''));
+    const qaHasilJudul = qaJenisLaporan === 'kalibrasi' ? 'HASIL KALIBRASI' : (qaJenisLaporan === 'verifikasi' ? 'HASIL VERIFIKASI' : 'HASIL PEMERIKSAAN');
     if (qaJudulLaporan) {
         const reportRoot = document.getElementById('report');
         const titleTexts = ['LAPORAN KALIBRASI','LAPORAN PEMERIKSAAN','LAPORAN PEMERIKSAAN GAUGE','LAPORAN VERIFIKASI'];
+        const resultTexts = ['HASIL KALIBRASI','HASIL PEMERIKSAAN','HASIL VERIFIKASI'];
         const applyJenisTitle = function(root) {
             if (!root || root.nodeType !== 1) return;
             const nodes = [root].concat(Array.from(root.querySelectorAll('div,td,th')));
@@ -868,6 +916,7 @@ html, body {
                 if (el.children.length) return;
                 const text = String(el.textContent || '').replace(/\s+/g,' ').trim().toUpperCase();
                 if (titleTexts.indexOf(text) !== -1) el.textContent = qaJudulLaporan;
+                else if (resultTexts.indexOf(text) !== -1) el.textContent = qaHasilJudul;
             });
         };
         new MutationObserver(function(mutations) {
@@ -1487,6 +1536,53 @@ html, body {
                 td.classList.add('diagonal-strike-td');
             }
         });
+        // Alignment cetak: hanya isi sel bagian kanan HEADER/FOOTER.
+        // Semua nilai SEKSI dibuat tebal; label dan sisi kiri tetap seperti aslinya.
+        // Pengecualian HUMIDITY (bukan KELEMBABAN RUANGAN) tetap dipertahankan.
+        root.querySelectorAll('table tr').forEach(tr => {
+            const table = tr.closest('table');
+            if (!table) return;
+            const cells = Array.from(tr.children).filter(el => el.tagName === 'TD' || el.tagName === 'TH');
+            cells.forEach((label, index) => {
+                const value = label.nextElementSibling;
+                if (!value || (value.tagName !== 'TD' && value.tagName !== 'TH') ||
+                    label.colSpan > 1 || value.colSpan > 1 || label.querySelector('table')) return;
+                const name = String(label.textContent || '').replace(/\s+/g, ' ').trim().replace(/\s*:\s*$/, '').toUpperCase();
+                if (!name) return;
+
+                // SEKSI dibuat bold untuk semua format, termasuk yang semula inline normal (J).
+                if (name === 'SEKSI') value.style.setProperty('font-weight', 'bold', 'important');
+                if (/\bHUMIDITY\b/.test(name)) return;
+
+                // Pastikan pasangan label/nilai berada di sisi KANAN lembar cetak.
+                // Format header berbeda-beda: 4 kolom atau tabel terpisah kiri/kanan.
+                const tb = table.getBoundingClientRect();
+                const lb = label.getBoundingClientRect();
+                const page = label.closest('.a4-page, .report, [class*="report-"]') || root;
+                const pb = page.getBoundingClientRect();
+                const onRight = index >= 2 ||
+                    !!label.closest('.mid-h, .mid-i') ||
+                    (tb.width > 0 && lb.left >= tb.left + tb.width * .47) ||
+                    (pb.width > 0 && lb.left >= pb.left + pb.width * .45);
+                if (!onRight) return;
+
+                const tableClasses = Array.from(table.classList);
+                const headerTable = tableClasses.some(cls =>
+                    /^(?:info(?:-|$)|header(?:-|$)|head(?:-|$))/.test(cls)) ||
+                    !!table.closest('.header, [class^="header-"], [class*=" header-"], [class^="head-"], [class*=" head-"]');
+                const footerTable = tableClasses.some(cls =>
+                    cls.startsWith('detail-') || cls === 'footer-table' ||
+                    cls === 'sz-details' || cls === 'x-details' || cls === 'y-details') ||
+                    !!table.closest('.detail-o');
+
+                // Untuk table-excel dan layout tabel custom tanpa class header/footer.
+                const headerLabel = /^(?:SEKSI|(?:PETUGAS|OPERATOR)(?:\s+.*)?|TANGGAL(?:\s+.*)?|TGL(?:\.|\s+.*)?|ALAT STANDAR|STANDAR UJI|ALAT VERIFIKASI|TRACEABILITY|SUHU(?:\s*\/.*)?|NO\.?\s*(?:ALAT|LAPORAN)|NOMOR ALAT|METODE(?:\s+.*)?)$/.test(name);
+                const footerLabel = /^(?:KELEMBABAN RUANGAN|STANDAR TOLERANSI|KEPUTUSAN|KETIDAKPASTIAN|CONFIDENCE LEVEL|(?:TGL\.?|TANGGAL)?\s*(?:PERIKSA|PEMERIKSAAN|PENGECEKAN|KALIBRASI|VERIFIKASI) BERIKUTNYA)$/.test(name);
+                if (headerTable || footerTable || headerLabel || footerLabel) {
+                    value.style.setProperty('text-align', 'center', 'important');
+                }
+            });
+        });
         root.querySelectorAll('.qa-sign-date-pembuat').forEach(span => {
             /* Tanggal pembuat tetap disembunyikan; tanggal pemeriksa/penyetuju tetap tampil. */
             span.style.display = 'none';
@@ -1509,6 +1605,110 @@ html, body {
     const qaReportObserver = new MutationObserver(() => setTimeout(qaCleanReport, 0));
     qaReportObserver.observe(document.getElementById('report'), { childList:true, subtree:true });
 
+
+    // ================= FORMAT S / Z — TABEL HASIL SESUAI FORM ACUAN =================
+    if (data.format === 'S' || data.format === 'Z') {
+        const esc=qaEscText;
+        const raw=v=>String(v??'').trim();
+        const num=v=>{const t=raw(v).replace(',','.');return t!==''&&/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(t)?Number(t):NaN;};
+        const fmt=v=>Number.isFinite(v)?String(Number(v.toFixed(6))):'';
+        const show=v=>esc(raw(v));
+        const szDate=(v,long=false)=>{const m=raw(v).match(/^(\d{4})-(\d{2})-(\d{2})/);if(!m)return esc(raw(v));const mons=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];return long?m[3]+' '+mons[Number(m[2])-1]+' '+m[1]:m[3]+' - '+m[2]+' - '+m[1];};
+        const isS=data.format==='S';
+        const rows=(Array.isArray(data.hasil_array)?data.hasil_array:[]).filter(r=>{
+            if(!r || typeof r!=='object')return false;
+            const keys=isS?['standar','toleransi','hasil']:['setting','alat_standar'];
+            return keys.some(k=>raw(r[k])!=='');
+        });
+        let resultBody='';
+        if(isS){
+            ['NAIK','TURUN'].forEach(function(arah){
+                const group=rows.filter(r=>String(r?.arah||'').toUpperCase()===arah);
+                group.forEach(function(r,i){
+                    const correction=num(r.standar)-num(r.hasil);
+                    resultBody+='<tr>'+(i===0?'<td rowspan="'+group.length+'"><span class="sz-vertical">'+arah+'</span></td>':'')+
+                    '<td class="sz-standard-cell"><div class="sz-standard-inner"><span>'+show(r.standar)+'</span><span>±'+show(r.toleransi)+'</span></div></td>'+
+                    '<td>'+show(r.hasil)+'</td><td>'+fmt(correction)+'</td></tr>';
+                });
+            });
+        }else{
+            rows.forEach((r,i)=>{
+                const setting=num(r.setting),std=num(r.alat_standar);
+                const dec=raw(r.alat_standar).replace(',','.').split('.')[1];
+                const places=Math.max(2,Math.min(6,(dec||'').length));
+                const diff=Number.isFinite(setting)&&Number.isFinite(std)?(setting-std).toFixed(places):'';
+                resultBody+='<tr><td>'+(i+1)+'</td><td>'+show(r.setting)+'</td><td>'+show(r.alat_standar)+'</td><td>'+esc(diff)+'</td></tr>';
+            });
+        }
+        const title=qaJudulLaporan||'LAPORAN PEMERIKSAAN';
+        const unit=raw(data.satuan);
+        const unitText=unit?'( '+esc(unit)+' )':'';
+        const docCode = isS ? 'STIS-CMFG4-05 / R4' : 'STIS-CMFG4-05/R3';
+        // Footer S dan Z berbeda. Field berasal dari payload/snapshot, bukan contoh hardcoded.
+        const absent=v=>raw(v)!==''?show(v):'~';
+        const suhuRaw=qaSuhuValue(data.suhu);
+        const suhuText=suhuRaw?esc(suhuRaw+' °C'):'~';
+        const humidityRaw=qaHumidityValue(data.kelembapan);
+        const humidityText=humidityRaw?esc(humidityRaw+' %'):'~';
+        const confidenceRaw=raw(data.confidence_level||data.confidence);
+        const confidenceText=confidenceRaw
+            ? esc(confidenceRaw + (/^[+-]?(?:\d+(?:[.,]\d*)?|\.\d+)$/.test(confidenceRaw)?' %':'')) : '~';
+        const toleranceRaw=raw(data.toleransi_global||data.toleransi);
+        const toleranceText=(()=>{
+            if(!toleranceRaw)return '~';
+            let v=toleranceRaw;
+            if(!v.includes('±') && /^[+-]?(?:\d+(?:[.,]\d*)?|\.\d+)/.test(v)){
+                v='± '+v.replace(/^[+-]\s*/,'');
+            }
+            // Form Z menuliskan satuan di nilai toleransi seperti '± 0.5 Sec'.
+            if(!isS && unit && !v.toLowerCase().includes(unit.toLowerCase()))v+=' '+unit;
+            return esc(v);
+        })();
+        const dateNext=szDate(data.jadwal_berikutnya||data.periode_berikutnya);
+        const szDetails=isS ? `
+            <tr><td>METODE</td><td>${absent(data.metode||data.metode_uji)}</td><td>KELEMBABAN RUANGAN</td><td>${humidityText}</td></tr>
+            <tr><td>STANDAR UJI</td><td>${absent(data.standar_uji)}</td><td>STANDAR TOLERANSI</td><td>${toleranceText}</td></tr>
+            <tr><td>TRACEABILITY</td><td>${absent(data.traceability)}</td><td>KEPUTUSAN</td><td style="text-align:center;font-weight:bold">${absent(data.keputusan||data.status_final)}</td></tr>
+            <tr><td>SUHU RUANGAN</td><td>${suhuText}</td><td>TGL PERIKSA BERIKUTNYA</td><td>${dateNext||'~'}</td></tr>` : `
+            <tr><td>METODE</td><td>${absent(data.metode||data.metode_uji)}</td><td>KELEMBABAN RUANGAN</td><td>${humidityText}</td></tr>
+            <tr><td>STANDAR UJI</td><td>${absent(data.standar_uji)}</td><td>KETIDAKPASTIAN</td><td>${absent(data.ketidakpastian)}</td></tr>
+            <tr><td>TRACEABILITY</td><td>${absent(data.traceability)}</td><td>STANDAR TOLERANSI</td><td>${toleranceText}</td></tr>
+            <tr><td>CONFIDENCE LEVEL</td><td>${confidenceText}</td><td>KEPUTUSAN</td><td style="text-align:center;font-weight:bold">${absent(data.keputusan||data.status_final)}</td></tr>
+            <tr><td>SUHU RUANGAN</td><td>${suhuText}</td><td>PERIKSA BERIKUTNYA</td><td>${dateNext||'~'}</td></tr>`;
+        const gridHeader=isS
+            ? '<tr><th class="sz-scale">UJI<br>SKALA</th><th class="sz-std">STANDAR'+(unitText?'<br>'+unitText:'')+'</th><th class="sz-hasil">HASIL'+(unitText?'<br>'+unitText:'')+'</th><th class="sz-koreksi">KOREKSI'+(unitText?'<br>'+unitText:'')+'</th></tr>'
+            : '<tr><th class="sz-scale">No</th><th class="sz-std">Setting'+(unitText?'<br>'+unitText:'')+'</th><th class="sz-hasil">Alat Standar'+(unitText?'<br>'+unitText:'')+'</th><th class="sz-koreksi">Selisih'+(unitText?'<br>'+unitText:'')+'</th></tr>';
+        document.getElementById('report').innerHTML=`
+          <div class="report-sz ${isS?'sz-s':'sz-z'}${rows.length>20?' sz-long':''}">
+            <div class="sz-company">PT. SURYA TOTO INDONESIA Tbk.</div>
+            <div class="sz-content">
+              <div class="sz-title">${esc(title)}</div>
+              <table class="sz-info">
+                <tr><td>NO LAPORAN</td><td>${show(data.no_laporan)}</td><td>SEKSI</td><td style="text-align:center;font-weight:bold">${show(data.seksi_pemilik||data.seksi)}</td></tr>
+                <tr><td>NAMA ALAT</td><td>${show(data.nama_part||data.nama_alat)}</td><td rowspan="2">PETUGAS PERIKSA</td><td rowspan="2" style="text-align:center">${qaSignatureName(data.operator||data.petugas)}</td></tr>
+                <tr><td>NOMOR ALAT</td><td>${show(data.no_part||data.no_alat)}</td></tr>
+                <tr><td>SPESIFIKASI</td><td>${show(data.spesifikasi)}</td><td rowspan="2">TANGGAL PERIKSA</td><td rowspan="2" style="text-align:center">${szDate(data.tanggal_periksa)}</td></tr>
+                <tr><td>RESOLUSI</td><td>${show(data.resolusi)}</td></tr>
+              </table>
+              <div class="sz-results-heading">${esc(qaHasilJudul)}</div>
+              <table class="sz-grid"><thead>${gridHeader}</thead><tbody>${resultBody}</tbody></table>
+              <table class="sz-details">
+                <colgroup><col style="width:20%"><col style="width:30%"><col style="width:30%"><col style="width:20%"></colgroup>
+                ${szDetails}
+                <tr><td colspan="4" class="sz-note"><b>KETERANGAN :</b><br>${qaKeterangan(data.keterangan)}</td></tr>
+              </table>
+              <div class="sz-footer">
+                <div class="sz-city">TANGERANG, ${szDate(data.tanggal_periksa,true)}</div>
+                <table class="sz-sign"><thead><tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr></thead><tbody>
+                  <tr class="sz-sign-names"><td>${qaSignatureName(data.operator||data.petugas)}<br>${qaApprovalDate('pembuat')}</td><td>${qaSignatureName(data.pemeriksa||data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td><td>${qaSignatureName(data.penyetuju||data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td></tr>
+                  <tr class="sz-sign-roles"><td>PETUGAS</td><td>FOREMAN</td><td>SUPERVISOR</td></tr>
+                </tbody></table>
+                <div class="sz-doc">${docCode}</div>
+              </div>
+            </div>
+          </div>`;
+        return;
+    }
 
     // ================= FORMAT Y — SUHU / HUMIDITY =================
     if (data.format === 'Y') {
@@ -1744,6 +1944,9 @@ html, body {
             let lo=numT(r.tol_minus ?? r.tol_bawah), hi=numT(r.tol_plus ?? r.tol_atas);
             if(!Number.isFinite(lo)&&Number.isFinite(oldTol))lo=-oldTol;
             if(!Number.isFinite(hi)&&Number.isFinite(oldTol))hi=oldTol;
+            // Khusus Format T, normalisasi toleransi sebelum menghitung batas min/max.
+            if(Number.isFinite(lo))lo=-Math.abs(lo);
+            if(Number.isFinite(hi))hi=Math.abs(hi);
             let mn=numT(r.min),mx=numT(r.max);
             if(Number.isFinite(st)&&Number.isFinite(lo)&&Number.isFinite(hi)){mn=Math.min(st+lo,st+hi);mx=Math.max(st+lo,st+hi);}
             r._st=st;r._lo=lo;r._hi=hi;r._min=mn;r._max=mx;return r;
@@ -1762,9 +1965,7 @@ html, body {
         const sharedNoStd=rawT(rows.find(r=>rawT(r.no_alat_standar))?.no_alat_standar)||rawT(data.no_alat_standar);
         const body=rows.map((r,i)=>{
             const absLo=Number.isFinite(r._lo)?Math.abs(r._lo):NaN, absHi=Number.isFinite(r._hi)?Math.abs(r._hi):NaN;
-            const tol=(Number.isFinite(absLo)&&Number.isFinite(absHi)&&Math.abs(absLo-absHi)<1e-9)
-                ? '±'+Number(absHi.toFixed(6)).toString()
-                : (Number.isFinite(r._lo)?(r._lo>=0?'+':'')+Number(r._lo.toFixed(6)).toString():'')+'/'+(Number.isFinite(r._hi)?(r._hi>=0?'+':'')+Number(r._hi.toFixed(6)).toString():'');
+            const tol=(Number.isFinite(absLo)?'-'+Number(absLo.toFixed(6)).toString():'')+' / '+(Number.isFinite(absHi)?'+'+Number(absHi.toFixed(6)).toString():'');
             const std=`<div class="std-t"><b>${escT(r.standar)}</b> &nbsp; ${escT(tol)}<div class="range-t">( ${escT(fmtT(r._min))} ~ ${escT(fmtT(r._max))} )</div></div>`;
             const depan=depanVals(r), belakang=belakangVals(r);
             const d1=depan[0]||'', d2=depan[1]||'', b1=belakang[0]||'', b2=belakang[1]||'';
@@ -2530,7 +2731,7 @@ html, body {
                     <td class="label-j">NO LAPORAN</td>
                     <td class="value-j">${escJ(data.no_laporan)}</td>
                     <td class="label2-j">SEKSI</td>
-                    <td class="value2-j" style="text-align:center;font-weight:bold;">${escJ(data.seksi_pemilik || data.seksi)}</td>
+                    <td class="value2-j" style="text-align:center;font-weight:normal;">${escJ(data.seksi_pemilik || data.seksi)}</td>
                 </tr>
                 <tr>
                     <td class="label-j">NAMA ALAT</td>
@@ -2540,13 +2741,13 @@ html, body {
                 </tr>
                 <tr>
                     <td class="label-j">METODE</td>
-                    <td class="value-j" style="font-weight:bold;">${escJ(data.metode)}</td>
+                    <td class="value-j" style="font-weight:normal;">${escJ(data.metode)}</td>
                     <td class="label2-j">TANGGAL VERIFIKASI</td>
                     <td class="value2-j" style="text-align:center;">${dateJ(data.tanggal_periksa)}</td>
                 </tr>
                 <tr>
                     <td class="label-j">ALAT VERIFIKASI</td>
-                    <td class="value-j" style="font-weight:bold;">${escJ(data.alat_verifikasi)}</td>
+                    <td class="value-j" style="font-weight:normal;">${escJ(data.alat_verifikasi)}</td>
                     <td class="label2-j"></td>
                     <td class="value2-j"></td>
                 </tr>
@@ -4639,7 +4840,7 @@ html, body {
                         }
 
                         finalHtml += `<tr><td colspan="4" class="text-center" style="border-top: 1px solid #000; border-bottom: 1px solid #000; padding: 2px 0;">HASIL ${data.format === 'R' || data.format === 'F' ? 'KALIBRASI' : 'PEMERIKSAAN'} ${pageIndex > 0 ? '( Lanjutan )' : ''}</td></tr>`;
-                        finalHtml += `<tr><td colspan="4" style="padding:0; border:none; line-height:0;">`;
+                        finalHtml += `<tr><td colspan="4" style="padding:0; border:none; line-height:${data.format === 'E' || data.format === 'F' ? 'normal' : '0'};">`;
                 
                         if (data.format === 'F') {
                             finalHtml += `<div style="line-height:normal; margin:0; padding:0;">${dataTabelHasil}</div>`; 

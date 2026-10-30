@@ -251,6 +251,68 @@ function qaFormatYActual($raw, array $standards): ?array
     return $canonical;
 }
 
+/** Format S: dua arah NAIK/TURUN, standar dan toleransi disimpan saat registrasi. */
+function qaFormatSStandards($input): ?array
+{
+    if (!is_array($input) || count($input)<2 || count($input)>40 || array_keys($input)!==range(0,count($input)-1)) return null;
+    $counts=['NAIK'=>0,'TURUN'=>0];$last=0;$out=[];
+    foreach ($input as $row) {
+        if(!is_array($row))return null;
+        $arah=strtoupper(trim((string)($row['arah']??'')));
+        $idx=array_search($arah,['NAIK','TURUN'],true);
+        $std=qaFormatXNumber($row['standar']??null);
+        $tol=qaFormatXNumber($row['toleransi']??null);
+        if($idx===false||$idx<$last||$idx>$last+1||$std===null||$tol===null||$tol<0||++$counts[$arah]>20)return null;
+        $last=$idx;
+        $out[]=['arah'=>$arah,'standar'=>trim((string)$row['standar']),'toleransi'=>trim((string)$row['toleransi'])];
+    }
+    return $counts['NAIK']>0&&$counts['TURUN']>0?$out:null;
+}
+function qaFormatSActual($raw, array $masters): ?array
+{
+    $input=json_decode((string)$raw,true);
+    if(!is_array($input)||count($input)!==count($masters)||array_keys($input)!==range(0,count($input)-1))return null;
+    $out=[];
+    foreach($masters as $i=>$m){
+        $row=$input[$i];
+        if(!is_array($row)||strtoupper(trim((string)($row['arah']??'')))!==$m['arah'])return null;
+        $actual=qaFormatXNumber($row['hasil']??null);
+        if($actual===null)return null;
+        $diff=qaFormatXNumber($m['standar'])-$actual;
+        $tol=qaFormatXNumber($m['toleransi']);
+        $out[]=['arah'=>$m['arah'],'standar'=>$m['standar'],'toleransi'=>$m['toleransi'],
+            'hasil'=>trim((string)$row['hasil']),'koreksi'=>number_format($diff,6,'.',''),
+            'status'=>abs($diff)<=$tol+1e-9?'OK':'NOT GOOD'];
+    }
+    return $out;
+}
+/** Format Z: SETTING (registrasi) - ALAT STANDAR (hasil ukur) = SELISIH. */
+function qaFormatZStandards($input): ?array
+{
+    if(!is_array($input)||count($input)<1||count($input)>20||array_keys($input)!==range(0,count($input)-1))return null;
+    $out=[];
+    foreach($input as $row){
+        if(!is_array($row)||qaFormatXNumber($row['setting']??null)===null)return null;
+        $out[]=['setting'=>trim((string)$row['setting'])];
+    }
+    return $out;
+}
+function qaFormatZActual($raw,array $masters): ?array
+{
+    $input=json_decode((string)$raw,true);
+    if(!is_array($input)||count($input)!==count($masters)||array_keys($input)!==range(0,count($input)-1))return null;
+    $out=[];
+    foreach($masters as $i=>$m){
+        $row=$input[$i];
+        $hasil=is_array($row)?qaFormatXNumber($row['alat_standar']??null):null;
+        if($hasil===null)return null;
+        $diff=qaFormatXNumber($m['setting'])-$hasil;
+        $out[]=['setting'=>$m['setting'],'alat_standar'=>trim((string)$row['alat_standar']),
+            'selisih'=>number_format($diff,6,'.','')];
+    }
+    return $out;
+}
+
 function qaJenisLaporanDariFormat($format)
 {
     $format = strtoupper(trim((string)$format));
@@ -281,6 +343,7 @@ function qaLegacyMaxNoLaporan($konek, $jenis, $tanggalRef)
                 $upper = strtoupper($no);
                 if (strpos($upper, '/LAP/KALIBRASI/') !== false) $rowJenis = 'kalibrasi';
                 elseif (strpos($upper, '/LAP/PERIKSA/') !== false || strpos($upper, '/LAP/PEMERIKSAAN/') !== false) $rowJenis = 'periksa';
+                elseif (strpos($upper, '/LAP/VERIFIKASI/') !== false) $rowJenis = 'verifikasi';
             }
             if ($rowJenis !== $jenis) continue;
             if (preg_match('/^(\d+)\s*\//', $no, $m)) $max = max($max, (int)$m[1]);
@@ -292,7 +355,7 @@ function qaLegacyMaxNoLaporan($konek, $jenis, $tanggalRef)
 function qaGenerateNoLaporan($konek, $jenis, $tanggalRef)
 {
     $jenis = strtolower(trim((string)$jenis));
-    if (!in_array($jenis, ['periksa','kalibrasi'], true)) throw new Exception('Jenis laporan tidak valid.');
+    if (!in_array($jenis, ['periksa','kalibrasi','verifikasi'], true)) throw new Exception('Jenis laporan tidak valid.');
     $ts = strtotime((string)$tanggalRef);
     if ($ts === false) $ts = time();
     $tahun = (int)date('Y', $ts);
@@ -309,7 +372,7 @@ function qaGenerateNoLaporan($konek, $jenis, $tanggalRef)
     $nomor = (int)($rNo['nomor'] ?? 0);
     if ($nomor <= 0) throw new Exception('Nomor laporan otomatis tidak terbentuk.');
 
-    $label = $jenis === 'kalibrasi' ? 'Kalibrasi' : 'Periksa';
+    $label = $jenis === 'kalibrasi' ? 'Kalibrasi' : ($jenis === 'verifikasi' ? 'Verifikasi' : 'Periksa');
     return str_pad((string)$nomor, 2, '0', STR_PAD_LEFT).'/Lap/'.$label.'/'.qaBulanRomawi($bulan).'/'.$tahun;
 }
 
@@ -931,12 +994,24 @@ elseif ($action == 'simpan_alat') {
 
         // Registrasi mendukung Format A sampai Y
         $format_laporan = strtoupper(trim((string)$format_laporan));
-        $format_valid = str_split('ABCDEFGHIJKLMNOPQRSTUVWXY');
+        $format_valid = str_split('ABCDEFGHIJKLMNOPQRSTUVWXYZ');
         if (!in_array($format_laporan, $format_valid)) {
             echo json_encode(['status' => 'error', 'message' => 'Format laporan tidak valid.']);
             exit;
         }
 
+        if ($format_laporan === 'S' || $format_laporan === 'Z') {
+            $mastersNew = $format_laporan === 'S'
+                ? qaFormatSStandards(json_decode($titik_standar_raw,true))
+                : qaFormatZStandards(json_decode($titik_standar_raw,true));
+            if($mastersNew===null){
+                echo json_encode(['status'=>'error','message'=>$format_laporan==='S'
+                    ? 'Format S: wajib ada 1–20 baris NAIK dan 1–20 baris TURUN, Standar dan Toleransi numerik.'
+                    : 'Format Z: wajib ada 1–20 baris Setting numerik.']);exit;
+            }
+            $titik_standar_raw=json_encode($mastersNew,JSON_UNESCAPED_UNICODE|JSON_INVALID_UTF8_SUBSTITUTE);
+            $titik_standar_json=mysqli_real_escape_string($konek,$titik_standar_raw);
+        }
         if ($format_laporan === 'Y') {
             $standardsY = qaFormatYStandards(json_decode($titik_standar_raw, true));
             if ($standardsY === null) {
@@ -1042,6 +1117,13 @@ elseif ($action == 'simpan_alat') {
                 'status_final'=>'OK', 'keputusan'=>'OK', 'status_validasi'=>'setuju', 'nomor_pengecekan'=>$nomor_pengecekan,
                 'titik_standar_json'=>$titik_standar_raw, 'audit'=>[]
             ];
+            // Format S/Z: satuan tersimpan di qa_part, sertakan juga di payload cetak langsung setelah registrasi.
+            if ($formatUpper === 'S' || $formatUpper === 'Z') {
+                $registrationPrint['satuan'] = trim((string)($_POST['satuan'] ?? ''));
+                // Standar Toleransi pada footer S/Z harus ikut pada cetak registrasi.
+                $registrationPrint['toleransi_global'] = trim((string)($_POST['toleransi_global'] ?? ''));
+                $registrationPrint['toleransi'] = $registrationPrint['toleransi_global'];
+            }
             mysqli_commit($konek);
             echo json_encode(['status'=>'success','jadwal_selanjutnya'=>$jadwal_kalibrasi,'registry_id'=>$registryId,'no_laporan'=>$no_laporan_raw,'jenis_laporan'=>$jenis_laporan,'no_pengecekan'=>$nomor_pengecekan,'print_data'=>$registrationPrint]);
         } catch (Exception $ex) {
@@ -1101,15 +1183,15 @@ elseif ($action == 'simpan_qa') {
         $hasil_raw        = isset($_POST['hasil_json']) ? $_POST['hasil_json'] : '[]';
 
         // Update hasil mendukung Format A sampai Y
-        if (!in_array($format_laporan, str_split('ABCDEFGHIJKLMNOPQRSTUVWXY'), true)) {
+        if (!in_array($format_laporan, str_split('ABCDEFGHIJKLMNOPQRSTUVWXYZ'), true)) {
             echo json_encode(['status' => 'error', 'message' => 'Format laporan tidak valid.']);
             exit;
         }
 
         $tgl_pengecekan = date('Y-m-d');
         $jenis_laporan = strtolower(trim((string)($_POST['jenis_laporan'] ?? '')));
-        if (!in_array($jenis_laporan, ['periksa','kalibrasi'], true)) {
-            echo json_encode(['status'=>'error','message'=>'Jenis laporan wajib dipilih: Laporan Pemeriksaan atau Laporan Kalibrasi.']);
+        if (!in_array($jenis_laporan, ['periksa','kalibrasi','verifikasi'], true)) {
+            echo json_encode(['status'=>'error','message'=>'Jenis laporan wajib dipilih: Pemeriksaan, Verifikasi, atau Kalibrasi.']);
             exit;
         }
         $waktu_sekarang = date('Y-m-d H:i:s');
@@ -1122,6 +1204,23 @@ elseif ($action == 'simpan_qa') {
         }
         $registryId=(int)($d_part['alat_registry_id']??0); if($registryId<=0){$regTmp=qaGetRegistry($konek,$no_part);$registryId=(int)($regTmp['id']??0);} if($registryId<=0){echo json_encode(['status'=>'error','message'=>'Registry nomor alat belum tersedia. Jalankan migration registry terlebih dahulu.']);exit;}
         $regCurrent=qaGetRegistry($konek,$no_part); if($regCurrent && strtoupper((string)$regCurrent['status_alat'])!=='AKTIF'){echo json_encode(['status'=>'error','message'=>'Nomor alat sedang tidak aktif dan tidak dapat digunakan untuk update hasil.']);exit;}
+        if($format_laporan==='S' || $format_laporan==='Z'){
+            if(strtoupper(trim((string)($d_part['format_laporan']??'')))!==$format_laporan){
+                echo json_encode(['status'=>'error','message'=>'Format hasil tidak sesuai dengan format alat terdaftar.']);exit;
+            }
+            $mastersNew=$format_laporan==='S'
+                ? qaFormatSStandards(json_decode((string)($d_part['titik_standar_json']??''),true))
+                : qaFormatZStandards(json_decode((string)($d_part['titik_standar_json']??''),true));
+            $actualNew=$mastersNew===null?null:($format_laporan==='S'
+                ? qaFormatSActual($hasil_raw,$mastersNew)
+                : qaFormatZActual($hasil_raw,$mastersNew));
+            if($actualNew===null){
+                echo json_encode(['status'=>'error','message'=>'Format '.$format_laporan.': lengkapi hasil seluruh baris sesuai urutan dan standar saat registrasi.']);exit;
+            }
+            $hasil_raw=json_encode($actualNew,JSON_UNESCAPED_UNICODE|JSON_INVALID_UTF8_SUBSTITUTE);
+            if($format_laporan==='S')$status_qa=count(array_filter($actualNew,static function($r){return $r['status']==='NOT GOOD';}))?'NOT GOOD':'OK';
+            // Z tidak menampilkan toleransi; status final tetap dari pilihan operator.
+        }
         if ($format_laporan === 'Y') {
             if(strtoupper(trim((string)($d_part['format_laporan']??'')))!=='Y'){
                 echo json_encode(['status'=>'error','message'=>'Format Y tidak sesuai dengan format terdaftar.']);exit;
@@ -1596,6 +1695,36 @@ if ($action === 'get_transaksi_detail') {
     foreach($audit as $a){ if($a['tahap']==='pemeriksa' && $a['keputusan']==='setuju'){ $pemeriksa=$a['nama_validator'];$tanggal_validasi_pemeriksa=$a['created_at']??'';$pOk=true; } if($a['tahap']==='penyetuju' && $a['keputusan']==='setuju'){ $penyetuju=$a['nama_validator'];$tanggal_validasi_penyetuju=$a['created_at']??'';$sOk=true; } }
     $raw=json_decode($row['hasil_json']?:'[]',true); $snap=$raw;
     if(is_array($raw)&&isset($raw['header'])){$h=$raw['header'];$env=$raw['environment']??[];$ft=$raw['footer']??[];$rows=$raw['rows']??[];} else {$h=[];$env=[];$ft=[];$rows=is_array($raw)?$raw:[];}
+
+    // Format S/Z: snapshot lama kadang tidak menyimpan satuan walaupun qa_part sudah punya.
+    // Ambil dari master alat untuk cetak ulang histori/approval tanpa default ml/Sec.
+    if (in_array(strtoupper(trim((string)($row['format_laporan'] ?? ($raw['format'] ?? '')))), ['S', 'Z'], true) && trim((string)($h['satuan'] ?? '')) === '') {
+        $alatId = (int)($row['alat_id'] ?? 0);
+        $registryId = (int)($row['alat_registry_id'] ?? 0);
+        $noAlatSql = mysqli_real_escape_string($konek, strtoupper(trim((string)($row['no_part'] ?? ''))));
+        $whereSatuan = [];
+        if ($alatId > 0) $whereSatuan[] = "id='$alatId'";
+        if ($registryId > 0) $whereSatuan[] = "alat_registry_id='$registryId'";
+        if ($noAlatSql !== '') $whereSatuan[] = "UPPER(TRIM(no_part))='$noAlatSql'";
+        if ($whereSatuan) {
+            $sqlWhere = implode(' OR ', $whereSatuan);
+            $tables = array_merge(['qa_part'], array_unique(array_column(qaArchiveDefs(), 'table')));
+            foreach ($tables as $tableSatuan) {
+                // Tabel arsip lama belum tentu mempunyai semua kolom identifier qa_part.
+                $tableWhere = $tableSatuan === 'qa_part' ? $sqlWhere : ($noAlatSql !== '' ? "UPPER(TRIM(no_part))='$noAlatSql'" : '1=0');
+                // Lewati tabel arsip legacy yang tidak mempunyai kolom satuan.
+                try {
+                    $qSatuan = @mysqli_query($konek, "SELECT satuan FROM `$tableSatuan` WHERE $tableWhere LIMIT 1");
+                } catch (mysqli_sql_exception $e) {
+                    continue;
+                }
+                if ($qSatuan && ($masterSatuan = mysqli_fetch_assoc($qSatuan))) {
+                    $unitSatuan = trim((string)($masterSatuan['satuan'] ?? ''));
+                    if ($unitSatuan !== '') { $h['satuan'] = $unitSatuan; break; }
+                }
+            }
+        }
+    }
 
     // No Gambar Format P disimpan bersama row hasil. Pada halaman Transaksi
     // payload print dibangun ulang dari hasil_json, jadi ambil nilainya secara
