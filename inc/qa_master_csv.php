@@ -222,6 +222,15 @@ function qaCsvPlan(mysqli $db, array $rows, bool $lock = false): array {
         $masters = $context['master'][$no] ?? []; $registries = $context['registry'][$no] ?? [];
         $master = $masters[0] ?? null; $registry = $registries[0] ?? null;
         $history = $context['history'][$no] ?? []; $archives = $context['archive'][$no] ?? [];
+        // The new header-only workbook is insert-only. Existing tools, including
+        // yellow examples copied from masterdata, must never change on reupload.
+        if (!empty($row['header_only']) && $master && $registry && count($masters)===1 && count($registries)===1 && !$errors) {
+            $counts['unchanged']++;
+            $items[]=['line'=>$row['line'],'data'=>['no_part'=>$no],'errors'=>[],'action'=>'unchanged','header_only'=>true,
+                'changes'=>[],'master_id'=>$master['id'],'registry_id'=>$registry['id'],'needs_registry'=>false,
+                'state'=>hash('sha256',serialize([$masters,$registries,$archives,$history]))];
+            continue;
+        }
         if (count($masters) > 1 || count($registries) > 1) $errors[] = 'Nomor alat ambigu/duplikat di database. Rapikan data terlebih dahulu.';
         if ($archives || ($master && strtolower($master['status']) !== 'aktif') || ($registry && strtoupper($registry['status_alat']) !== 'AKTIF')) $errors[] = 'Alat nonaktif atau sudah diarsipkan. Tidak dapat diubah melalui upload CSV.';
         foreach ($history as $event) {
@@ -245,7 +254,7 @@ function qaCsvPlan(mysqli $db, array $rows, bool $lock = false): array {
         $needsRegistry = !$registry || ($master && (int)$master['alat_registry_id'] !== (int)$registry['id']) || ($registry && (empty($registry['sumber_tabel']) || empty($registry['sumber_id'])));
         $action = $errors ? 'error' : (!$master ? 'new' : (($changes || $needsRegistry) ? 'update' : 'unchanged'));
         $counts[$action]++;
-        $items[] = ['line'=>$row['line'], 'data'=>$values, 'errors'=>array_values(array_unique($errors)), 'action'=>$action,
+        $items[] = ['line'=>$row['line'], 'data'=>$values, 'errors'=>array_values(array_unique($errors)), 'action'=>$action, 'header_only'=>!empty($row['header_only']),
             'changes'=>$changes, 'master_id'=>$master['id'] ?? null, 'registry_id'=>$registry['id'] ?? null,
             'needs_registry'=>$needsRegistry, 'state'=>hash('sha256', serialize([$masters,$registries,$archives,$history]))];
     }
@@ -256,7 +265,7 @@ function qaCsvApply(mysqli $db, array $rows, string $signature, string $actor): 
     $transactional=qaCsvTransactional($db);
     $db->query("SET SESSION sql_mode = CONCAT_WS(',', @@SESSION.sql_mode, 'STRICT_ALL_TABLES')");
     if ($transactional) $db->begin_transaction();
-    else $db->query('LOCK TABLES `qa_part` WRITE, `qa_alat_registry` WRITE, `qa_seksi_master` READ, `qa_pengecekan` READ, `qa_alat_ng` READ, `qa_alat_rusak` READ, `qa_alat_discontinue` READ, `qa_alat_ditarik` READ');
+    else $db->query('LOCK TABLES `qa_part` WRITE, `qa_alat_registry` WRITE, `qa_seksi_master` READ, `qa_pengecekan` WRITE, `qa_alat_ng` READ, `qa_alat_rusak` READ, `qa_alat_discontinue` READ, `qa_alat_ditarik` READ');
     try {
         $plan = qaCsvPlan($db, $rows, $transactional);
         if ($plan['counts']['error'] || !hash_equals($signature, $plan['signature'])) {
@@ -286,6 +295,11 @@ function qaCsvApply(mysqli $db, array $rows, string $signature, string $actor): 
                     qaCsvWrite($db, 'UPDATE qa_part SET '.$assignments.' WHERE id=?', array_merge(array_values($updates), [$masterId]));
                 }
                 qaCsvWrite($db, "UPDATE qa_alat_registry SET sumber_tabel='qa_part',sumber_id=? WHERE id=?", [$masterId,$registryId]);
+                if ($item['action']==='new' && $item['header_only']) {
+                    $date=$values['tanggal_registrasi']??date('Y-m-d');
+                    $number='QA-REG-'.date('YmdHis').'-'.$masterId;
+                    qaCsvWrite($db, "INSERT INTO qa_pengecekan (alat_registry_id,alat_id,no_part,nomor_pengecekan,tanggal_pengecekan,tanggal_jadwal_saat_pengecekan,status_kalibrasi,status_validasi,jenis_transaksi,seksi_qa,operator,periode_berikutnya,created_by,keterangan,created_at,hasil_json) VALUES (?,?,?,?,?,?,'Good','setuju','registrasi_alat','QA',?,?,?,'~ Registrasi Alat Baru',?,'[]')", [$registryId,$masterId,$values['no_part'],$number,$date,$date,$actor,$values['jadwal_kalibrasi']??null,$actor,date('Y-m-d H:i:s')]);
+                }
                 $written++;
             } catch (Throwable $error) {
                 error_log('QA master import gagal pada no_part '.$values['no_part'].': '.$error->getMessage());

@@ -647,6 +647,43 @@ if ($action == 'simpan_qr_alat') {
  * Cek status sebuah alat: terdaftar aktif, belum terdaftar, atau sudah
  * divonis NOT GOOD/RUSAK/DISCONTINUE/DITARIK TECHNICAL (di tabel qa_alat_rusak).
  * =================================================================== */
+if ($action == 'simpan_standar_awal') {
+    require_once __DIR__.'/../../../inc/qa_master_workbook.php';
+    try {
+        $no=strtoupper(trim((string)($_POST['no_part']??'')));
+        $payload=json_decode((string)($_POST['points']??''),true);
+        if ($no==='' || !is_array($payload) || count($payload)>500) throw new RuntimeException('Nomor alat atau titik standar tidak valid.');
+        $stmt=$konek->prepare("SELECT id,format_laporan,titik_standar_json FROM qa_part WHERE UPPER(TRIM(no_part))=? AND status='aktif' LIMIT 1");
+        $stmt->bind_param('s',$no); $stmt->execute(); $tool=$stmt->get_result()->fetch_assoc(); $stmt->close();
+        if (!$tool) throw new RuntimeException('Alat aktif tidak ditemukan.');
+        $existing=json_decode((string)$tool['titik_standar_json'],true);
+        if (is_array($existing) && count($existing)>0) throw new RuntimeException('Titik standar awal sudah diisi. Muat ulang halaman.');
+        $format=strtoupper((string)$tool['format_laporan']);
+        if (!isset(qaMasterFormats()[$format])) throw new RuntimeException('Form body format ini belum tersedia.');
+        $entries=[]; foreach ($payload as $i=>$point) {
+            if (!is_array($point)) throw new RuntimeException('Titik standar tidak valid.');
+            $entries[]=['line'=>$i+1,'data'=>array_map(static function($v){return is_scalar($v)?trim((string)$v):'';},$point)];
+        }
+        $body=qaMasterValidatePoints($format,$entries);
+        if ($format==='F') {
+            $meta=$_POST['meta']??[]; if (!is_array($meta)) $meta=[];
+            foreach (['std_sec1','std_sec3','batas_bawah','batas_atas'] as $key) if (trim((string)($meta[$key]??''))==='') throw new RuntimeException($key.' wajib diisi.');
+            array_unshift($body,['meta'=>'F','std_sec1'=>trim((string)$meta['std_sec1']),'std_sec3'=>trim((string)$meta['std_sec3'])]);
+        }
+        $json=json_encode($body,JSON_THROW_ON_ERROR); if (strlen($json)>2097152) throw new RuntimeException('Titik standar terlalu besar.');
+        $id=(int)$tool['id'];
+        $stmt=$konek->prepare("UPDATE qa_part SET titik_standar_json=? WHERE id=? AND (titik_standar_json IS NULL OR titik_standar_json='' OR titik_standar_json='[]')");
+        $stmt->bind_param('si',$json,$id); $stmt->execute(); $changed=$stmt->affected_rows; $stmt->close();
+        if ($changed!==1) throw new RuntimeException('Data alat sudah berubah. Muat ulang halaman.');
+        if ($format==='F') {
+            $tolerance=trim((string)$meta['batas_bawah']).'|'.trim((string)$meta['batas_atas']);
+            $stmt=$konek->prepare('UPDATE qa_part SET toleransi_global=? WHERE id=?'); $stmt->bind_param('si',$tolerance,$id); $stmt->execute(); $stmt->close();
+        }
+        echo json_encode(['status'=>'success','message'=>'Titik standar awal tersimpan.']);
+    } catch (Throwable $e) { echo json_encode(['status'=>'error','message'=>$e->getMessage()]); }
+    exit;
+}
+
 if ($action == 'cek_alat') {
     try {
         $no_part=isset($_POST['no_part'])?normalisasi_no_part($konek,$_POST['no_part']):'';

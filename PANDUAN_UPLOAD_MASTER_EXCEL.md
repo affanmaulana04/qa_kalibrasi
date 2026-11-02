@@ -1,22 +1,15 @@
-# Upload master alat lengkap dari Excel
+# Upload master alat dari Excel
 
-Di **Upload Master Data Excel / CSV**, langsung klik **Unduh Template Excel**. Satu template universal mendukung seluruh format registrasi aplikasi: A–R dan T–Y. Tidak perlu memilih format sebelum download; satu file dapat memuat alat dengan format berbeda.
+Di halaman **Upload Master Data Excel / CSV**, klik **Unduh Template Excel**. Satu file memuat 24 tab format A?R dan T?Y. Format S dan Z menunggu form body/laporan. Nama format mengikuti daftar alat yang diberikan pengguna; nama tab disingkat agar sesuai batas Excel.
 
-1. Buka sheet **Mulai di Sini** dan ikuti empat langkah singkat di sana.
-2. Buka tab sesuai jenis alat, misalnya **A - Gauge**, **F - Timbangan**, atau **Y - Suhu Humidity**. Setiap format mempunyai tab sendiri dan hanya menampilkan kolom yang relevan.
-3. Isi **No. Alat**, kolom **DATA | ...**, dan kolom **TITIK | ...** pada satu baris. Format laporan diambil otomatis dari nama tab sehingga tidak perlu diketik.
-4. Jika satu alat mempunyai beberapa titik standar, tambah baris dengan **No. Alat yang sama**. Kolom DATA pada baris lanjutan boleh kosong; isi kolom TITIK untuk setiap titik. Tab yang tidak digunakan dibiarkan kosong.
-4. Simpan sebagai **Excel Workbook (.xlsx)** lalu **Upload & Simpan**. Nama sheet dan judul kolom harus dipertahankan. File `.xls`, macro, password, dan rumus tidak didukung; tempel rumus sebagai nilai terlebih dahulu.
+1. Buka **Mulai di Sini**, lalu pilih tab format alat.
+2. Isi satu alat per baris mulai baris 3. Judul kolom bertanda **HEADER LAPORAN**, **HEADER LAPORAN + BBRAU**, atau **FOOTER LAPORAN + BBRAU**. No. Alat, Nama Alat, Seksi, Periode Kalibrasi, dan Tanggal Registrasi wajib diisi. Rencana Kalibrasi boleh kosong; sistem menghitungnya dari tanggal registrasi + periode hari.
+3. Biarkan baris kuning contoh. Contoh dari masterdata asli ikut aturan No. Alat: didaftarkan bila belum ada, dilewati bila sudah ada. Contoh ilustratif selalu dilewati. Jangan menulis data alat di baris contoh. Tab lain boleh dibiarkan. Simpan sebagai `.xlsx`.
+4. Upload file. Alat baru masuk sebagai **Register** dan halaman kalibrasi membuka alat pertama dalam file. Isi **Titik Standar Awal** di sana, lalu simpan. Setelah itu form kalibrasi biasa tampil. Untuk alat lain dalam file, cari No. Alat tersebut pada halaman yang sama.
 
-**Tanggal Registrasi** adalah tanggal acuan alat, termasuk jika melakukan backdate. Jika Rencana Kalibrasi kosong, aplikasi menghitung tanggal acuan + periode hari. Alternatifnya, isi Rencana Kalibrasi langsung. Tanggal acuan disimpan sebagai `qa_part.tanggal_registrasi`; tidak mengubah timestamp pembuatan record atau histori lama. Tanggal menerima `YYYY-MM-DD`, `DD-MM-YYYY`, `DD/MM/YYYY`, atau tanggal numerik Excel (sistem 1900/1904).
+Body/titik standar tidak ada dalam template baru. Upload hanya mendaftarkan No. Alat yang belum ada; alat yang sudah terdaftar dilewati tanpa perubahan. Contoh tanpa masterdata diberi label ilustrasi dan tidak pernah diimpor. Gunakan format sel **Text** untuk nomor dengan nol di depan. Batas file 2 MB dan 1.000 alat.
 
-Gunakan format sel **Text** untuk nomor alat, aset, seri, dan nomor alat standar agar nol di depan tetap tersimpan. Template menggunakan format teks. Batas per file: **2 MB, 1.000 alat, dan 20.000 baris titik standar**.
-
-No. Alat baru menambah master dan registry. No. Alat yang sudah ada memperbarui master aktif; metadata opsional kosong mempertahankan nilai lama. **Titik Standar mengganti seluruh konfigurasi body alat yang diunggah**, sehingga semua titik alat itu perlu disertakan. Data alat yang tidak ada di file tidak berubah. Seksi harus sudah terdaftar. Alat nonaktif/arsip atau sedang menunggu validasi tetap ditolak.
-
-Upload menyiapkan master untuk **Update Hasil Kalibrasi**. Hasil ukur, nomor laporan transaksi, petugas, keputusan, dan approval tetap mengikuti proses aplikasi. Upload tidak membuat hasil kalibrasi atau histori persetujuan. Foto alat tetap melalui fitur upload foto aplikasi; gambar yang ditempel di Excel tidak diimpor.
-
-Template CSV lama dan pilihan download per format sudah dihapus. File CSV yang sudah dimiliki tetap dapat diunggah untuk data dasar alat; CSV tidak membawa body titik standar.
+CSV lama tetap dapat diunggah untuk metadata dasar. Workbook lama dengan sheet `Data Alat` dan `Titik Standar` masih bisa diproses untuk kompatibilitas, tetapi tidak lagi menjadi template yang diunduh.
 
 ## Pemasangan database
 

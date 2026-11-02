@@ -6,6 +6,7 @@ if ($_SESSION['login'] == 0) {
 }
 require_once __DIR__ . '/../../../inc/inc_koneksi.php';
 require_once __DIR__ . '/../../../inc/qa_rbac.php';
+require_once __DIR__ . '/../../../inc/qa_master_workbook.php';
 qaRbacRequire($konek,'kalibrasi'); 
 
 $id_pemakai = $_SESSION['userid'];
@@ -2168,7 +2169,7 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                             if(res.found){
                                 var alat=res.data,history=res.history||[];currentAlatData=alat;currentAlatHistory=history;
                                 setVisualAlat(alat.foto_alat);
-                                var tGabungan=$('#tabel-gabungan tbody').empty();tGabungan.append('<tr><td>1</td><td><strong>'+qaEsc(alat.no_part||'-')+'</strong></td><td>'+qaEsc(alat.nama_part||'-')+'</td><td>'+qaEsc(getAlatSpesifikasi(alat)||'-')+'</td><td>'+qaEsc(alat.seksi_pemilik||'-')+'</td><td>'+qaEsc(alat.lokasi||'-')+'</td><td><span class="label label-info">Jadwal</span></td><td><strong>'+formatTanggalJadwal(alat.jadwal_kalibrasi)+'</strong></td><td>-</td><td>-</td></tr>');
+                                var tGabungan=$('#tabel-gabungan tbody').empty();tGabungan.append('<tr><td>1</td><td><strong>'+qaEsc(alat.no_part||'-')+'</strong></td><td>'+qaEsc(alat.nama_part||'-')+'</td><td>'+qaEsc(getAlatSpesifikasi(alat)||'-')+'</td><td>'+qaEsc(alat.seksi_pemilik||'-')+'</td><td>'+qaEsc(alat.lokasi||'-')+'</td><td><span class="label label-info">'+(qaNeedsInitialStandards(alat)?'Register':'Jadwal')+'</span></td><td><strong>'+formatTanggalJadwal(alat.jadwal_kalibrasi)+'</strong></td><td>-</td><td>-</td></tr>');
                                 history.forEach(function(row,idx){var rawSt=String(row.display_status||row.status_display||row.status_kalibrasi||row.status||'').toUpperCase();var sv=String(row.status_validasi||'').toLowerCase();var jt=String(row.jenis_transaksi||row.tipe_transaksi||'').toLowerCase();var kt=String(row.keterangan||'').toLowerCase();var isRegist=(jt==='registrasi_alat'||jt.indexOf('registr')!==-1||kt.indexOf('registrasi alat')!==-1);var st=isRegist?'REGISTER':(sv==='menunggu_pemeriksa'?'MENUNGGU VALIDASI (PEMERIKSA)':(sv==='menunggu_penyetuju'?'MENUNGGU VALIDASI (PENYETUJU)':rawSt));if(st==='GOOD'||st==='LULUS')st='OK';if(st==='NG'||st==='BAD')st='NOT GOOD';var label=st==='OK'?'<span class="label label-success">OK</span>':(st==='REGISTER'?'<span class="label label-info">Register</span>':(st==='NOT GOOD'||st==='RUSAK'||st==='DISCONTINUE'||st==='DITARIK TECHNICAL'||st==='DITOLAK PEMERIKSA'||st==='DITOLAK PENYETUJU'?'<span class="label label-danger">'+qaEsc(st)+'</span>':'<span class="label label-warning"><i class="fa fa-clock-o"></i> '+qaEsc(st||'MENUNGGU VALIDASI')+'</span>'));var btnA='<button class="btn btn-xs btn-primary btn-print-hist" data-idx="'+idx+'"><i class="fa fa-print"></i> '+'Cetak'+'</button>';tGabungan.append('<tr><td>'+(idx+2)+'</td><td><strong>'+qaEsc(row.no_part||alat.no_part||'-')+'</strong></td><td>'+qaEsc(alat.nama_part||'-')+'</td><td>'+qaEsc(getAlatSpesifikasi(alat)||'-')+'</td><td>'+qaEsc(alat.seksi_pemilik||'-')+'</td><td>'+qaEsc(alat.lokasi||'-')+'</td><td>'+label+'</td><td><strong>'+formatTanggal(row.tanggal_pengecekan||row.tanggal)+'</strong></td><td>'+qaEsc(row.operator||row.petugas||'-')+'</td><td>'+btnA+'</td></tr>');});
                                 // BBRAU SHORTCUT V1 - NOMOR ALAT TERDAFTAR LANGSUNG BISA BUKA LAPORAN BBRAU
                                 var bbNo=encodeURIComponent(alat.no_part||noAlat);
@@ -2177,7 +2178,7 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                                 // CEK ALAT QR V2 - GENERATOR DI SAMPING SHORTCUT BBRAU
                                 if(!$('#btn-qr-generator').length){ $('#qa-detail-actions').append('<button type="button" id="btn-qr-generator" class="btn btn-sm btn-default"><i class="fa fa-qrcode"></i> Buat QR Code</button>'); }
                                 $('#btn-qr-generator').data('no-alat',alat.no_part||noAlat).data('nama-alat',alat.nama_part||alat.nama_alat||'').data('seksi-pemilik',alat.seksi_pemilik||alat.seksi||'');
-                                $('#qa_nomor_alat').val(alat.no_part);$('#qa_format_alat').val(alat.format_laporan);qaRenderUpdateEditor(alat,history);$('#nomor_alat').prop('disabled',true);$('#form-update-kalibrasi').slideDown();
+                                $('#qa_nomor_alat').val(alat.no_part);$('#qa_format_alat').val(alat.format_laporan);if(qaNeedsInitialStandards(alat)){qaShowInitialStandards(alat);$('#form-update-kalibrasi').hide();}else{$('#qa-initial-standards').remove();qaRenderUpdateEditor(alat,history);$('#form-update-kalibrasi').slideDown();}$('#nomor_alat').prop('disabled',true);
                             }else{
                                 const openReg=function(){ 
                                     $('#nomor_alat').prop('disabled', true); 
@@ -4024,6 +4025,27 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                         },function(){}).catch(function(){BootstrapDialog.alert('Kamera tidak dapat dibuka. Izinkan akses kamera dan gunakan HTTPS/localhost.');});
                     },400);
                 });
+
+                const qaInitialSchema=<?=json_encode(qaMasterFormats(), JSON_UNESCAPED_UNICODE)?>;
+                const qaInitialLabels=<?=json_encode(qaMasterPointLabels(), JSON_UNESCAPED_UNICODE)?>;
+                function qaNeedsInitialStandards(alat){
+                    try {const points=JSON.parse(alat.titik_standar_json||'[]'); return !Array.isArray(points)||points.length===0;} catch(e){return true;}
+                }
+                function qaShowInitialStandards(alat){
+                    $('#qa-initial-standards').remove();
+                    const keys=qaInitialSchema[String(alat.format_laporan||'').toUpperCase()]||[];
+                    if(!keys.length){BootstrapDialog.alert('Form body format ini belum tersedia.');return;}
+                    const box=$('<section id="qa-initial-standards" class="panel panel-info" style="margin-top:24px"><div class="panel-heading"><strong>Isi Titik Standar Awal</strong></div><div class="panel-body"><p>Alat sudah berstatus Register. Lengkapi body standar sekali di sini sebelum kalibrasi pertama.</p><div id="qa-initial-rows"></div><button type="button" class="btn btn-default" id="qa-add-initial-row">+ Tambah titik</button> <button type="button" class="btn btn-primary" id="qa-save-initial">Simpan Titik Standar</button></div></section>');
+                    $('#form-update-kalibrasi').before(box);
+                    function addRow(){const row=$('<div class="qa-initial-row well well-sm" style="display:flex;flex-wrap:wrap;gap:10px;align-items:end"></div>'); keys.forEach(function(key){const field=$('<label style="min-width:145px;flex:1"></label>');field.text(qaInitialLabels[key]||key);field.append($('<input type="text" class="form-control">').attr('data-key',key));row.append(field);});row.append('<button type="button" class="btn btn-default qa-remove-initial">Hapus</button>');$('#qa-initial-rows').append(row);}
+                    addRow();box.on('click','#qa-add-initial-row',addRow);box.on('click','.qa-remove-initial',function(){if($('.qa-initial-row').length>1)$(this).closest('.qa-initial-row').remove();});
+                    if(String(alat.format_laporan).toUpperCase()==='F'){
+                        const meta=$('<div id="qa-initial-meta" class="well well-sm"></div>');[['std_sec1','Standar Repeatability'],['std_sec3','Standar Center Loading'],['batas_bawah','Batas Bawah'],['batas_atas','Batas Atas']].forEach(function(x){meta.append($('<label style="margin-right:12px"></label>').text(x[1]).append($('<input class="form-control" type="text">').attr('data-key',x[0])));});$('#qa-initial-rows').before(meta);
+                    }
+                    box.on('click','#qa-save-initial',function(){const points=[];$('.qa-initial-row').each(function(){const item={};$(this).find('input').each(function(){item[$(this).data('key')]=$(this).val().trim();});points.push(item);});const meta={};$('#qa-initial-meta input').each(function(){meta[$(this).data('key')]=$(this).val().trim();});const btn=$(this).prop('disabled',true);$.post('proses_qa.php?action=simpan_standar_awal',{no_part:alat.no_part,points:JSON.stringify(points),meta:meta},function(res){btn.prop('disabled',false);if(res.status==='success'){$('#nomor_alat').prop('disabled',false);$('#btn-cek').click();}else BootstrapDialog.alert(res.message||'Gagal menyimpan titik standar.');},'json').fail(function(){btn.prop('disabled',false);BootstrapDialog.alert('Gagal menghubungi server.');});});
+                }
+                const qaStartNo=new URLSearchParams(window.location.search).get('no_alat');
+                if(qaStartNo){$('#nomor_alat').val(qaStartNo);setTimeout(function(){$('#btn-cek').click();},0);}
 
                 // Status lama di UI juga dibaca sebagai DITARIK TECHNICAL.
                 $('#qa_status_final option[value="DITARIK TECHNICAL"]').length || $('#qa_status_final option[value="DITARIK MECHANICAL"]').attr('value','DITARIK TECHNICAL').text('DITARIK TECHNICAL');

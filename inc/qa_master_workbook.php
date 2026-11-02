@@ -24,14 +24,13 @@ function qaMasterFormats(): array {
 }
 function qaMasterFormatLabels(): array {
     return [
-        'A'=>'Gauge (GO / NOT GO)','B'=>'Air Driver','C'=>'Temperatur','D'=>'Multimeter',
-        'E'=>'Thermometer (T1 / T2)','F'=>'Timbangan','G'=>'Air Torque','H'=>'Thread Plug Gauge',
-        'I'=>'Gauge ATAS / BAWAH','J'=>'Verifikasi Radius Gauge','K'=>'Voltage Ultrasonic',
-        'L'=>'Pressure Gauge','M'=>'Profile Projector','N'=>'Acuan Utama / Toleransi Dinamis',
-        'O'=>'Snap Gauge','P'=>'SK Gauge','Q'=>'Seration / Plug','R'=>'Range 3 Titik',
-        'T'=>'GO / NOT GO + Toleransi','U'=>'Laporan Kalibrasi',
-        'V'=>'Laporan Kalibrasi (Outside / Inside / Depth)','W'=>'Laporan Pemeriksaan Sudut',
-        'X'=>'Kestabilan / Pembacaan Maju / Mundur','Y'=>'Pemeriksaan Suhu / Humidity'
+        'A'=>'Abrassion inspection gauge','B'=>'Air Driver','C'=>'Temperature kontrol, Temp. Normal Regulator','D'=>'Multimeter digital',
+        'E'=>'Thermometer digital','F'=>'Timbangan digital','G'=>'Air Torque','H'=>'Thread plug gauge',
+        'I'=>'Thread Ring gauge','J'=>'Radius gauge','K'=>'Voltage Ultrasonic PL PB II',
+        'L'=>'Lux Meter, Pressure gauge','M'=>'Profile Projector','N'=>'Puller gauge',
+        'O'=>'Snap gauge','P'=>'SK Gauge','Q'=>'Seration plug gauge','R'=>'Gauge Verifikasi',
+        'T'=>'Plug gauge','U'=>'Ring standar, Dial Caliper gage, Height gage, Cylinder gage, Inside micrometer, Penggaris, Tapered Gage, Infrared Thermometer',
+        'V'=>'Sigmat Digital','W'=>'Bevel protractor','X'=>'Dial Indicator','Y'=>'Hygro Thermometer'
     ];
 }
 function qaMasterFormatDisplay(string $format): string {
@@ -43,15 +42,16 @@ function qaMasterFormatCode(string $value): string {
 }
 function qaMasterFormatSheetNames(): array {
     return [
-        'A'=>'A - Gauge','B'=>'B - Air Driver','C'=>'C - Temperatur','D'=>'D - Multimeter',
-        'E'=>'E - Thermometer','F'=>'F - Timbangan','G'=>'G - Air Torque','H'=>'H - Thread Plug Gauge',
-        'I'=>'I - Gauge Atas Bawah','J'=>'J - Radius Gauge','K'=>'K - Voltage Ultrasonic',
-        'L'=>'L - Pressure Gauge','M'=>'M - Profile Projector','N'=>'N - Toleransi Dinamis',
-        'O'=>'O - Snap Gauge','P'=>'P - SK Gauge','Q'=>'Q - Seration Plug','R'=>'R - Range 3 Titik',
-        'T'=>'T - GO NOT GO Toleransi','U'=>'U - Kalibrasi','V'=>'V - Outside Inside Depth',
-        'W'=>'W - Pemeriksaan Sudut','X'=>'X - Maju Mundur','Y'=>'Y - Suhu Humidity'
+        'A'=>'A - Abrassion inspection','B'=>'B - Air Driver','C'=>'C - Temperature kontrol','D'=>'D - Multimeter digital',
+        'E'=>'E - Thermometer digital','F'=>'F - Timbangan digital','G'=>'G - Air Torque','H'=>'H - Thread plug gauge',
+        'I'=>'I - Thread Ring gauge','J'=>'J - Radius gauge','K'=>'K - Voltage Ultrasonic',
+        'L'=>'L - Lux Meter Pressure','M'=>'M - Profile Projector','N'=>'N - Puller gauge',
+        'O'=>'O - Snap gauge','P'=>'P - SK Gauge','Q'=>'Q - Seration plug gauge','R'=>'R - Gauge Verifikasi',
+        'T'=>'T - Plug gauge','U'=>'U - Ring standar dll','V'=>'V - Sigmat Digital',
+        'W'=>'W - Bevel protractor','X'=>'X - Dial Indicator','Y'=>'Y - Hygro Thermometer'
     ];
 }
+
 function qaMasterDataFields(): array {
     return [
         'format_laporan'=>'FORMAT LAPORAN','no_part'=>'NO. ALAT','nama_part'=>'NAMA ALAT',
@@ -64,6 +64,17 @@ function qaMasterDataFields(): array {
         'std_sec1'=>'STANDAR REPEATABILITY (F)','std_sec3'=>'STANDAR CENTER LOADING (F)',
         'batas_bawah'=>'BATAS BAWAH (F)','batas_atas'=>'BATAS ATAS (F)'
     ];
+}
+function qaMasterHeaderFields(): array {
+    $fields=qaMasterDataFields();
+    foreach (['std_sec1','std_sec3','batas_bawah','batas_atas'] as $key) unset($fields[$key]);
+    return $fields;
+}
+function qaMasterHeaderLabel(string $key, string $label): string {
+    if (in_array($key,['no_part','format_laporan'],true)) return $label;
+    if (in_array($key,['nama_part','spesifikasi','seksi_pemilik','lokasi','no_fa','merk','type','buatan','fungsi','tanggal_registrasi'],true)) return 'HEADER LAPORAN + BBRAU | '.$label;
+    if (in_array($key,['periode_kalibrasi','jadwal_kalibrasi'],true)) return 'FOOTER LAPORAN + BBRAU | '.$label;
+    return 'HEADER LAPORAN | '.$label;
 }
 function qaMasterPointLabels(): array {
     return [
@@ -138,7 +149,7 @@ function qaMasterExamplePoints(string $format): array {
 function qaMasterExampleData(string $format, string $number): array {
     $dataFields = qaMasterDataFields();
     $data = array_fill_keys(array_keys($dataFields),'');
-    $data = array_merge($data, ['format_laporan'=>qaMasterFormatDisplay($format),'no_part'=>$number,'nama_part'=>'Contoh '.$format.' - '.qaMasterFormatLabels()[$format],
+    $data = array_merge($data, ['format_laporan'=>qaMasterFormatDisplay($format),'no_part'=>$number,'nama_part'=>mb_substr('Contoh '.$format.' - '.qaMasterFormatLabels()[$format],0,100,'UTF-8'),
         'spesifikasi'=>'0-150 mm','resolusi'=>'0.01','fungsi'=>'Mengukur dimensi','no_fa'=>'FA-001','lokasi'=>'Lab QA',
         'merk'=>'Contoh merk','type'=>'TIPE-001','buatan'=>'Jepang','seksi_pemilik'=>'QA','periode_kalibrasi'=>'365',
         'tanggal_registrasi'=>date('Y-m-d'),'jadwal_kalibrasi'=>'','metode_uji'=>'SOP-KAL-001',
@@ -198,40 +209,68 @@ function qaMasterSampleRecords(mysqli $db): array {
 }
 function qaMasterWorkbookTemplate(array $samples = []): string {
     $start=[
-        ['TEMPLATE UPLOAD MASTER ALAT','Mulai dari sini — cukup ikuti 5 langkah berikut'],
-        ['1. Pilih tab format','Buka tab sesuai jenis alat, misalnya A - Gauge atau F - Timbangan. Jangan mengisi format lain.'],
-        ['2. Lihat contoh di baris 2','Baris kuning adalah contoh. Kolom awal memakai masterdata asli jika format tersebut sudah punya alat; kolom kosong dan titik standar dilengkapi ilustrasi.'],
-        ['3. Isi mulai baris 3','Isi NO. ALAT, seluruh kolom DATA, dan kolom TITIK pada baris baru. Format ditentukan otomatis dari nama tab.'],
-        ['4. Tambah titik','Jika satu alat punya beberapa titik, tambah baris dan ulangi NO. ALAT. Kolom DATA pada baris lanjutan boleh dikosongkan.'],
-        ['5. Hapus contoh, lalu upload','Hapus baris kuning contoh di setiap tab yang diisi sebelum upload. Tab yang tidak dipakai boleh dibiarkan. Simpan sebagai .xlsx lalu upload.'],
-        ['PENTING','Jangan mengganti nama tab atau judul kolom. Satu file boleh berisi banyak alat dan beberapa format.'],
-        ['Tanggal','Isi TANGGAL REGISTRASI. RENCANA KALIBRASI boleh kosong agar dihitung otomatis dari tanggal + periode hari.'],
-        ['Perbarui alat','Titik Standar yang di-upload mengganti seluruh titik lama alat tersebut, jadi sertakan semuanya.'],
+        ['TEMPLATE UPLOAD MASTER ALAT','Isi header dan footer laporan / BBRAU. Titik standar diisi di sistem.'],
+        ['1. Pilih tab format','Buka tab jenis alat. Format S dan Z belum tersedia.'],
+        ['2. Isi mulai baris 3','Satu alat satu baris. Judul kolom menunjukkan tujuan datanya.'],
+        ['3. Biarkan contoh','Contoh dari masterdata asli ikut diproses: alat yang belum ada didaftarkan, alat yang sudah ada dilewati. Contoh ilustratif selalu dilewati.'],
+        ['4. Upload','Isi data alatmu mulai baris 3. Sesudah upload, isi titik standar awal alat baru di halaman kalibrasi.'],
+        ['PENTING','Jangan mengganti nama tab atau judul kolom. Tanggal registrasi dan periode wajib diisi.'],
     ];
+    foreach ($samples as $format=>$sample) if (isset(qaMasterFormats()[$format]) && trim((string)($sample['no_part']??''))!=='') {
+        $start[]=['SUMBER MASTER ASLI '.$format,(string)$sample['no_part']];
+    }
     $sheets=['Mulai di Sini'=>$start]; $options=['Mulai di Sini'=>['widths'=>[26,105],'wrap'=>true]];
-    $dataFields=qaMasterDataFields(); unset($dataFields['format_laporan'],$dataFields['no_part']);
+    $fields=qaMasterHeaderFields(); unset($fields['format_laporan'],$fields['no_part']);
     foreach (qaMasterFormatSheetNames() as $format=>$sheet) {
-        $formatData=$dataFields;
-        if ($format!=='F') foreach (['std_sec1','std_sec3','batas_bawah','batas_atas'] as $key) unset($formatData[$key]);
         $headers=['NO. ALAT'];
-        foreach ($formatData as $label) $headers[]='DATA | '.$label;
-        foreach (qaMasterFormats()[$format] as $key) $headers[]='TITIK | '.qaMasterPointLabels()[$key];
+        foreach ($fields as $key=>$label) $headers[]=qaMasterHeaderLabel($key,$label);
         $sample=$samples[$format]??null;
         $number=$sample ? (string)$sample['no_part'] : 'CONTOH-'.$format.'-001';
         $example=qaMasterExampleData($format,$number);
-        if ($sample) foreach ($formatData as $key=>$_) if (isset($sample[$key]) && trim((string)$sample[$key])!=='') $example[$key]=(string)$sample[$key];
-        $exampleRow=[$number];
-        foreach (array_keys($formatData) as $key) $exampleRow[]=$example[$key]??'';
-        $examplePoint=qaMasterExamplePoints($format)[0];
-        foreach (qaMasterFormats()[$format] as $key) $exampleRow[]=$examplePoint[$key]??'';
-        $sheets[$sheet]=[$headers,$exampleRow,array_fill(0,count($headers),'')];
+        if ($sample) foreach ($fields as $key=>$_) if (isset($sample[$key]) && trim((string)$sample[$key])!=='') $example[$key]=(string)$sample[$key];
+        $row=[$number]; foreach (array_keys($fields) as $key) $row[]=$example[$key]??'';
+        $sheets[$sheet]=[$headers,$row,array_fill(0,count($headers),'')];
         $options[$sheet]=['freezeColumns'=>1,'exampleRows'=>[2]];
     }
     return qaXlsxWrite($sheets,[],$options);
 }
 
+function qaMasterHeaderWorkbook(array $book): array {
+    $fields=qaMasterHeaderFields();
+    $rows=[['line'=>1,'cells'=>array_values($fields),'numeric'=>[]]];
+    $expectedFields=$fields; unset($expectedFields['format_laporan'],$expectedFields['no_part']);
+    $known=array_flip(array_merge(['Mulai di Sini'],array_values(qaMasterFormatSheetNames())));
+    foreach ($book['sheets'] as $name=>$sheet) if (!isset($known[$name]) && count($sheet)>1) throw new RuntimeException('Sheet tidak dikenal: '.$name);
+    $realSamples=[];
+    foreach ($book['sheets']['Mulai di Sini']??[] as $guideRow) {
+        $label=(string)($guideRow['cells'][0]??'');
+        if (preg_match('/^SUMBER MASTER ASLI ([A-RT-Y])$/',$label,$match)) $realSamples[$match[1]]=strtoupper(trim((string)($guideRow['cells'][1]??'')));
+    }
+    foreach (qaMasterFormatSheetNames() as $format=>$name) {
+        $sheet=$book['sheets'][$name]??[]; if (!$sheet) continue;
+        $header=array_shift($sheet);
+        $expected=['NO. ALAT']; foreach ($expectedFields as $key=>$label) $expected[]=qaMasterHeaderLabel($key,$label);
+        if (array_values($header['cells'])!==$expected) throw new RuntimeException('Sheet '.$name.': judul kolom berubah. Gunakan template terbaru.');
+        foreach ($sheet as $row) {
+            $exampleNo=strtoupper(trim((string)($row['cells'][0]??'')));
+            if (!empty($row['example']) && ($realSamples[$format]??'')!==$exampleNo) {
+                continue;
+            }
+            $values=$row['cells']; if (count(array_filter($values,static function($v){return trim((string)$v)!=='';}))===0) continue;
+            $cells=[$format,$values[0]??'']; foreach (array_keys($expectedFields) as $i=>$key) $cells[]=$values[$i+1]??'';
+            $numeric=[]; foreach ($row['numeric']??[] as $i=>$flag) if ($i>0) $numeric[$i+1]=$flag;
+            $rows[]=['line'=>$row['line'],'cells'=>$cells,'numeric'=>$numeric];
+        }
+    }
+    $book['sheets']['Data Alat']=$rows;
+    $book['header_only']=true;
+    return $book;
+}
 function qaMasterPerFormatSheets(array $book): array {
     $sheets=$book['sheets'];
+    foreach (qaMasterFormatSheetNames() as $sheetName) {
+        if (isset($sheets[$sheetName][0]['cells'][1]) && str_starts_with((string)$sheets[$sheetName][0]['cells'][1],'HEADER LAPORAN')) return qaMasterHeaderWorkbook($book);
+    }
     if (isset($sheets['Data Alat']) || isset($sheets['Titik Standar'])) return $book;
     $known=array_flip(array_merge(['Mulai di Sini'],array_values(qaMasterFormatSheetNames())));
     foreach ($sheets as $name=>$rows) if (!isset($known[$name]) && count($rows)>1) throw new RuntimeException('Sheet tidak dikenal atau namanya berubah: '.$name.'. Gunakan nama tab dari template.');
@@ -250,11 +289,8 @@ function qaMasterPerFormatSheets(array $book): array {
         $marked=($actual[0]??'')==='JENIS BARIS';
         if ($actual!==($marked?array_merge(['JENIS BARIS'],$expected):$expected)) throw new RuntimeException('Sheet '.$sheetName.': judul kolom berubah. Gunakan template terbaru.');
         $tools=[];
-        $hasDataRows=false;
-        foreach ($sheet as $candidate) if (empty($candidate['example'])) { $hasDataRows=true; break; }
         foreach ($sheet as $row) {
             if (!empty($row['example'])) {
-                if ($hasDataRows) throw new RuntimeException($sheetName.' baris '.$row['line'].': hapus baris kuning contoh sebelum upload.');
                 continue;
             }
             if ($marked) {
@@ -390,8 +426,35 @@ function qaMasterValidatePoints(string $format, array $entries): array {
 function qaMasterWorkbookParse(string $path, array $schema): array {
     foreach (['fungsi','buatan','tanggal_registrasi','titik_standar_json'] as $field) if (!isset($schema[$field])) throw new RuntimeException('Struktur Excel belum siap: kolom '.$field.'. Jalankan migrasi 20261026_qa_master_excel.sql.');
     $book=qaMasterPerFormatSheets(qaXlsxRead($path)); $sheets=$book['sheets'];
-    foreach (['Data Alat','Titik Standar'] as $name) if (empty($sheets[$name]) || count($sheets[$name])<2) throw new RuntimeException('Sheet '.$name.' harus berisi judul dan data. Gunakan template Excel.');
+    foreach ($book['header_only']??false ? ['Data Alat'] : ['Data Alat','Titik Standar'] as $name) if (empty($sheets[$name]) || count($sheets[$name])<2) throw new RuntimeException('Sheet '.$name.' harus berisi judul dan data. Gunakan template Excel.');
     $dataHeaders=qaMasterHeaders(array_shift($sheets['Data Alat']),qaMasterDataFields(),'Data Alat');
+    if (!empty($book['header_only'])) {
+        $rows=[]; $seen=[];
+        foreach ($sheets['Data Alat'] as $row) {
+            $data=qaMasterCells($row,$dataHeaders,'Data Alat'); $format=qaMasterFormatCode($data['format_laporan']??''); $data['format_laporan']=$format;
+            $errors=[]; $no=strtoupper($data['no_part']??'');
+            if (!isset(qaMasterFormats()[$format])) $errors[]='Format laporan belum tersedia.';
+            if (isset($seen[$no])) $errors[]='Nomor alat berulang dalam file.';
+            $seen[$no]=true;
+            foreach (['tanggal_registrasi','jadwal_kalibrasi'] as $field) if (($data[$field]??'')!=='') {
+                $column=array_search($field,$dataHeaders,true);
+                $date=qaMasterExcelDate($data[$field],isset($row['numeric'][$column]),$book['date1904']);
+                if ($date===null) $errors[]=(qaMasterDataFields()[$field]).' tidak valid.'; else $data[$field]=$date;
+            }
+            $registration=$data['tanggal_registrasi']??''; $period=qaCsvPeriod($data['periode_kalibrasi']??'');
+            if (($data['jadwal_kalibrasi']??'')==='' && qaCsvDate($registration)!==null && $period!==null) $data['jadwal_kalibrasi']=(new DateTimeImmutable($registration))->modify('+'.$period.' days')->format('Y-m-d');
+            if ($registration==='') $errors[]='Tanggal Registrasi wajib diisi untuk status awal Register.';
+            unset($data['tanggal_registrasi']);
+            $stream=fopen('php://temp','r+'); foreach (qaCsvRequired() as $key) $data[$key]=$data[$key]??'';
+            fputcsv($stream,array_keys($data),',','"',''); fputcsv($stream,array_values($data),',','"',''); rewind($stream);
+            $parsed=qaCsvParse(stream_get_contents($stream),$schema)[0]; fclose($stream);
+            $parsed['line']=$row['line']; $parsed['errors']=array_merge($parsed['errors'],$errors);
+            $parsed['data']['tanggal_registrasi']=$registration;
+            $parsed['header_only']=true;
+            $rows[]=$parsed;
+        }
+        return $rows;
+    }
     $pointHeaders=qaMasterHeaders(array_shift($sheets['Titik Standar']),['no_part'=>'NO. ALAT']+qaMasterPointLabels(),'Titik Standar');
     if (!in_array('no_part',$pointHeaders,true)) throw new RuntimeException('Titik Standar: kolom NO. ALAT wajib ada.');
     $points=[];

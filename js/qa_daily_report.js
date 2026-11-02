@@ -102,14 +102,14 @@
     function fillFields(report,entries,headerEntries) {
         for (const el of report.querySelectorAll('[data-daily-field]')) {
             const key=el.dataset.dailyField;
-            // Never drop No. Laporan or Nama Alat for the other transactions.
-            // The combined header must list each distinct identifier.
-            const candidates=(key==='name' || key==='report')?headerEntries:entries;
+            // A combined sheet has one report identity in its header. The
+            // selected transactions and their tool numbers remain in the table.
+            const candidates=(key==='name' || key==='report')?headerEntries.slice(0,1):entries;
             const values=Array.from(new Set(candidates.map(e=>e.fields[key]).filter(Boolean)));
             el.replaceChildren();
             if (el.dataset.dailyPrefix) el.append(document.createTextNode(el.dataset.dailyPrefix));
             if (key==='note' && (/^ket-/.test(el.className) || el.classList.contains('excel-note'))) el.append(node('b','KETERANGAN :'),node('br'));
-            // Keep all distinct names and original report numbers visible on every page.
+            // Repeat the same header on continuation pages; notes may still vary.
             values.forEach((value,i)=>{if(i)el.append(node('br'));el.append(document.createTextNode(value));});
         }
     }
