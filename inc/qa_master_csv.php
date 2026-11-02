@@ -177,7 +177,7 @@ function qaCsvParse(string $text, array $schema): array {
             else $data['jadwal_kalibrasi'] = $date;
             if (!empty($data['format_laporan'])) {
                 $data['format_laporan'] = strtoupper($data['format_laporan']);
-                if (!preg_match('/^[A-Y]$/', $data['format_laporan'])) $errors[] = 'Format laporan harus A sampai Y.';
+                if (!preg_match('/^[A-Z]$/', $data['format_laporan'])) $errors[] = 'Format laporan harus A sampai Z.';
             }
             foreach ($data as $field => $value) {
                 if (preg_match('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', $value)) $errors[] = qaCsvFields()[$field].' mengandung karakter kontrol.';
@@ -222,6 +222,9 @@ function qaCsvPlan(mysqli $db, array $rows, bool $lock = false): array {
         $masters = $context['master'][$no] ?? []; $registries = $context['registry'][$no] ?? [];
         $master = $masters[0] ?? null; $registry = $registries[0] ?? null;
         $history = $context['history'][$no] ?? []; $archives = $context['archive'][$no] ?? [];
+        if (!empty($row['real_sample']) && !$master && empty($data['tanggal_registrasi'])) {
+            $errors[]='Contoh master asli ini belum punya Tanggal Registrasi. Isi tanggal tersebut sebelum mendaftarkannya kembali.';
+        }
         // The new header-only workbook is insert-only. Existing tools, including
         // yellow examples copied from masterdata, must never change on reupload.
         if (!empty($row['header_only']) && $master && $registry && count($masters)===1 && count($registries)===1 && !$errors) {

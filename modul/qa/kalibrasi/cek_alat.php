@@ -4181,12 +4181,29 @@ $q_seksi = mysqli_query($konek, "SELECT * FROM qa_seksi_master ORDER BY nama_sek
                     if(!keys.length){BootstrapDialog.alert('Form body format ini belum tersedia.');return;}
                     const box=$('<section id="qa-initial-standards" class="panel panel-info" style="margin-top:24px"><div class="panel-heading"><strong>Isi Titik Standar Awal</strong></div><div class="panel-body"><p>Alat sudah berstatus Register. Lengkapi body standar sekali di sini sebelum kalibrasi pertama.</p><div id="qa-initial-rows"></div><button type="button" class="btn btn-default" id="qa-add-initial-row">+ Tambah titik</button> <button type="button" class="btn btn-primary" id="qa-save-initial">Simpan Titik Standar</button></div></section>');
                     $('#form-update-kalibrasi').before(box);
-                    function addRow(){const row=$('<div class="qa-initial-row well well-sm" style="display:flex;flex-wrap:wrap;gap:10px;align-items:end"></div>'); keys.forEach(function(key){const field=$('<label style="min-width:145px;flex:1"></label>');field.text(qaInitialLabels[key]||key);field.append($('<input type="text" class="form-control">').attr('data-key',key));row.append(field);});row.append('<button type="button" class="btn btn-default qa-remove-initial">Hapus</button>');$('#qa-initial-rows').append(row);}
-                    addRow();box.on('click','#qa-add-initial-row',addRow);box.on('click','.qa-remove-initial',function(){if($('.qa-initial-row').length>1)$(this).closest('.qa-initial-row').remove();});
+                    const initialFormat=String(alat.format_laporan||'').toUpperCase();
+                    function addRow(direction){
+                        const row=$('<div class="qa-initial-row well well-sm" style="display:flex;flex-wrap:wrap;gap:10px;align-items:end"></div>');
+                        keys.forEach(function(key){
+                            const field=$('<label style="min-width:145px;flex:1"></label>');field.text(qaInitialLabels[key]||key);
+                            if(initialFormat==='S' && key==='arah') field.append($('<select class="form-control" data-key="arah"><option value="NAIK">NAIK</option><option value="TURUN">TURUN</option></select>').val(direction||'NAIK'));
+                            else field.append($('<input type="text" class="form-control">').attr('data-key',key));
+                            row.append(field);
+                        });
+                        row.append('<button type="button" class="btn btn-default qa-remove-initial">Hapus</button>');
+                        if(initialFormat==='S' && direction==='NAIK' && $('#qa-initial-rows .qa-initial-row select[data-key="arah"]').filter(function(){return $(this).val()==='TURUN';}).length) row.insertBefore($('#qa-initial-rows .qa-initial-row select[data-key="arah"]').filter(function(){return $(this).val()==='TURUN';}).first().closest('.qa-initial-row'));
+                        else $('#qa-initial-rows').append(row);
+                    }
+                    if(initialFormat==='S'){
+                        $('#qa-add-initial-row').replaceWith('<button type="button" class="btn btn-default" id="qa-add-initial-naik">+ NAIK</button> <button type="button" class="btn btn-default" id="qa-add-initial-turun">+ TURUN</button>');
+                        addRow('NAIK');addRow('TURUN');
+                        box.on('click','#qa-add-initial-naik',function(){addRow('NAIK');});box.on('click','#qa-add-initial-turun',function(){addRow('TURUN');});
+                    }else{addRow();box.on('click','#qa-add-initial-row',function(){addRow();});}
+                    box.on('click','.qa-remove-initial',function(){if($('.qa-initial-row').length>1)$(this).closest('.qa-initial-row').remove();});
                     if(String(alat.format_laporan).toUpperCase()==='F'){
                         const meta=$('<div id="qa-initial-meta" class="well well-sm"></div>');[['std_sec1','Standar Repeatability'],['std_sec3','Standar Center Loading'],['batas_bawah','Batas Bawah'],['batas_atas','Batas Atas']].forEach(function(x){meta.append($('<label style="margin-right:12px"></label>').text(x[1]).append($('<input class="form-control" type="text">').attr('data-key',x[0])));});$('#qa-initial-rows').before(meta);
                     }
-                    box.on('click','#qa-save-initial',function(){const points=[];$('.qa-initial-row').each(function(){const item={};$(this).find('input').each(function(){item[$(this).data('key')]=$(this).val().trim();});points.push(item);});const meta={};$('#qa-initial-meta input').each(function(){meta[$(this).data('key')]=$(this).val().trim();});const btn=$(this).prop('disabled',true);$.post('proses_qa.php?action=simpan_standar_awal',{no_part:alat.no_part,points:JSON.stringify(points),meta:meta},function(res){btn.prop('disabled',false);if(res.status==='success'){$('#nomor_alat').prop('disabled',false);$('#btn-cek').click();}else BootstrapDialog.alert(res.message||'Gagal menyimpan titik standar.');},'json').fail(function(){btn.prop('disabled',false);BootstrapDialog.alert('Gagal menghubungi server.');});});
+                    box.on('click','#qa-save-initial',function(){const points=[];$('.qa-initial-row').each(function(){const item={};$(this).find('input,select').each(function(){item[$(this).data('key')]=$(this).val().trim();});points.push(item);});const meta={};$('#qa-initial-meta input').each(function(){meta[$(this).data('key')]=$(this).val().trim();});const btn=$(this).prop('disabled',true);$.post('proses_qa.php?action=simpan_standar_awal',{no_part:alat.no_part,points:JSON.stringify(points),meta:meta},function(res){btn.prop('disabled',false);if(res.status==='success'){$('#nomor_alat').prop('disabled',false);$('#btn-cek').click();}else BootstrapDialog.alert(res.message||'Gagal menyimpan titik standar.');},'json').fail(function(){btn.prop('disabled',false);BootstrapDialog.alert('Gagal menghubungi server.');});});
                 }
                 const qaStartNo=new URLSearchParams(window.location.search).get('no_alat');
                 if(qaStartNo){$('#nomor_alat').val(qaStartNo);setTimeout(function(){$('#btn-cek').click();},0);}

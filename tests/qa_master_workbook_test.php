@@ -28,6 +28,12 @@ function wbPatch(string $bytes, array $parts): string {
         return file_get_contents($path);
     } finally { if(is_file($path))unlink($path); }
 }
+function wbHeaderExampleRow(string $format,string $number): array {
+    $fields=qaMasterHeaderFields(); unset($fields['format_laporan'],$fields['no_part']);
+    $data=qaMasterExampleData($format,$number); $row=[$number];
+    foreach (array_keys($fields) as $key) $row[]=$data[$key]??'';
+    return $row;
+}
 $templates=[];
 foreach (array_keys(qaMasterFormats()) as $format) {
     $bytes=qaXlsxWrite(qaMasterWorkbookSheets([$format])); $templates[$format]=$bytes;
@@ -43,38 +49,20 @@ foreach (array_keys(qaMasterFormats()) as $format) {
     wbCheck(qaCsvPlan($konek,$rows)['counts']['unchanged']===1,'Format '.$format.' repeated import is idempotent');
 }
 wbCheck(count(qaCsvFetch($konek,'SELECT id FROM qa_pengecekan'))===0,'imports do not invent measurement/approval history');
-$actualSample=qaMasterSampleRecords($konek);
-wbCheck(isset($actualSample['A']) && $actualSample['A']['no_part']==='TEST-A','sample source reads actual masterdata rows');
-$markedTemplate=qaMasterWorkbookTemplate($actualSample);
-$markedPath=tempnam(sys_get_temp_dir(),'qa-sample-'); file_put_contents($markedPath,$markedTemplate);
-try {
-    $markedBook=qaXlsxRead($markedPath);
-    wbCheck($markedBook['sheets']['A - Abrassion inspection'][0]['cells'][0]==='NO. ALAT' && $markedBook['sheets']['A - Abrassion inspection'][1]['cells'][0]==='TEST-A' && !empty($markedBook['sheets']['A - Abrassion inspection'][1]['example']),'template shows actual master number in a yellow example row without a status column');
-    $withData=$markedBook; $newRow=$withData['sheets']['A - Abrassion inspection'][1]; $newRow['line']=3; $newRow['cells'][0]='NEW-A-001'; $newRow['example']=false; $withData['sheets']['A - Abrassion inspection'][]=$newRow;
-    wbCheck(count(qaMasterPerFormatSheets($withData)['sheets']['Data Alat'])===count($actualSample)+2,'used sheet includes actual master examples beside real data');
-    unset($withData['sheets']['A - Abrassion inspection'][1]);
-    wbCheck(count(qaMasterPerFormatSheets($withData)['sheets']['Data Alat'])===count($actualSample)+1,'removing an actual master example is optional');
-} finally { unlink($markedPath); }
-$markedRows=wbParse($markedTemplate,$schema);
-wbCheck(count($markedRows)===count($actualSample) && $markedRows[0]['data']['no_part']==='TEST-A' && !empty($markedRows[0]['header_only']),'actual master examples are processed while illustrative examples are ignored');
-wbCheck(qaCsvPlan($konek,$markedRows)['counts']['unchanged']===count($actualSample),'actual master examples already in database are skipped');
-$missingSample=qaMasterExampleData('A','REAL-SAMPLE-MISSING');
-$missingSampleRows=wbParse(qaMasterWorkbookTemplate(['A'=>$missingSample]),$schema);
-wbCheck(count($missingSampleRows)===1 && qaCsvPlan($konek,$missingSampleRows)['counts']['new']===1,'actual master example missing from database is planned as a new registration');
-wbReject(function()use($schema){wbParse(qaMasterWorkbookTemplate(),$schema);},'illustrative-only template does not import fake tools');
+wbReject(function()use($schema){wbParse(qaMasterWorkbookTemplate(),$schema);},'empty template has no tools to import');
 $template=qaMasterWorkbookTemplate();
 $universal=qaXlsxWrite(qaMasterWorkbookSheets());
 $universalRows=wbParse($universal,$schema);
-wbCheck(count($universalRows)===24 && count(array_filter($universalRows,static function($row){return $row['errors'];}))===0,'single universal download accepts all 24 mixed formats with irrelevant columns blank');
+wbCheck(count($universalRows)===26 && count(array_filter($universalRows,static function($row){return $row['errors'];}))===0,'single universal download accepts all 26 mixed formats with irrelevant columns blank');
 wbCheck(array_column(array_column($universalRows,'data'),'format_laporan')===array_keys(qaMasterFormats()),'universal examples cover every supported format in one workbook');
 $universalPlan=qaCsvPlan($konek,$universalRows);
-wbCheck($universalPlan['counts']['new']===24 && !$universalPlan['counts']['error'],'all formats can be planned together in one import');
+wbCheck($universalPlan['counts']['new']===26 && !$universalPlan['counts']['error'],'all formats can be planned together in one import');
 qaCsvApply($konek,$universalRows,$universalPlan['signature'],'test');
 foreach ($universalRows as $row) {
     $saved=qaCsvFetch($konek,'SELECT format_laporan,titik_standar_json FROM qa_part WHERE no_part=?',[$row['data']['no_part']])[0];
     wbCheck($saved['format_laporan']===$row['data']['format_laporan'] && json_decode($saved['titik_standar_json'],true)===json_decode($row['data']['titik_standar_json'],true),'universal batch preserves the correct body for Format '.$row['data']['format_laporan']);
 }
-wbCheck(qaCsvPlan($konek,$universalRows)['counts']['unchanged']===24,'universal mixed-format reupload is idempotent');
+wbCheck(qaCsvPlan($konek,$universalRows)['counts']['unchanged']===26,'universal mixed-format reupload is idempotent');
 wbCheck(count(qaCsvFetch($konek,'SELECT id FROM qa_pengecekan'))===0,'universal batch does not create measurement history');
 $wrongFormatRows=$universalRows;
 $wrongFormatRows[0]['errors'][]='Titik Standar: kolom format lain tidak boleh diisi.';
@@ -87,10 +75,9 @@ wbCheck(count(wbParse(qaXlsxWrite($wrongColumns),$schema)[0]['errors'])>0,'unive
 $path=tempnam(sys_get_temp_dir(),'qa-wb-rule-');file_put_contents($path,$template);
 try {
     $book=qaXlsxRead($path);
-    wbCheck(count(array_intersect(array_values(qaMasterFormatSheetNames()),array_keys($book['sheets'])))===24,'downloaded workbook provides one clearly named sheet per supported format');
+    wbCheck(count(array_intersect(array_values(qaMasterFormatSheetNames()),array_keys($book['sheets'])))===26,'downloaded workbook provides one clearly named sheet per supported format');
     wbCheck(!in_array('DATA | STANDAR REPEATABILITY (F)',$book['sheets']['F - Timbangan digital'][0]['cells'],true) && !in_array('TITIK | ZONA',$book['sheets']['F - Timbangan digital'][0]['cells'],true),'new template leaves Format F body parameters for first-time system entry');
-    wbCheck(count($book['sheets']['A - Abrassion inspection'])===2 && count($book['sheets']['Y - Hygro Thermometer'])===2,'all format sheets include a clearly marked example row');
-    wbCheck($book['sheets']['A - Abrassion inspection'][1]['cells'][0]==='CONTOH-A-001' && !empty($book['sheets']['A - Abrassion inspection'][1]['example']),'illustrative example is clearly styled and never imported before deletion');
+    wbCheck(count($book['sheets']['A - Abrassion inspection'])===1 && count($book['sheets']['Y - Hygro Thermometer'])===1,'formats without real masterdata have no fabricated example row');
 } finally { unlink($path); }
 $sheetFormat='N'; $sheetDataFields=qaMasterDataFields(); unset($sheetDataFields['format_laporan'],$sheetDataFields['no_part']);
 foreach (['std_sec1','std_sec3','batas_bawah','batas_atas'] as $key) unset($sheetDataFields[$key]);
@@ -163,7 +150,7 @@ wbReject(function()use($schema){qaCsvParse("no_part,nama_part,seksi_pemilik,peri
 $headerPath=tempnam(sys_get_temp_dir(),'qa-header-'); file_put_contents($headerPath,$template);
 try { $headerBook=qaXlsxRead($headerPath); } finally { unlink($headerPath); }
 $headerCells=$headerBook['sheets']['A - Abrassion inspection'][0]['cells'];
-$headerValues=$headerBook['sheets']['A - Abrassion inspection'][1]['cells']; $headerValues[0]='NEW-HEADER-A';
+$headerValues=wbHeaderExampleRow('A','NEW-HEADER-A');
 $headerRows=wbParse(qaXlsxWrite(['A - Abrassion inspection'=>[$headerCells,$headerValues]]),$schema);
 wbCheck(count($headerRows)===1 && !$headerRows[0]['errors'] && !isset($headerRows[0]['data']['titik_standar_json']),'header-only Excel parses without body points');
 $headerPlan=qaCsvPlan($konek,$headerRows); wbCheck($headerPlan['counts']['new']===1,'header-only Excel plans a new registration');
@@ -177,4 +164,18 @@ wbCheck($reuploadPlan['counts']['unchanged']===1 && !$reuploadPlan['counts']['er
 qaCsvApply($konek,$reupload,$reuploadPlan['signature'],'test');
 $savedName=qaCsvFetch($konek,'SELECT nama_part FROM qa_part WHERE no_part=?',['NEW-HEADER-A'])[0]['nama_part'];
 wbCheck($savedName!=='Should not overwrite existing tool','reupload leaves existing master unchanged');
+$szTemplatePath=tempnam(sys_get_temp_dir(),'qa-sz-'); file_put_contents($szTemplatePath,$template);
+try { $szBook=qaXlsxRead($szTemplatePath); } finally { unlink($szTemplatePath); }
+$szSheets=[];
+foreach (['S','Z'] as $format) {
+    $name=qaMasterFormatSheetNames()[$format];
+    $cells=$szBook['sheets'][$name];
+    $example=wbHeaderExampleRow($format,'NEW-'.$format.'-001');
+    $szSheets[$name]=[$cells[0]['cells'],$example];
+}
+$szRows=wbParse(qaXlsxWrite($szSheets),$schema);
+wbCheck(count($szRows)===2 && !$szRows[0]['errors'] && !$szRows[1]['errors'] && array_column(array_column($szRows,'data'),'format_laporan')===['S','Z'],'new S and Z tabs import header metadata without body');
+wbCheck(qaCsvPlan($konek,$szRows)['counts']['new']===2,'S and Z header-only imports plan new registrations');
+wbReject(function(){qaMasterValidatePoints('S',[['line'=>2,'data'=>['arah'=>'NAIK','standar'=>'10','toleransi'=>'1']]]);},'S requires both NAIK and TURUN');
+wbReject(function(){qaMasterValidatePoints('Z',[['line'=>2,'data'=>['setting'=>'abc']]]);},'Z requires numeric Setting');
 echo $checks.' checks passed; only temporary tables were written.'.PHP_EOL;

@@ -11,14 +11,13 @@ $konek->set_charset('utf8mb4');
 function csvH($value){return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');}
 if (empty($_SESSION['qa_csv_csrf'])) $_SESSION['qa_csv_csrf'] = bin2hex(random_bytes(32));
 $csrf = $_SESSION['qa_csv_csrf'];
-$error = ''; $schema = []; $transactional = false; $samples = [];
+$error = ''; $schema = []; $transactional = false;
 $flash = $_SESSION['qa_csv_flash'] ?? null;
 unset($_SESSION['qa_csv_flash']);
 $actor = trim((string)($_SESSION['userid'] ?? ''));
 try {
     $schema = qaCsvSchema($konek);
     $transactional = qaCsvTransactional($konek);
-    $samples = qaMasterSampleRecords($konek);
 } catch (Throwable $e) {
     error_log('QA CSV schema: '.$e->getMessage());
     $error = $e instanceof mysqli_sql_exception ? 'Struktur database belum siap untuk upload master data.' : $e->getMessage();
@@ -30,7 +29,7 @@ if (isset($_GET['template']) && in_array($_GET['template'], ['1','csv','xlsx'], 
     }
     if ($error) { http_response_code(503); echo csvH($error); exit; }
     try {
-        $workbook = qaMasterWorkbookTemplate($samples);
+        $workbook = qaMasterWorkbookTemplate();
     } catch (Throwable $e) {
         error_log('QA Excel template: '.$e->getMessage());
         http_response_code(503);
@@ -149,29 +148,23 @@ $items = $validation ? array_slice($validation['items'], ($page-1)*100, 100) : [
 <main class="csv-container">
     <section class="csv-card">
         <h2>Upload Master Data Excel / CSV</h2>
-        <p>Tambahkan alat baru atau perbarui alat yang sudah ada berdasarkan <b>No. Alat</b>.</p>
+        <p>Daftarkan alat baru berdasarkan <b>No. Alat</b>. Alat yang sudah ada dilewati.</p>
         <?php if ($error): ?><div class="alert alert-danger" role="alert"><?=csvH($error)?></div><?php endif; ?>
         <?php if ($flash): ?><div class="alert alert-success" role="status">Import selesai: <b><?=(int)$flash['new']?></b> alat ditambahkan, <b><?=(int)$flash['update']?></b> diperbarui, dan <b><?=(int)$flash['unchanged']?></b> tidak berubah.</div><?php endif; ?>
         <a class="btn btn-default" href="?template=xlsx"><i class="fa fa-download"></i> Unduh Template Excel</a>
-        <p class="text-muted" style="margin-top:10px">Satu template mencakup seluruh 24 format, masing-masing pada tab terpisah. Saat dibuka, mulai dari sheet <b>Mulai di Sini</b>.</p>
-        <?php $featuredFormat=isset($samples['P'])?'P':(array_key_first($samples)??'A'); $featured=$samples[$featuredFormat]??null; ?>
+        <p class="text-muted" style="margin-top:10px">Satu template mencakup seluruh 26 format, masing-masing pada tab terpisah. Saat dibuka, mulai dari sheet <b>Mulai di Sini</b>.</p>
         <div class="example-help" aria-labelledby="exampleTitle">
-            <h3 id="exampleTitle">Contoh pengisian di Excel</h3>
-            <p>Buka tab <b><?=csvH(qaMasterFormatSheetNames()[$featuredFormat])?></b>. Baris kuning dari masterdata asli ikut diproses: No. Alat yang sudah ada dilewati, yang belum ada didaftarkan. Baris ilustratif dilewati. Isi data alatmu mulai baris 3 tanpa menghapus contoh.</p>
-            <div class="csv-table-wrap"><table class="table table-bordered csv-table"><thead><tr><th>Baris</th><th>NO. ALAT</th><th>HEADER LAPORAN + BBRAU | NAMA ALAT</th><th>HEADER LAPORAN + BBRAU | SEKSI</th><th>FOOTER LAPORAN + BBRAU | PERIODE</th></tr></thead><tbody>
-                <tr class="example-sample"><td>2 — <?=$featured?'contoh master asli':'contoh ilustratif'?></td><td><?=csvH($featured['no_part']??'CONTOH-'.$featuredFormat.'-001')?></td><td><?=csvH($featured['nama_part']??'Contoh '.qaMasterFormatLabels()[$featuredFormat])?></td><td><?=csvH($featured['seksi_pemilik']??'QA')?></td><td><?=csvH($featured['periode_kalibrasi']??'365')?></td></tr>
-                <tr class="example-entry"><td>3 — isi di sini</td><td>nomor alatmu</td><td>nama alatmu</td><td>seksi terdaftar</td><td>periode kalibrasi (hari)</td></tr>
-            </tbody></table></div>
-            <p class="text-muted">Untuk format yang sudah ada di masterdata, <b>No. Alat dan metadata awal</b> diambil dari master; nilai kolom yang belum tersedia adalah ilustrasi. Format tanpa masterdata diberi label <b>Contoh ilustrasi</b> dan tidak ikut diimpor.</p>
-            <details class="example-list"><summary>Lihat contoh awal untuk semua 24 format</summary><div class="csv-table-wrap"><table class="table table-bordered csv-table"><thead><tr><th>Tab format</th><th>No. Alat contoh</th><th>Nama alat contoh</th><th>Seksi</th><th>Sumber</th></tr></thead><tbody>
-                <?php foreach (qaMasterFormatSheetNames() as $format=>$sheet): $sample=$samples[$format]??null; ?>
-                <tr><td><?=csvH($sheet)?></td><td><?=csvH($sample['no_part']??'CONTOH-'.$format.'-001')?></td><td><?=csvH($sample['nama_part']??'Contoh '.$format.' - '.qaMasterFormatLabels()[$format])?></td><td><?=csvH($sample['seksi_pemilik']??'QA')?></td><td><span class="source-badge<?=$sample?'':' is-illustrative'?>"><?=$sample?'Masterdata + ilustrasi':'Ilustrasi'?></span></td></tr>
-                <?php endforeach; ?>
-            </tbody></table></div></details>
+            <h3 id="exampleTitle">Contoh pengisian di halaman ini</h3>
+            <p>Misalnya alat <b>Format P - SK Gauge</b>. Di Excel, buka tab itu dan isi baris 2 seperti berikut. Contoh ini hanya panduan di halaman; <b>file Excel yang diunduh tetap kosong</b>.</p>
+            <div class="csv-table-wrap"><table class="table table-bordered csv-table">
+                <thead><tr><th>NO. ALAT</th><th>HEADER LAPORAN + BBRAU | NAMA ALAT</th><th>HEADER LAPORAN + BBRAU | SEKSI</th><th>FOOTER LAPORAN + BBRAU | PERIODE KALIBRASI (HARI)</th><th>HEADER LAPORAN + BBRAU | TANGGAL REGISTRASI</th></tr></thead>
+                <tbody><tr class="example-sample"><td>CONTOH-P-001</td><td>SK Gauge</td><td>MACHINING 3</td><td>365</td><td>2026-11-02</td></tr></tbody>
+            </table></div>
+            <p class="text-muted">Ganti semua nilai contoh dengan data alat sebenarnya. Kolom lain seperti spesifikasi, metode kalibrasi, standar uji, dan traceability diisi sesuai dokumen alat. Titik standar diisi di halaman kalibrasi setelah upload.</p>
         </div>
-        <p><b>Cara singkat:</b> pilih tab format dan isi satu baris per alat mulai baris 3. Contoh master asli ikut aturan No. Alat yang sama; contoh ilustratif dilewati. Penanda kolom menunjukkan data yang masuk ke header/footer laporan dan BBRAU.</p>
+        <p><b>Cara singkat:</b> pilih tab format, lalu isi satu alat per baris mulai baris 2. Semua tab kosong. Penanda kolom menunjukkan data yang masuk ke header/footer laporan dan BBRAU.</p>
         <p>Kolom body/titik standar tidak diisi di Excel. Setelah upload, sistem membuka halaman kalibrasi untuk melengkapi titik standar pertama kali. Alat baru langsung berstatus <b>Register</b>; setelah titik standar disimpan, form kalibrasi biasa muncul.</p>
-        <p>Untuk banyak alat dalam satu file, sistem membuka alat pertama. Cari No. Alat berikutnya di halaman kalibrasi untuk melengkapi titik standarnya. Format S dan Z menunggu susunan laporan/body.</p>
+        <p>Untuk banyak alat dalam satu file, sistem membuka alat pertama. Cari No. Alat berikutnya di halaman kalibrasi untuk melengkapi titik standarnya. Format S dan Z sudah tersedia; standar awalnya diisi di halaman kalibrasi setelah upload.</p>
         <p>No. Alat yang belum ada akan didaftarkan. No. Alat yang sudah ada dilewati tanpa mengubah metadata atau titik standar.</p>
         <form method="post" action="upload_master_csv.php" enctype="multipart/form-data" class="csv-upload" id="masterUploadForm">
             <input type="hidden" name="csrf" value="<?=csvH($csrf)?>"><input type="hidden" name="action" value="upload">
@@ -181,7 +174,7 @@ $items = $validation ? array_slice($validation['items'], ($page-1)*100, 100) : [
         </form>
         <?php if (!$transactional): ?><p class="text-warning" style="margin-top:12px"><b>Catatan:</b> database MyISAM tidak mendukung rollback jika server gagal saat batch berjalan. Backup database sebelum upload banyak alat.</p><?php endif; ?>
         <p id="csvFileHelp" class="text-muted" style="margin-top:10px">Untuk template per format, simpan sebagai <b>Excel Workbook (.xlsx)</b>, bukan CSV; CSV tidak menyimpan tab. Maksimal 2 MB dan 1.000 alat per file. CSV format lama harus UTF-8; pemisah koma, titik koma, atau tab dikenali otomatis.</p>
-        <p><b>Nama Alat, No. Alat, Periode Kalibrasi, dan Seksi wajib diisi.</b> Gunakan nama seksi yang terdaftar; satu file boleh berisi beberapa seksi dan format. Untuk Excel, lengkapi kolom header/footer pada tab format yang sesuai. Isi <b>Tanggal Registrasi</b> agar Rencana Kalibrasi dihitung otomatis dari tanggal tersebut + periode, atau isi Rencana Kalibrasi langsung. CSV wajib berisi Rencana Kalibrasi.</p>
+        <p><b>Nama Alat, No. Alat, Periode Kalibrasi, Seksi, dan Tanggal Registrasi wajib diisi pada Excel.</b> Gunakan nama seksi yang terdaftar; satu file boleh berisi beberapa seksi dan format. Rencana Kalibrasi dapat dibiarkan kosong agar dihitung otomatis dari Tanggal Registrasi + Periode. CSV format lama tetap wajib berisi Rencana Kalibrasi.</p>
         <p>Isi <b>Periode Kalibrasi</b> dalam <b>satuan hari</b>, misalnya <b>180</b> atau <b>365</b>. Tanggal dapat ditulis <b>16 - 09 - 2026</b>, <b>16-09-2026</b>, atau <b>2026-09-16</b>. CSV lama tetap hanya memperbarui data dasar; isian Spesifikasi dan Resolusi yang kosong mempertahankan nilai lama.</p>
     </section>
     <?php if ($validation): ?>

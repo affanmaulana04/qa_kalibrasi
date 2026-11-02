@@ -16,10 +16,10 @@ function qaMasterFormats(): array {
         'O'=>['spesifikasi','tol_plus','tol_minus','go_std','go_tol_near','go_tol_far','notgo_std','notgo_tol'],
         'P'=>['group_id','type_ukuran','alat_nama','alat_no','std_label','toleransi_mode','toleransi','tol_plus','tol_minus'],
         'Q'=>['bagian','std_spesifikasi','std_no_alat','std','tol_minus','tol_plus'],
-        'R'=>['bagian','standar','toleransi'],
+        'R'=>['bagian','standar','toleransi'], 'S'=>['arah','standar','toleransi'],
         'T'=>['group_id','spesifikasi_standar','resolusi_standar','no_alat_standar','posisi','standar','tol_minus','tol_plus'],
         'U'=>['standar'], 'V'=>['bagian','standar'], 'W'=>['standar'],
-        'X'=>['bagian','standar'], 'Y'=>['bagian','standar','toleransi']
+        'X'=>['bagian','standar'], 'Y'=>['bagian','standar','toleransi'], 'Z'=>['setting']
     ];
 }
 function qaMasterFormatLabels(): array {
@@ -28,9 +28,9 @@ function qaMasterFormatLabels(): array {
         'E'=>'Thermometer digital','F'=>'Timbangan digital','G'=>'Air Torque','H'=>'Thread plug gauge',
         'I'=>'Thread Ring gauge','J'=>'Radius gauge','K'=>'Voltage Ultrasonic PL PB II',
         'L'=>'Lux Meter, Pressure gauge','M'=>'Profile Projector','N'=>'Puller gauge',
-        'O'=>'Snap gauge','P'=>'SK Gauge','Q'=>'Seration plug gauge','R'=>'Gauge Verifikasi',
+        'O'=>'Snap gauge','P'=>'SK Gauge','Q'=>'Seration plug gauge','R'=>'Gauge Verifikasi','S'=>'Gelas ukur',
         'T'=>'Plug gauge','U'=>'Ring standar, Dial Caliper gage, Height gage, Cylinder gage, Inside micrometer, Penggaris, Tapered Gage, Infrared Thermometer',
-        'V'=>'Sigmat Digital','W'=>'Bevel protractor','X'=>'Dial Indicator','Y'=>'Hygro Thermometer'
+        'V'=>'Sigmat Digital','W'=>'Bevel protractor','X'=>'Dial Indicator','Y'=>'Hygro Thermometer','Z'=>'Blow Timer (Naniwa 6)'
     ];
 }
 function qaMasterFormatDisplay(string $format): string {
@@ -38,7 +38,7 @@ function qaMasterFormatDisplay(string $format): string {
 }
 function qaMasterFormatCode(string $value): string {
     $value=mb_strtoupper(trim($value),'UTF-8');
-    return preg_match('/^([A-RT-Y])(?:\s|$|[-—:])/', $value, $match) ? $match[1] : $value;
+    return preg_match('/^([A-Z])(?:\s|$|[-—:])/', $value, $match) ? $match[1] : $value;
 }
 function qaMasterFormatSheetNames(): array {
     return [
@@ -46,9 +46,9 @@ function qaMasterFormatSheetNames(): array {
         'E'=>'E - Thermometer digital','F'=>'F - Timbangan digital','G'=>'G - Air Torque','H'=>'H - Thread plug gauge',
         'I'=>'I - Thread Ring gauge','J'=>'J - Radius gauge','K'=>'K - Voltage Ultrasonic',
         'L'=>'L - Lux Meter Pressure','M'=>'M - Profile Projector','N'=>'N - Puller gauge',
-        'O'=>'O - Snap gauge','P'=>'P - SK Gauge','Q'=>'Q - Seration plug gauge','R'=>'R - Gauge Verifikasi',
+        'O'=>'O - Snap gauge','P'=>'P - SK Gauge','Q'=>'Q - Seration plug gauge','R'=>'R - Gauge Verifikasi','S'=>'S - Gelas ukur',
         'T'=>'T - Plug gauge','U'=>'U - Ring standar dll','V'=>'V - Sigmat Digital',
-        'W'=>'W - Bevel protractor','X'=>'X - Dial Indicator','Y'=>'Y - Hygro Thermometer'
+        'W'=>'W - Bevel protractor','X'=>'X - Dial Indicator','Y'=>'Y - Hygro Thermometer','Z'=>'Z - Blow Timer'
     ];
 }
 
@@ -115,7 +115,9 @@ function qaMasterRequired(string $format): array {
         'V'=>'resolusi,toleransi_global,satuan,metode_uji,standar_uji,traceability',
         'W'=>'resolusi,toleransi_global,metode_uji,standar_uji,traceability',
         'X'=>'spesifikasi,resolusi,toleransi_global,satuan,metode_uji,standar_uji,traceability',
-        'Y'=>'spesifikasi,resolusi,metode_uji,standar_uji,traceability'
+        'Y'=>'spesifikasi,resolusi,metode_uji,standar_uji,traceability',
+        'S'=>'spesifikasi,resolusi,toleransi_global,satuan,metode_uji,standar_uji,traceability',
+        'Z'=>'spesifikasi,resolusi,toleransi_global,satuan,metode_uji,standar_uji,traceability'
     ];
     return array_merge(['format_laporan','no_part','nama_part','seksi_pemilik','periode_kalibrasi','lokasi'], explode(',', $required[$format] ?? ''));
 }
@@ -136,7 +138,8 @@ function qaMasterExamplePoints(string $format): array {
     $groups = ['A'=>['posisi',['GO','NOT GO']], 'H'=>['posisi_ukur',['GO','NOT GO','PLUG']],
         'M'=>['jenis',['AXIS','ANGLE']], 'Q'=>['bagian',['OUT','PITCH']], 'R'=>['bagian',['Ø OUT','Ø DALAM','HEIGHT']],
         'T'=>['posisi',['GO','NOT GO']], 'V'=>['bagian',['OUTSIDE','INSIDE','DEPTH']],
-        'X'=>['bagian',['KESTABILAN','MAJU','MUNDUR']], 'Y'=>['bagian',['SUHU','HUMIDITY']]];
+        'X'=>['bagian',['KESTABILAN','MAJU','MUNDUR']], 'Y'=>['bagian',['SUHU','HUMIDITY']],
+        'S'=>['arah',['NAIK','TURUN']]];
     if (!isset($groups[$format])) return [$row];
     [$key,$values] = $groups[$format]; $rows = [];
     foreach ($values as $value) {
@@ -171,8 +174,8 @@ function qaMasterWorkbookSheets(array $formats = []): array {
     }
     $guide = [
         ['BAGIAN / FORMAT','PETUNJUK / KOLOM WAJIB DATA ALAT','KOLOM TITIK STANDAR'],
-        ['Template universal','Satu Excel untuk semua format A–R dan T–Y. Pilih FORMAT LAPORAN pada setiap baris Data Alat. Satu file boleh memuat alat dengan format berbeda.'],
-        ['Contoh','Ada contoh untuk seluruh 24 format. Ganti atau hapus SEMUA contoh CONTOH-... yang tidak dipakai pada Data Alat DAN Titik Standar sebelum upload. Jangan menyisakan titik standar tanpa alat.'],
+        ['Template universal','Satu Excel untuk semua format A sampai Z. Pilih FORMAT LAPORAN pada setiap baris Data Alat. Satu file boleh memuat alat dengan format berbeda.'],
+        ['Contoh','Ada contoh untuk seluruh 26 format. Ganti atau hapus SEMUA contoh CONTOH-... yang tidak dipakai pada Data Alat DAN Titik Standar sebelum upload. Jangan menyisakan titik standar tanpa alat.'],
         ['Data Alat','Satu baris per alat; isi FORMAT LAPORAN sesuai jenis laporan. Nama seksi harus sudah terdaftar. Lihat daftar kolom wajib setiap format di bawah.'],
         ['Titik Standar','Satu baris per titik; NO. ALAT menghubungkan ke Data Alat. Isi hanya kolom milik format alat tersebut; kosongkan kolom format lain. Urutan baris dipertahankan. Isi konfigurasi standar registrasi, bukan hasil ukur.'],
         ['Tanggal','Isi TANGGAL REGISTRASI (tanggal acuan) dengan YYYY-MM-DD, DD-MM-YYYY, atau tanggal Excel. Jika RENCANA KALIBRASI kosong, dihitung tanggal registrasi + periode (hari). Isi salah satunya.'],
@@ -193,44 +196,21 @@ function qaMasterWorkbookSheets(array $formats = []): array {
     }
     return ['Data Alat'=>$dataRows,'Titik Standar'=>$points,'Panduan'=>$guide];
 }
-function qaMasterSampleRecords(mysqli $db): array {
-    $fields=['format_laporan','no_part','nama_part','spesifikasi','resolusi','fungsi','no_fa','lokasi','merk','type','buatan','seksi_pemilik','periode_kalibrasi','tanggal_registrasi','jadwal_kalibrasi','metode_uji','toleransi_global','standar_uji','satuan','traceability','no_seri'];
-    $rows=qaCsvFetch($db,'SELECT '.implode(',',array_map(static fn($field)=>'`'.$field.'`',$fields)).' FROM qa_part WHERE format_laporan IS NOT NULL AND format_laporan <> \'\' ORDER BY id');
-    $samples=[]; $scores=[];
-    foreach ($rows as $row) {
-        $format=qaMasterFormatCode((string)$row['format_laporan']);
-        if (!isset(qaMasterFormats()[$format]) || trim((string)$row['no_part'])==='' || trim((string)$row['nama_part'])==='') continue;
-        $score=0;
-        if (!preg_match('/\b(test|testing|demo|contoh)\b/i',(string)$row['nama_part'].' '.$row['no_part'])) $score+=5;
-        foreach (['spesifikasi','resolusi','lokasi','merk','metode_uji','standar_uji'] as $field) if (trim((string)$row[$field])!=='') $score++;
-        if (!isset($scores[$format]) || $score>$scores[$format]) { $samples[$format]=$row; $scores[$format]=$score; }
-    }
-    return $samples;
-}
-function qaMasterWorkbookTemplate(array $samples = []): string {
+function qaMasterWorkbookTemplate(): string {
     $start=[
         ['TEMPLATE UPLOAD MASTER ALAT','Isi header dan footer laporan / BBRAU. Titik standar diisi di sistem.'],
-        ['1. Pilih tab format','Buka tab jenis alat. Format S dan Z belum tersedia.'],
-        ['2. Isi mulai baris 3','Satu alat satu baris. Judul kolom menunjukkan tujuan datanya.'],
-        ['3. Biarkan contoh','Contoh dari masterdata asli ikut diproses: alat yang belum ada didaftarkan, alat yang sudah ada dilewati. Contoh ilustratif selalu dilewati.'],
-        ['4. Upload','Isi data alatmu mulai baris 3. Sesudah upload, isi titik standar awal alat baru di halaman kalibrasi.'],
+        ['1. Pilih tab format','Buka tab sesuai jenis alat. Semua format A sampai Z tersedia.'],
+        ['2. Isi mulai baris 2','Semua tab kosong. Isi satu alat per baris mulai baris 2.'],
+        ['3. Upload','Alat baru didaftarkan, nomor alat yang sudah ada dilewati. Isi titik standar awal di halaman kalibrasi.'],
         ['PENTING','Jangan mengganti nama tab atau judul kolom. Tanggal registrasi dan periode wajib diisi.'],
     ];
-    foreach ($samples as $format=>$sample) if (isset(qaMasterFormats()[$format]) && trim((string)($sample['no_part']??''))!=='') {
-        $start[]=['SUMBER MASTER ASLI '.$format,(string)$sample['no_part']];
-    }
     $sheets=['Mulai di Sini'=>$start]; $options=['Mulai di Sini'=>['widths'=>[26,105],'wrap'=>true]];
     $fields=qaMasterHeaderFields(); unset($fields['format_laporan'],$fields['no_part']);
-    foreach (qaMasterFormatSheetNames() as $format=>$sheet) {
+    foreach (qaMasterFormatSheetNames() as $sheet) {
         $headers=['NO. ALAT'];
         foreach ($fields as $key=>$label) $headers[]=qaMasterHeaderLabel($key,$label);
-        $sample=$samples[$format]??null;
-        $number=$sample ? (string)$sample['no_part'] : 'CONTOH-'.$format.'-001';
-        $example=qaMasterExampleData($format,$number);
-        if ($sample) foreach ($fields as $key=>$_) if (isset($sample[$key]) && trim((string)$sample[$key])!=='') $example[$key]=(string)$sample[$key];
-        $row=[$number]; foreach (array_keys($fields) as $key) $row[]=$example[$key]??'';
-        $sheets[$sheet]=[$headers,$row,array_fill(0,count($headers),'')];
-        $options[$sheet]=['freezeColumns'=>1,'exampleRows'=>[2]];
+        $sheets[$sheet]=[$headers];
+        $options[$sheet]=['freezeColumns'=>1];
     }
     return qaXlsxWrite($sheets,[],$options);
 }
@@ -244,7 +224,7 @@ function qaMasterHeaderWorkbook(array $book): array {
     $realSamples=[];
     foreach ($book['sheets']['Mulai di Sini']??[] as $guideRow) {
         $label=(string)($guideRow['cells'][0]??'');
-        if (preg_match('/^SUMBER MASTER ASLI ([A-RT-Y])$/',$label,$match)) $realSamples[$match[1]]=strtoupper(trim((string)($guideRow['cells'][1]??'')));
+        if (preg_match('/^SUMBER MASTER ASLI ([A-Z])$/',$label,$match)) $realSamples[$match[1]]=strtoupper(trim((string)($guideRow['cells'][1]??'')));
     }
     foreach (qaMasterFormatSheetNames() as $format=>$name) {
         $sheet=$book['sheets'][$name]??[]; if (!$sheet) continue;
@@ -259,7 +239,8 @@ function qaMasterHeaderWorkbook(array $book): array {
             $values=$row['cells']; if (count(array_filter($values,static function($v){return trim((string)$v)!=='';}))===0) continue;
             $cells=[$format,$values[0]??'']; foreach (array_keys($expectedFields) as $i=>$key) $cells[]=$values[$i+1]??'';
             $numeric=[]; foreach ($row['numeric']??[] as $i=>$flag) if ($i>0) $numeric[$i+1]=$flag;
-            $rows[]=['line'=>$row['line'],'cells'=>$cells,'numeric'=>$numeric];
+            $rows[]=['line'=>$row['line'],'cells'=>$cells,'numeric'=>$numeric,
+                'real_sample'=>!empty($row['example']) && ($realSamples[$format]??'')===$exampleNo];
         }
     }
     $book['sheets']['Data Alat']=$rows;
@@ -374,7 +355,7 @@ function qaMasterValidatePoints(string $format, array $entries): array {
             'F'=>['zona'=>['B','A']], 'M'=>['jenis'=>['AXIS','ANGLE']], 'Q'=>['bagian'=>['OUT','PITCH']],
             'R'=>['bagian'=>['Ø OUT','Ø DALAM','HEIGHT']], 'T'=>['posisi'=>['GO','NOT GO']],
             'V'=>['bagian'=>['OUTSIDE','INSIDE','DEPTH']], 'X'=>['bagian'=>['KESTABILAN','MAJU','MUNDUR']],
-            'Y'=>['bagian'=>['SUHU','HUMIDITY']], 'L'=>['uji_skala_mode'=>['ARAH','NOMOR']], 'P'=>['toleransi_mode'=>['PM','RANGE']]];
+            'Y'=>['bagian'=>['SUHU','HUMIDITY']], 'S'=>['arah'=>['NAIK','TURUN']], 'L'=>['uji_skala_mode'=>['ARAH','NOMOR']], 'P'=>['toleransi_mode'=>['PM','RANGE']]];
         foreach ($choices[$format]??[] as $key=>$values) {
             $value=mb_strtoupper($point[$key],'UTF-8');
             if (!in_array($value,$values,true)) throw new RuntimeException('Titik Standar baris '.$line.': '.$key.' harus '.implode(' / ',$values).'.');
@@ -390,8 +371,8 @@ function qaMasterValidatePoints(string $format, array $entries): array {
             if ($point['jenis']==='AXIS') { $point['std_x']=$point['std_y']=$point['std_mm']; $point['toleransi_x']=$point['toleransi_y']=$point['toleransi_axis']; }
             else { $point['std_degree']=$point['std_angle']; $point['toleransi_sudut']=$point['toleransi_angle']; }
         }
-        if (in_array($format,['X','Y'],true)) {
-            foreach ($format==='Y'?['standar','toleransi']:['standar'] as $key) {
+        if (in_array($format,['X','Y','S','Z'],true)) {
+            foreach ($format==='Z'?['setting']:(in_array($format,['Y','S'],true)?['standar','toleransi']:['standar']) as $key) {
                 $value=str_replace(',','.',$point[$key]);
                 if (!preg_match('/^[+-]?(?:\d+\.?\d*|\.\d+)$/',$value) || !is_finite((float)$value) || ($key==='toleransi' && (float)$value<0)) throw new RuntimeException('Titik Standar baris '.$line.': '.$key.' harus angka valid'.($key==='toleransi'?' tidak negatif':'').'.');
             }
@@ -400,15 +381,18 @@ function qaMasterValidatePoints(string $format, array $entries): array {
     }
     if (!$rows) throw new RuntimeException('Minimal satu baris Titik Standar wajib diisi.');
     if ($format==='O' && count($rows)!==1) throw new RuntimeException('Format O harus memiliki tepat satu baris konfigurasi GO / NOT GO.');
-    if (in_array($format,['X','Y'],true)) {
-        $groups=$format==='X'?['KESTABILAN','MAJU','MUNDUR']:['SUHU','HUMIDITY']; $counts=array_fill_keys($groups,0); $last=0;
+    if (in_array($format,['X','Y','S'],true)) {
+        $groups=$format==='X'?['KESTABILAN','MAJU','MUNDUR']:($format==='S'?['NAIK','TURUN']:['SUHU','HUMIDITY']);
+        $counts=array_fill_keys($groups,0); $last=0;
         foreach ($rows as $row) {
-            $index=array_search($row['bagian'],$groups,true);
-            if ($index<$last || $index>$last+1 || ++$counts[$row['bagian']]>20) throw new RuntimeException('Format '.$format.': bagian harus berurutan, masing-masing 1–20 baris.');
+            $group=$format==='S'?$row['arah']:$row['bagian'];
+            $index=array_search($group,$groups,true);
+            if ($index<$last || $index>$last+1 || ++$counts[$group]>20) throw new RuntimeException('Format '.$format.': kelompok harus berurutan, masing-masing 1-20 baris.');
             $last=$index;
         }
         if (in_array(0,$counts,true)) throw new RuntimeException('Format '.$format.': isi semua bagian '.implode(', ',$groups).'.');
     }
+    if ($format==='Z' && count($rows)>20) throw new RuntimeException('Format Z maksimal 20 baris Setting.');
     if (in_array($format,['P','T'],true)) {
         $groups=[];
         foreach ($rows as $row) {
@@ -443,7 +427,7 @@ function qaMasterWorkbookParse(string $path, array $schema): array {
             }
             $registration=$data['tanggal_registrasi']??''; $period=qaCsvPeriod($data['periode_kalibrasi']??'');
             if (($data['jadwal_kalibrasi']??'')==='' && qaCsvDate($registration)!==null && $period!==null) $data['jadwal_kalibrasi']=(new DateTimeImmutable($registration))->modify('+'.$period.' days')->format('Y-m-d');
-            if ($registration==='') $errors[]='Tanggal Registrasi wajib diisi untuk status awal Register.';
+            if ($registration==='' && empty($row['real_sample'])) $errors[]='Tanggal Registrasi wajib diisi untuk status awal Register.';
             unset($data['tanggal_registrasi']);
             $stream=fopen('php://temp','r+'); foreach (qaCsvRequired() as $key) $data[$key]=$data[$key]??'';
             fputcsv($stream,array_keys($data),',','"',''); fputcsv($stream,array_values($data),',','"',''); rewind($stream);
@@ -451,6 +435,7 @@ function qaMasterWorkbookParse(string $path, array $schema): array {
             $parsed['line']=$row['line']; $parsed['errors']=array_merge($parsed['errors'],$errors);
             $parsed['data']['tanggal_registrasi']=$registration;
             $parsed['header_only']=true;
+            $parsed['real_sample']=!empty($row['real_sample']);
             $rows[]=$parsed;
         }
         return $rows;
@@ -468,7 +453,7 @@ function qaMasterWorkbookParse(string $path, array $schema): array {
         $data=qaMasterCells($row,$dataHeaders,'Data Alat'); $format=qaMasterFormatCode($data['format_laporan']??'');
         $data['format_laporan']=$format;
         $no=strtoupper($data['no_part']??''); $numbers[$no]=true; $errors=[];
-        if (!isset(qaMasterFormats()[$format])) { $rows[]=['line'=>$row['line'],'data'=>['no_part'=>$no],'errors'=>['Format laporan harus A–R atau T–Y.']]; continue; }
+        if (!isset(qaMasterFormats()[$format])) { $rows[]=['line'=>$row['line'],'data'=>['no_part'=>$no],'errors'=>['Format laporan harus A sampai Z.']]; continue; }
         foreach (qaMasterRequired($format) as $key) if (($data[$key]??'')==='') $errors[]=(qaMasterDataFields()[$key]??$key).' wajib diisi untuk Format '.$format.'.';
         $registration='';
         foreach (['tanggal_registrasi','jadwal_kalibrasi'] as $field) if (($data[$field]??'')!=='') {
