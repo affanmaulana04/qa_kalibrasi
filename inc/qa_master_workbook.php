@@ -111,15 +111,13 @@ function qaMasterRequired(string $format): array {
         'O'=>'satuan,metode_uji,standar_uji,traceability','P'=>'metode_uji,standar_uji,traceability',
         'Q'=>'spesifikasi,metode_uji,standar_uji,traceability','R'=>'resolusi,metode_uji,standar_uji,traceability',
         'T'=>'spesifikasi,metode_uji,standar_uji,traceability',
-        'U'=>'resolusi,toleransi_global,satuan,metode_uji,standar_uji,traceability',
-        'V'=>'resolusi,toleransi_global,satuan,metode_uji,standar_uji,traceability',
-        'W'=>'resolusi,toleransi_global,metode_uji,standar_uji,traceability',
+        'U'=>'','V'=>'','W'=>'',
         'X'=>'spesifikasi,resolusi,toleransi_global,satuan,metode_uji,standar_uji,traceability',
         'Y'=>'spesifikasi,resolusi,metode_uji,standar_uji,traceability',
-        'S'=>'spesifikasi,resolusi,toleransi_global,satuan,metode_uji,standar_uji,traceability',
-        'Z'=>'spesifikasi,resolusi,toleransi_global,satuan,metode_uji,standar_uji,traceability'
+        'S'=>'spesifikasi,resolusi,satuan,metode_uji,standar_uji,traceability',
+        'Z'=>'spesifikasi,resolusi,satuan,metode_uji,standar_uji,traceability'
     ];
-    return array_merge(['format_laporan','no_part','nama_part','seksi_pemilik','periode_kalibrasi','lokasi'], explode(',', $required[$format] ?? ''));
+    return array_merge(['format_laporan','no_part','nama_part','seksi_pemilik','periode_kalibrasi','lokasi'], array_filter(explode(',', $required[$format] ?? '')));
 }
 function qaMasterExamplePoints(string $format): array {
     $row = array_fill_keys(qaMasterFormats()[$format], '1');
@@ -202,7 +200,7 @@ function qaMasterWorkbookTemplate(): string {
         ['1. Pilih tab format','Buka tab sesuai jenis alat. Semua format A sampai Z tersedia.'],
         ['2. Isi mulai baris 2','Semua tab kosong. Isi satu alat per baris mulai baris 2.'],
         ['3. Upload','Alat baru didaftarkan, nomor alat yang sudah ada dilewati. Isi titik standar awal di halaman kalibrasi.'],
-        ['PENTING','Jangan mengganti nama tab atau judul kolom. Tanggal registrasi dan periode wajib diisi.'],
+        ['PENTING','Jangan mengganti nama tab atau judul kolom. No. Alat, Nama Alat, Seksi, Periode, dan Lokasi wajib diisi. Kolom wajib lain mengikuti format seperti di form regist. Tanggal registrasi boleh kosong (menggunakan tanggal upload); rencana kalibrasi akan dihitung otomatis.'],
     ];
     $sheets=['Mulai di Sini'=>$start]; $options=['Mulai di Sini'=>['widths'=>[26,105],'wrap'=>true]];
     $fields=qaMasterHeaderFields(); unset($fields['format_laporan'],$fields['no_part']);
@@ -418,6 +416,7 @@ function qaMasterWorkbookParse(string $path, array $schema): array {
             $data=qaMasterCells($row,$dataHeaders,'Data Alat'); $format=qaMasterFormatCode($data['format_laporan']??''); $data['format_laporan']=$format;
             $errors=[]; $no=strtoupper($data['no_part']??'');
             if (!isset(qaMasterFormats()[$format])) $errors[]='Format laporan belum tersedia.';
+            foreach (qaMasterRequired($format) as $field) if ($field!=='format_laporan' && ($data[$field]??'')==='') $errors[]=(qaMasterDataFields()[$field]??$field).' wajib diisi untuk Format '.$format.'.';
             if (isset($seen[$no])) $errors[]='Nomor alat berulang dalam file.';
             $seen[$no]=true;
             foreach (['tanggal_registrasi','jadwal_kalibrasi'] as $field) if (($data[$field]??'')!=='') {
@@ -425,9 +424,10 @@ function qaMasterWorkbookParse(string $path, array $schema): array {
                 $date=qaMasterExcelDate($data[$field],isset($row['numeric'][$column]),$book['date1904']);
                 if ($date===null) $errors[]=(qaMasterDataFields()[$field]).' tidak valid.'; else $data[$field]=$date;
             }
-            $registration=$data['tanggal_registrasi']??''; $period=qaCsvPeriod($data['periode_kalibrasi']??'');
+            $registration=$data['tanggal_registrasi']??'';
+            if ($registration==='') $registration=(new DateTimeImmutable('today',new DateTimeZone('Asia/Bangkok')))->format('Y-m-d');
+            $period=qaCsvPeriod($data['periode_kalibrasi']??'');
             if (($data['jadwal_kalibrasi']??'')==='' && qaCsvDate($registration)!==null && $period!==null) $data['jadwal_kalibrasi']=(new DateTimeImmutable($registration))->modify('+'.$period.' days')->format('Y-m-d');
-            if ($registration==='' && empty($row['real_sample'])) $errors[]='Tanggal Registrasi wajib diisi untuk status awal Register.';
             unset($data['tanggal_registrasi']);
             $stream=fopen('php://temp','r+'); foreach (qaCsvRequired() as $key) $data[$key]=$data[$key]??'';
             fputcsv($stream,array_keys($data),',','"',''); fputcsv($stream,array_values($data),',','"',''); rewind($stream);

@@ -153,6 +153,31 @@ $headerCells=$headerBook['sheets']['A - Abrassion inspection'][0]['cells'];
 $headerValues=wbHeaderExampleRow('A','NEW-HEADER-A');
 $headerRows=wbParse(qaXlsxWrite(['A - Abrassion inspection'=>[$headerCells,$headerValues]]),$schema);
 wbCheck(count($headerRows)===1 && !$headerRows[0]['errors'] && !isset($headerRows[0]['data']['titik_standar_json']),'header-only Excel parses without body points');
+$headerKeys=array_values(array_diff(array_keys(qaMasterHeaderFields()),['format_laporan','no_part']));
+$registrationIndex=array_search('tanggal_registrasi',$headerKeys,true)+1;
+$scheduleIndex=array_search('jadwal_kalibrasi',$headerKeys,true)+1;
+$blankDateValues=$headerValues;
+$blankDateValues[$registrationIndex]='';
+$blankDateValues[$scheduleIndex]='';
+$blankDateRows=wbParse(qaXlsxWrite(['A - Abrassion inspection'=>[$headerCells,$blankDateValues]]),$schema);
+$today=(new DateTimeImmutable('today',new DateTimeZone('Asia/Bangkok')))->format('Y-m-d');
+$expectedSchedule=(new DateTimeImmutable($today))->modify('+'.qaCsvPeriod($blankDateRows[0]['data']['periode_kalibrasi']).' days')->format('Y-m-d');
+wbCheck(!$blankDateRows[0]['errors'] && $blankDateRows[0]['data']['tanggal_registrasi']===$today && $blankDateRows[0]['data']['jadwal_kalibrasi']===$expectedSchedule,'blank registration and schedule use upload date and period: '.implode('; ',$blankDateRows[0]['errors']));
+$optionalFields=array_keys(qaMasterHeaderFields());
+$optionalFields=array_values(array_diff($optionalFields,['format_laporan','no_part']));
+$spesifikasiIndex=array_search('spesifikasi',$optionalFields,true)+1;
+$missingRequired=$headerValues; $missingRequired[$spesifikasiIndex]='';
+$requiredRows=wbParse(qaXlsxWrite(['A - Abrassion inspection'=>[$headerCells,$missingRequired]]),$schema);
+wbCheck((bool)$requiredRows[0]['errors'],'Excel rejects a field required by the matching registration form');
+foreach (['S','Z','U','V','W'] as $optionalFormat) {
+    $optionalName=qaMasterFormatSheetNames()[$optionalFormat];
+    $optionalValues=wbHeaderExampleRow($optionalFormat,'OPTIONAL-'.$optionalFormat);
+    foreach (['toleransi_global',...($optionalFormat==='U'||$optionalFormat==='V'||$optionalFormat==='W'?['resolusi','satuan','metode_uji','standar_uji','traceability']:[])] as $field) {
+        $optionalValues[array_search($field,$headerKeys,true)+1]='';
+    }
+    $optionalRows=wbParse(qaXlsxWrite([$optionalName=>[$headerBook['sheets'][$optionalName][0]['cells'],$optionalValues]]),$schema);
+    wbCheck(!$optionalRows[0]['errors'],'Format '.$optionalFormat.' accepts fields optional in registration form: '.implode('; ',$optionalRows[0]['errors']));
+}
 $headerPlan=qaCsvPlan($konek,$headerRows); wbCheck($headerPlan['counts']['new']===1,'header-only Excel plans a new registration');
 qaCsvApply($konek,$headerRows,$headerPlan['signature'],'test');
 $headerSaved=qaCsvFetch($konek,'SELECT titik_standar_json FROM qa_part WHERE no_part=?',['NEW-HEADER-A'])[0];

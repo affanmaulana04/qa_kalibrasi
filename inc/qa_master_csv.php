@@ -222,9 +222,6 @@ function qaCsvPlan(mysqli $db, array $rows, bool $lock = false): array {
         $masters = $context['master'][$no] ?? []; $registries = $context['registry'][$no] ?? [];
         $master = $masters[0] ?? null; $registry = $registries[0] ?? null;
         $history = $context['history'][$no] ?? []; $archives = $context['archive'][$no] ?? [];
-        if (!empty($row['real_sample']) && !$master && empty($data['tanggal_registrasi'])) {
-            $errors[]='Contoh master asli ini belum punya Tanggal Registrasi. Isi tanggal tersebut sebelum mendaftarkannya kembali.';
-        }
         // The new header-only workbook is insert-only. Existing tools, including
         // yellow examples copied from masterdata, must never change on reupload.
         if (!empty($row['header_only']) && $master && $registry && count($masters)===1 && count($registries)===1 && !$errors) {
