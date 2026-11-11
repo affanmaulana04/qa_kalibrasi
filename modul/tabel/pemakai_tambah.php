@@ -1,21 +1,207 @@
 <?php
 session_start();
-if (empty($_SESSION['login'])) { header('Location: ../../logout.php'); exit; }
+if (empty($_SESSION['login'])) {
+    header('Location: ../../logout.php');
+    exit;
+}
 include '../../inc/inc_koneksi.php';
-require_once __DIR__.'/../../inc/qa_rbac.php';
-if (empty($_SESSION['qa_user_admin_csrf'])) $_SESSION['qa_user_admin_csrf']=bin2hex(random_bytes(20));
+require_once __DIR__ . '/../../inc/qa_rbac.php';
+if (empty($_SESSION['qa_user_admin_csrf']))
+    $_SESSION['qa_user_admin_csrf'] = bin2hex(random_bytes(20));
 
-if (!qaRbacIsAdmin($konek)) {http_response_code(403);exit('Hanya Admin QA.');}
-qaRbacRequire($konek,'pengguna',false);
-$id_pemakai=trim((string)($_SESSION['userid']??'')); $nama_pemakai=trim((string)($_SESSION['username']??$id_pemakai));
-$is_admin=strtoupper((string)($_SESSION['admin']??'N'))==='Y'||strtolower((string)($_SESSION['role']??''))==='admin'; if(!$is_admin){http_response_code(403);exit('Akses ditolak.');}
-function ensure_user_column($db,$col,$def){$q=mysqli_query($db,"SHOW COLUMNS FROM `user` LIKE '".mysqli_real_escape_string($db,$col)."'");if($q&&mysqli_num_rows($q)===0)mysqli_query($db,"ALTER TABLE `user` ADD COLUMN `".$col."` ".$def);} ensure_user_column($konek,'pembuat',"ENUM('Y','N') NOT NULL DEFAULT 'N'");ensure_user_column($konek,'pemeriksa',"ENUM('Y','N') NOT NULL DEFAULT 'N'");ensure_user_column($konek,'penyetuju',"ENUM('Y','N') NOT NULL DEFAULT 'N'");ensure_user_column($konek,'block',"ENUM('Y','N') NOT NULL DEFAULT 'N'");
-$customRoles=qaRbacActiveRoles($konek);
-$seksi=[]; $qs=mysqli_query($konek,"SELECT DISTINCT seksi FROM `user` WHERE seksi IS NOT NULL AND seksi<>'' ORDER BY seksi"); if($qs) while($s=mysqli_fetch_assoc($qs)) $seksi[]=$s['seksi'];
-?><!DOCTYPE html><html lang="id"><head><link rel="icon" type="image/png" href="/qa_kalibrasi/images/favicon-toto-qa.png?v=1"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tambah User QA</title><link href="../../css/bootstrap.min.css" rel="stylesheet">
-<link href="../../font-awesome-4.3.0/css/font-awesome.min.css" rel="stylesheet">
-<link href="../../css/bootstrap-dialog.css" rel="stylesheet">
-<style>body{padding-top:70px;background:#f4f6f9}.card{background:#fff;border:1px solid #ddd;border-radius:10px;padding:24px;margin-bottom:20px}.navbar-brand img{height:25px;margin-top:-3px}.form-title{font-weight:700;color:#1E3F66;margin-top:0}.btn-row{margin-top:25px}</style></head><body><nav class="navbar navbar-default navbar-fixed-top"><div class="container-fluid"><div class="navbar-header"><a class="navbar-brand" href="../../media.php"><img src="../../images/toto.png"></a></div><ul class="nav navbar-nav navbar-left"><li><a href="pemakai.php"><i class="fa fa-arrow-left"></i> Tabel Pemakai QA</a></li></ul><ul class="nav navbar-nav navbar-right"><li><a><i class="fa fa-user"></i> <?php echo htmlspecialchars($nama_pemakai,ENT_QUOTES); ?></a></li><li><a href="../../logout.php">Logout</a></li></ul></div></nav><div class="container"><div class="card"><h3 class="form-title">Tambah User QA</h3><form id="formUser"><input type="hidden" name="qa_user_csrf" value="<?=htmlspecialchars($_SESSION['qa_user_admin_csrf'],ENT_QUOTES,'UTF-8')?>"><input type="hidden" name="status_proses" value="tambah"><input type="hidden" name="xloginid" value="<?php echo htmlspecialchars($id_pemakai,ENT_QUOTES); ?>"><div class="row"><div class="col-md-6"><div class="form-group"><label>ID User *</label><input class="form-control" name="input_uid" id="input_uid" maxlength="30" required></div><div class="form-group"><label>Nama *</label><input class="form-control" name="input_uname" id="input_uname" maxlength="100" required></div><div class="form-group"><label>Password *</label><input type="password" class="form-control" name="input_upwd" id="input_upwd" maxlength="35" required></div><div class="form-group"><label>Sapaan</label><select class="form-control" name="input_sapaan"><option value="">-</option><option>Bpk.</option><option>Ibu</option><option>Mr.</option><option>Mrs.</option><option>Miss</option></select></div><div class="form-group"><label>Seksi</label><input class="form-control" name="input_seksi" list="seksiList"><datalist id="seksiList"><?php foreach($seksi as $s) echo '<option value="'.htmlspecialchars($s,ENT_QUOTES).'">'; ?></datalist></div><div class="form-group"><label>E-mail</label><input type="email" class="form-control" name="input_email"></div></div><div class="col-md-6"><div class="form-group" style="margin-top:15px"><label>Custom Role (Hak Akses Halaman) *</label><select class="form-control" name="input_custom_role" required><option value="">-- Pilih Role --</option><?php foreach($customRoles as $r): ?><option value="<?=(int)$r['id']?>"><?=htmlspecialchars($r['nama_role'],ENT_QUOTES,'UTF-8')?></option><?php endforeach; ?></select><p class="help-block">Hak akses pengguna mengikuti Custom Role yang dipilih. <a href="../akses/roles.php">Kelola Custom Role</a>.</p></div><div class="btn-row"><button type="button" id="simpan" class="btn btn-primary"><i class="fa fa-save"></i> Simpan</button> <button type="button" id="batal" class="btn btn-default"><i class="fa fa-arrow-left"></i> Kembali</button></div></div></div></form></div></div>
-<script src="../../js/jquery.js"></script><script src="../../js/bootstrap.min.js"></script><script src="../../js/bootstrap-dialog.js"></script><script>
-$(function(){ $('#batal').click(function(){location.href='pemakai.php';}); $('#simpan').click(function(){var f=$('#formUser')[0]; if(!f.checkValidity()){f.reportValidity();return;} var b=$(this).prop('disabled',true);$.post('pemakai_simpan.php',$('#formUser').serialize(),function(r){if(r.status==='success'){BootstrapDialog.alert({title:'Berhasil',type:BootstrapDialog.TYPE_SUCCESS,message:r.message,callback:function(){location.href='pemakai.php';}});}else{b.prop('disabled',false);BootstrapDialog.alert({title:'Gagal',type:BootstrapDialog.TYPE_DANGER,message:r.message||'Gagal menyimpan user.'});}},'json').fail(function(x){b.prop('disabled',false);BootstrapDialog.alert({title:'Gagal',type:BootstrapDialog.TYPE_DANGER,message:x.responseText||'Request gagal.'});});});});
-</script></body></html>
+if (!qaRbacIsAdmin($konek)) {
+    http_response_code(403);
+    exit('Hanya Admin QA.');
+}
+qaRbacRequire($konek, 'pengguna', false);
+$id_pemakai = trim((string)($_SESSION['userid'] ?? ''));
+$nama_pemakai = trim((string)($_SESSION['username'] ?? $id_pemakai));
+$is_admin = strtoupper((string)($_SESSION['admin'] ?? 'N')) === 'Y' || strtolower((string)($_SESSION['role'] ?? '')) === 'admin';
+if (!$is_admin) {
+    http_response_code(403);
+    exit('Akses ditolak.');
+}
+function ensure_user_column($db, $col, $def) {
+    $q = mysqli_query($db, "SHOW COLUMNS FROM `user` LIKE '" . mysqli_real_escape_string($db, $col) . "'");
+    if ($q && mysqli_num_rows($q) === 0)
+        mysqli_query($db, "ALTER TABLE `user` ADD COLUMN `" . $col . "` " . $def);
+}
+ensure_user_column($konek, 'pembuat', "ENUM('Y','N') NOT NULL DEFAULT 'N'");
+ensure_user_column($konek, 'pemeriksa', "ENUM('Y','N') NOT NULL DEFAULT 'N'");
+ensure_user_column($konek, 'penyetuju', "ENUM('Y','N') NOT NULL DEFAULT 'N'");
+ensure_user_column($konek, 'block', "ENUM('Y','N') NOT NULL DEFAULT 'N'");
+require_once __DIR__ . '/../../inc/qa_seksi_akses.php';
+$qaSeksiOptions = [];
+$qsQa = @mysqli_query($konek, 'SELECT nama_seksi FROM qa_seksi_master UNION SELECT DISTINCT seksi_pemilik AS nama_seksi FROM qa_part WHERE seksi_pemilik IS NOT NULL AND TRIM(seksi_pemilik)<>\'\' ORDER BY nama_seksi');
+if ($qsQa)
+    while ($x = mysqli_fetch_assoc($qsQa))
+        $qaSeksiOptions[] = $x['nama_seksi'];
+$selectedQaSeksi = [];
+$customRoles = qaRbacActiveRoles($konek);
+$seksi = [];
+$qs = mysqli_query($konek, "SELECT DISTINCT seksi FROM `user` WHERE seksi IS NOT NULL AND seksi<>'' ORDER BY seksi");
+if ($qs)
+    while ($s = mysqli_fetch_assoc($qs))
+        $seksi[] = $s['seksi'];
+?><!DOCTYPE html>
+<html lang="id">
+    <head>
+        <link rel="icon" type="image/png" href="/qa_kalibrasi/images/favicon-toto-qa.png?v=1">
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>Tambah User QA</title>
+        <link href="../../css/bootstrap.min.css" rel="stylesheet">
+        <link href="../../font-awesome-4.3.0/css/font-awesome.min.css" rel="stylesheet">
+        <link href="../../css/bootstrap-dialog.css" rel="stylesheet">
+        <style>
+            body {
+                padding-top: 70px;
+                background: #f4f6f9
+            }
+            .card {
+                background: #fff;
+                border: 1px solid #ddd;
+                border-radius: 10px;
+                padding: 24px;
+                margin-bottom: 20px
+            }
+            .navbar-brand img {
+                height: 25px;
+                margin-top: -3px
+            }
+            .form-title {
+                font-weight: 700;
+                color: #1E3F66;
+                margin-top: 0
+            }
+            .btn-row {
+                margin-top: 25px
+            }
+            .qa-seksi-list {
+                max-height: 220px;
+                overflow-y: auto;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                background: #fff
+            }
+            .qa-seksi-item {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin: 0;
+                padding: 9px 12px;
+                border-bottom: 1px solid #ddd;
+                font-weight: 400;
+                cursor: pointer
+            }
+            .qa-seksi-item:last-child {
+                border-bottom: 0
+            }
+            .qa-seksi-item:hover {
+                background: #f5f8fb
+            }
+            .qa-seksi-item input {
+                margin: 0;
+                flex: none
+            }
+            .qa-seksi-empty {
+                padding: 12px;
+                color: #777
+            }
+        </style>
+    </head>
+    <body>
+        <nav class="navbar navbar-default navbar-fixed-top">
+            <div class="container-fluid">
+                <div class="navbar-header"><a class="navbar-brand" href="../../media.php"><img src="../../images/toto.png"></a></div>
+                <ul class="nav navbar-nav navbar-left">
+                    <li><a href="pemakai.php"><i class="fa fa-arrow-left"></i> Tabel Pemakai QA</a></li>
+                </ul>
+                <ul class="nav navbar-nav navbar-right">
+                    <li><a><i class="fa fa-user"></i> <?php echo htmlspecialchars($nama_pemakai, ENT_QUOTES); ?></a></li>
+                    <li><a href="../../logout.php">Logout</a></li>
+                </ul>
+            </div>
+        </nav>
+        <div class="container">
+            <div class="card">
+                <h3 class="form-title">Tambah User QA</h3>
+                <form id="formUser"><input type="hidden" name="qa_user_csrf" value="<?= htmlspecialchars($_SESSION['qa_user_admin_csrf'], ENT_QUOTES, 'UTF-8')?>"><input type="hidden" name="status_proses" value="tambah"><input type="hidden" name="xloginid" value="<?php echo htmlspecialchars($id_pemakai, ENT_QUOTES); ?>"><div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group"><label>ID User *</label><input class="form-control" name="input_uid" id="input_uid" maxlength="30" required></div>
+                            <div class="form-group"><label>Nama *</label><input class="form-control" name="input_uname" id="input_uname" maxlength="100" required></div>
+                            <div class="form-group"><label>Password *</label><input type="password" class="form-control" name="input_upwd" id="input_upwd" maxlength="35" required></div>
+                            <div class="form-group"><label>Sapaan</label><select class="form-control" name="input_sapaan"><option value="">-</option><option>Bpk.</option><option>Ibu</option><option>Mr.</option><option>Mrs.</option><option>Miss</option></select></div>
+                            <div class="form-group"><label>Seksi</label><input class="form-control" name="input_seksi" list="seksiList"><datalist id="seksiList"><?php foreach ($seksi as $s)
+    echo '<option value="' . htmlspecialchars($s, ENT_QUOTES) . '">'; ?></datalist></div>
+                            <div class="form-group"><label>E-mail</label><input type="email" class="form-control" name="input_email"></div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group" style="margin-top:15px"><label>Custom Role (Hak Akses Halaman) *</label><select class="form-control" name="input_custom_role" required><option value="">-- Pilih Role --</option><?php foreach ($customRoles as $r): ?><option value="<?= (int)$r['id']?>"><?= htmlspecialchars($r['nama_role'], ENT_QUOTES, 'UTF-8')?></option><?php endforeach; ?></select><p class="help-block">Hak akses pengguna mengikuti Custom Role yang dipilih. <a href="../akses/roles.php">Kelola Custom Role</a>.</p>
+                            </div>
+                            <div class="form-group"><label>Akses Seksi QA</label>
+<div class="qa-seksi-list" role="group" aria-label="Akses Seksi QA">
+<?php if (!$qaSeksiOptions): ?><div class="qa-seksi-empty">Belum ada seksi QA.</div><?php endif; ?>
+<?php foreach ($qaSeksiOptions as $section): ?>
+<label class="qa-seksi-item"><input type="checkbox" name="qa_seksi_akses[]" value="<?= htmlspecialchars($section, ENT_QUOTES, 'UTF-8')?>"><span><?= htmlspecialchars($section,ENT_QUOTES,'UTF-8')?></span></label>
+<?php endforeach; ?>
+</div>
+                                <p class="help-block">Centang seksi yang boleh diberi akses masterdata alat QA. <span class="qa-seksi-count"></span></p>
+                            </div>
+                            <div class="btn-row"><button type="button" id="simpan" class="btn btn-primary"><i class="fa fa-save"></i> Simpan</button> <button type="button" id="batal" class="btn btn-default"><i class="fa fa-arrow-left"></i> Kembali</button></div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <script src="../../js/jquery.js"></script>
+        <script src="../../js/bootstrap.min.js"></script>
+        <script src="../../js/bootstrap-dialog.js"></script>
+        <script>
+            $(function() {
+                function updateSeksiCount() {
+                    $('.qa-seksi-count').text('(' + $('#formUser input[name="qa_seksi_akses[]"]:checked').length + ' seksi dipilih)');
+                }
+                $('#formUser').on('change', 'input[name="qa_seksi_akses[]"]', updateSeksiCount);
+                updateSeksiCount();
+                $('#batal').click(function() {
+                    location.href = 'pemakai.php';
+                });
+                $('#simpan').click(function() {
+                    var f = $('#formUser')[0];
+                    if (!f.checkValidity()) {
+                        f.reportValidity();
+                        return;
+                    }
+                    var b = $(this).prop('disabled', true);
+                    $.post('pemakai_simpan.php', $('#formUser').serialize(), function(r) {
+                        if (r.status === 'success') {
+                            BootstrapDialog.alert({
+                                title: 'Berhasil',
+                                type: BootstrapDialog.TYPE_SUCCESS,
+                                message: r.message,
+                                callback: function() {
+                                    location.href = 'pemakai.php';
+                                }
+                            });
+                        } else {
+                            b.prop('disabled', false);
+                            BootstrapDialog.alert({
+                                title: 'Gagal',
+                                type: BootstrapDialog.TYPE_DANGER,
+                                message: r.message || 'Gagal menyimpan user.'
+                            });
+                        }
+                    }, 'json').fail(function(x) {
+                        b.prop('disabled', false);
+                        BootstrapDialog.alert({
+                            title: 'Gagal',
+                            type: BootstrapDialog.TYPE_DANGER,
+                            message: x.responseText || 'Request gagal.'
+                        });
+                    });
+                });
+            });
+        </script>
+    </body>
+</html>

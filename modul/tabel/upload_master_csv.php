@@ -1,162 +1,454 @@
 <?php
+// Nama file/URL lama dipertahankan agar menu + RBAC tidak putus.
 session_start();
-if (empty($_SESSION['login'])) { header('Location: ../../logout.php'); exit; }
-require_once __DIR__.'/../../inc/inc_koneksi.php';
-require_once __DIR__.'/../../inc/qa_rbac.php';
-qaRbacRequire($konek,'upload_master');
-require_once __DIR__ . '/../../inc/qa_master_csv.php';
-mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
-$konek->set_charset('utf8mb4');
-function csvH($value){return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');}
-if (empty($_SESSION['qa_csv_csrf'])) $_SESSION['qa_csv_csrf'] = bin2hex(random_bytes(32));
-$csrf = $_SESSION['qa_csv_csrf'];
-$error = ''; $schema = [];
-$flash = $_SESSION['qa_csv_flash'] ?? null;
-unset($_SESSION['qa_csv_flash']);
-$actor = trim((string)($_SESSION['userid'] ?? ''));
-try {
-    $schema = qaCsvSchema($konek);
-} catch (Throwable $e) {
-    error_log('QA CSV schema: '.$e->getMessage());
-    $error = $e instanceof mysqli_sql_exception ? 'Struktur database belum siap untuk upload master data.' : $e->getMessage();
-}
-if (isset($_GET['template']) && in_array($_GET['template'], ['1','csv'], true)) {
-    if ($error) { http_response_code(503); echo csvH($error); exit; }
-    header('Content-Type: text/csv; charset=UTF-8');
-    header('Content-Disposition: attachment; filename="template_master_alat.csv"');
-    header('Cache-Control: no-store');
-    $out = fopen('php://output', 'w');
-    fwrite($out, "\xEF\xBB\xBF");
-    fputcsv($out, qaCsvTemplateHeaders(), ',', '"', '');
-    foreach (qaCsvTemplateExamples() as $example) fputcsv($out, $example, ',', '"', '');
-    fclose($out);
+if (empty($_SESSION['login'])) {
+    header('Location: ../../logout.php');
     exit;
 }
-// Discard previews from the former two-step upload flow.
-unset($_SESSION['qa_csv_preview']);
-if (isset($_SESSION['qa_csv_errors']) && time() - $_SESSION['qa_csv_errors']['created'] > 1800) unset($_SESSION['qa_csv_errors']);
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $validToken = is_string($_POST['csrf'] ?? null) && hash_equals($csrf, $_POST['csrf']);
-    if (!$validToken) {
-        http_response_code(403);
-        $error = 'Sesi formulir tidak valid. Muat ulang halaman lalu coba lagi.';
-    } elseif (!$error) {
-        try {
-            $action = $_POST['action'] ?? '';
-            if ($action === 'upload') {
-                unset($_SESSION['qa_csv_errors']);
-                $file = $_FILES['csv_file'] ?? null;
-                if (!$file || !is_int($file['error'] ?? null) || $file['error'] !== UPLOAD_ERR_OK) throw new RuntimeException('Upload gagal. Pilih CSV maksimal 2 MB dan coba lagi.');
-                if (!is_string($file['name']) || strtolower(pathinfo($file['name'], PATHINFO_EXTENSION)) !== 'csv') throw new RuntimeException('File harus berformat .csv.');
-                if ($file['size'] > QA_CSV_MAX_BYTES) throw new RuntimeException('Ukuran CSV maksimal 2 MB.');
-                if (!is_string($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) throw new RuntimeException('File upload tidak valid.');
-                $text = file_get_contents($file['tmp_name'], false, null, 0, QA_CSV_MAX_BYTES + 1);
-                if ($text === false) throw new RuntimeException('CSV tidak dapat dibaca.');
-                $rows = qaCsvParse($text, $schema);
-                $plan = qaCsvPlan($konek, $rows);
-                if ($plan['counts']['error']) {
-                    $_SESSION['qa_csv_errors'] = ['created'=>time(), 'filename'=>basename($file['name']),
-                        'items'=>array_values(array_filter($plan['items'],static function($item){return !empty($item['errors']);}))];
-                    header('Location: upload_master_csv.php#csvErrors'); exit;
-                }
-                // Import diverifikasi ulang dengan table locks MyISAM; backup dianjurkan sebelum import massal.
-                $counts = qaCsvApply($konek, $rows, $plan['signature'], $actor);
-                $_SESSION['qa_csv_flash'] = $counts;
-                // A repeated POST with the previous form token cannot import again.
-                $_SESSION['qa_csv_csrf'] = bin2hex(random_bytes(32));
-                header('Location: upload_master_csv.php'); exit;
-            } else { throw new RuntimeException('Aksi formulir tidak dikenal.'); }
-        } catch (Throwable $e) {
-            if ($e instanceof mysqli_sql_exception) {
-                error_log('QA CSV import: '.$e->getMessage());
-                $error = 'Proses database gagal. Karena MyISAM tidak mendukung rollback, sebagian data mungkin sudah masuk. Periksa qa_part dan qa_alat_registry sebelum mengulang import.';
-            } else { $error = $e->getMessage(); }
-        }
+require_once __DIR__ . '/../../inc/inc_koneksi.php';
+require_once __DIR__ . '/../../inc/qa_rbac.php';
+require_once __DIR__ . '/../../inc/qa_seksi_akses.php';
+function qaMigRequireSections($db, $data) {
+    foreach ($data['master'] ?? [] as $m) {
+        qaSeksiRequire($db, $m['SEKSI_PEMILIK'] ?? '');
+        qaSeksiRequireNo($db, $m['NO_ALAT'] ?? '', false);
     }
 }
-$validation = $_SESSION['qa_csv_errors'] ?? null;
-$page = filter_var($_GET['halaman'] ?? 1, FILTER_VALIDATE_INT, ['options'=>['min_range'=>1]]) ?: 1;
-$pages = $validation ? max(1, (int)ceil(count($validation['items']) / 100)) : 1;
-$page = min($page, $pages);
-$items = $validation ? array_slice($validation['items'], ($page-1)*100, 100) : [];
+qaRbacRequire($konek, 'upload_master');
+require_once __DIR__ . '/../../inc/qa_migrasi_excel.php';
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+$konek->set_charset('utf8mb4'); // qa_part dan registry memakai latin1_swedish_ci
+function mH($x) {
+    return htmlspecialchars((string)$x, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
+if (empty($_SESSION['qa_mig_csrf']))
+    $_SESSION['qa_mig_csrf'] = bin2hex(random_bytes(32));
+$csrf = $_SESSION['qa_mig_csrf'];
+$error = '';
+$success = $_SESSION['qa_mig_success'] ?? null;
+unset($_SESSION['qa_mig_success']);
+// Download template bersih langsung dari halaman upload (tidak membutuhkan extension ZIP).
+if (isset($_GET['template']) && $_GET['template'] === 'xlsx') {
+    $templatePath = __DIR__ . '/templates/template_migrasi.xlsx';
+    if (!is_file($templatePath) || !is_readable($templatePath)) {
+        http_response_code(404);
+        echo 'Template Excel tidak ditemukan. Pastikan folder modul/tabel/templates ikut disalin.';
+        exit;
+    }
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    header('Content-Disposition: attachment; filename="template_migrasi.xlsx"');
+    header('Content-Length: ' . filesize($templatePath));
+    header('Cache-Control: private, no-store, max-age=0');
+    header('X-Content-Type-Options: nosniff');
+    readfile($templatePath);
+    exit;
+}
+if (isset($_SESSION['qa_mig_pending']) && (time() - ($_SESSION['qa_mig_pending']['at'] ?? 0) > 1800))
+    unset($_SESSION['qa_mig_pending']);
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    try {
+        if (!hash_equals($csrf, (string)($_POST['csrf'] ?? '')))
+            throw new RuntimeException('Sesi formulir tidak valid, refresh halaman.');
+        $action = (string)($_POST['action'] ?? '');
+        if ($action === 'cancel') {
+            unset($_SESSION['qa_mig_pending']);
+            header('Location: upload_master_csv.php');
+            exit;
+        }
+        qaMigEnsureTables($konek);
+        if ($action === 'preview') {
+            unset($_SESSION['qa_mig_pending']);
+            $file = $_FILES['xlsx_file'] ?? null;
+            if (!$file || $file['error'] !== UPLOAD_ERR_OK || empty($file['tmp_name']) || !is_uploaded_file($file['tmp_name']))
+                throw new RuntimeException('Pilih file XLSX yang valid.');
+            if (strtolower(pathinfo($file['name'], PATHINFO_EXTENSION)) !== 'xlsx')
+                throw new RuntimeException('File wajib .xlsx (bukan .xls atau .csv).');
+            if ((int)$file['size'] <= 0 || (int)$file['size'] > QA_MIG_MAX_BYTES)
+                throw new RuntimeException('Ukuran XLSX maksimal 5 MB.');
+            $data = qaMigParse($file['tmp_name']);
+            qaMigRequireSections($konek, $data);
+            $plan = qaMigPlan($konek, $data);
+            $_SESSION['qa_mig_pending'] = ['at' => time(), 'data' => $data, 'plan' => $plan, 'filename' => basename($file['name']),
+                'ticket' => bin2hex(random_bytes(16))];
+        } elseif ($action === 'import') {
+            $pending = $_SESSION['qa_mig_pending'] ?? null;
+            if (!$pending || !hash_equals((string)$pending['ticket'], (string)($_POST['ticket'] ?? '')))
+                throw new RuntimeException('Preview sudah kedaluwarsa. Upload ulang.');
+            if ($pending['plan']['errors'])
+                throw new RuntimeException('File masih memiliki kesalahan. Perbaiki Excel lalu Preview ulang.');
+            $actor = trim((string)($_SESSION['userid'] ?? $_SESSION['username'] ?? 'migrasi'));
+            qaMigRequireSections($konek, $pending['data']);
+            $result = qaMigApply($konek, $pending['data'], $actor);
+            unset($_SESSION['qa_mig_pending']);
+            $_SESSION['qa_mig_success'] = $result;
+            $_SESSION['qa_mig_csrf'] = bin2hex(random_bytes(32));
+            header('Location: upload_master_csv.php');
+            exit;
+        } else
+            throw new RuntimeException('Aksi tidak dikenal.');
+    } catch (Throwable $e) {
+        if ($e instanceof mysqli_sql_exception) {
+            error_log('QA Migrasi XLSX: ' . $e->getMessage());
+            $error = 'Data gagal disimpan. Hubungi admin sistem untuk pemeriksaan sebelum mencoba lagi.';
+        } else
+            $error = $e->getMessage();
+    }
+}
+$pending = $_SESSION['qa_mig_pending'] ?? null;
+$plan = $pending['plan'] ?? null;
 ?>
 <!doctype html>
-<html lang="id"><head>
-    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Upload Master Data CSV | QA System</title>
-    <link rel="icon" href="../../images/favicon-toto-qa.png?v=1">
-    <link rel="stylesheet" href="../../css/bootstrap.min.css">
-    <link rel="stylesheet" href="../../font-awesome-4.3.0/css/font-awesome.min.css">
-    <style>
-        body{background:#f4f6f9;padding-top:75px;color:#25364a}
-        .navbar .container-fluid{display:flex;align-items:center}
-        .navbar .navbar-header{flex-shrink:0}
-        .navbar .navbar-nav{margin:0}
-        .navbar-brand img{height:25px;margin-top:-3px}
-        .csv-container{max-width:1400px;margin:auto;padding:0 20px 30px}
-        .csv-card{padding:22px;background:#fff;border:1px solid #ddd;border-radius:8px;margin-bottom:20px}
-        h2{font-size:24px;font-weight:bold;margin-top:0;color:#1e3f66}
-        .csv-upload{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-top:18px}
-        .csv-upload .form-group{margin:0;flex:1;min-width:200px}
-        .csv-table-wrap{overflow:auto}
-        .csv-table{min-width:900px;margin-bottom:0}
-        .csv-table th{background:#e9eef4;white-space:nowrap}
-        .csv-table td{vertical-align:top!important;overflow-wrap:anywhere}
-        .csv-table ul{padding-left:18px;margin-bottom:0}
-        .csv-template{margin:15px 0;min-width:780px;color:#25364a}
-        .csv-template td,.csv-template th{border:1px solid #999;padding:10px;font-weight:normal}
-        .csv-template caption{color:#25364a;padding:8px 0}
-        .csv-pager{display:flex;gap:12px;align-items:center;justify-content:flex-end;margin-top:15px}
-        .text-muted{color:#667687}
-        @media(max-width:600px){.csv-container{padding:0 12px 20px}.csv-card{padding:16px}.csv-upload .btn{width:100%}}
-    </style>
-</head><body>
-<nav class="navbar navbar-default navbar-fixed-top"><div class="container-fluid">
-    <div class="navbar-header"><a class="navbar-brand" href="../../media.php"><img src="../../images/toto.png" alt="TOTO"></a></div>
-    <ul class="nav navbar-nav"><li><a href="../../media.php"><i class="fa fa-arrow-left"></i> Menu QA</a></li></ul>
-</div></nav>
-<main class="csv-container">
-    <section class="csv-card">
-        <h2>Upload Master Data CSV</h2>
-        <p>Tambahkan alat baru atau perbarui alat yang sudah ada berdasarkan <b>No. Alat</b>.</p>
-        <?php if ($error): ?><div class="alert alert-danger" role="alert"><?=csvH($error)?></div><?php endif; ?>
-        <?php if ($flash): ?><div class="alert alert-success" role="status">Import selesai: <b><?=(int)$flash['new']?></b> alat ditambahkan, <b><?=(int)$flash['update']?></b> diperbarui, dan <b><?=(int)$flash['unchanged']?></b> tidak berubah.</div><?php endif; ?>
-        <a class="btn btn-default" href="?template=1"><i class="fa fa-download"></i> Unduh Template CSV</a>
-        <div class="csv-table-wrap"><table class="csv-template">
-            <caption>Template berisi contoh berikut. Ganti atau hapus baris contoh sebelum upload.</caption>
-            <thead><tr><?php foreach (qaCsvTemplateHeaders() as $heading): ?><th><?=csvH($heading)?></th><?php endforeach; ?></tr></thead>
-            <tbody><?php foreach (qaCsvTemplateExamples() as $example): ?><tr><?php foreach ($example as $value): ?><td><?=csvH($value)?></td><?php endforeach; ?></tr><?php endforeach; ?></tbody>
-        </table></div>
-        <form method="post" action="upload_master_csv.php" enctype="multipart/form-data" class="csv-upload">
-            <input type="hidden" name="csrf" value="<?=csvH($csrf)?>"><input type="hidden" name="action" value="upload">
-            <input type="hidden" name="MAX_FILE_SIZE" value="<?=QA_CSV_MAX_BYTES?>">
-            <div class="form-group"><label for="csvFile">File CSV</label><input class="form-control" type="file" id="csvFile" name="csv_file" accept=".csv,text/csv" required aria-describedby="csvFileHelp"></div>
-            <button class="btn btn-primary" type="submit"><i class="fa fa-upload"></i> Upload &amp; Simpan</button>
-        </form>
-        <p class="text-warning" style="margin-top:12px"><b>Catatan:</b> database MyISAM tidak mendukung rollback jika server gagal saat batch berjalan. Backup database sebelum upload banyak alat.</p>
-        <p id="csvFileHelp" class="text-muted" style="margin-top:10px">CSV UTF-8, maksimal 2 MB / 1.000 baris. Pemisah koma, titik koma, atau tab dikenali otomatis.</p>
-        <p>Baris pertama berisi tujuh judul kolom; isi alat mulai baris kedua. Isi <b>Seksi</b> pada setiap baris, di kolom setelah <b>Rencana Kalibrasi</b>, menggunakan nama seksi yang terdaftar. Satu file boleh berisi beberapa seksi.</p>
-        <p><b>Nama Alat, No. Alat, Periode Kalibrasi, Rencana Kalibrasi, dan Seksi wajib diisi.</b> Spesifikasi dan Resolusi boleh kosong; saat memperbarui alat, isian kosong mempertahankan nilai lama.</p>
-        <p>Isi <b>Periode Kalibrasi</b> dengan angka dalam <b>satuan hari</b>, misalnya <b>180</b> atau <b>365</b>. Tanggal dapat ditulis <b>16 - 09 - 2026</b>, <b>16-09-2026</b>, atau <b>2026-09-16</b>. Simpan file sebagai CSV UTF-8 setelah mengisi template.</p>
-    </section>
-    <?php if ($validation): ?>
-    <section class="csv-card" id="csvErrors">
-        <h3 style="margin-top:0">Upload gagal: <?=csvH($validation['filename'])?></h3>
-        <div class="alert alert-warning" role="alert">Data belum disimpan karena validasi menemukan masalah. Perbaiki <?=count($validation['items'])?> baris bermasalah di bawah, lalu upload ulang CSV.</div>
-        <div class="csv-table-wrap"><table class="table table-bordered csv-table">
-            <thead><tr><th>Baris CSV</th><th>No. Alat</th><th>Nama Alat</th><th>Seksi</th><th>Periode (hari)</th><th>Jadwal</th><th>Kesalahan</th></tr></thead><tbody>
-            <?php foreach ($items as $item): $d=$item['data']; ?>
-            <tr><td><?=(int)$item['line']?></td>
-                <td><?=csvH($d['no_part']??'-')?></td><td><?=csvH($d['nama_part']??'-')?></td><td><?=csvH($d['seksi_pemilik']??'-')?></td><td><?=csvH($d['periode_kalibrasi']??'-')?></td><td><?=csvH($d['jadwal_kalibrasi']??'-')?></td>
-                <td><ul class="text-danger"><?php foreach ($item['errors'] as $message): ?><li><?=csvH($message)?></li><?php endforeach; ?></ul></td>
-            </tr><?php endforeach; ?>
-            </tbody></table></div>
-        <div class="csv-pager">
-            <?php if ($page>1): ?><a class="btn btn-default btn-sm" href="?halaman=<?=$page-1?>#csvErrors">Sebelumnya</a><?php endif; ?>
-            <span>Halaman <?=$page?> / <?=$pages?> (maksimal 100 baris per halaman)</span>
-            <?php if ($page<$pages): ?><a class="btn btn-default btn-sm" href="?halaman=<?=$page+1?>#csvErrors">Berikutnya</a><?php endif; ?>
-        </div>
-    </section>
-    <?php endif; ?>
+<html lang="id">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Migrasi Masterdata Excel | QA System</title>
+        <link rel="icon" href="../../images/favicon-toto-qa.png?v=1">
+        <link rel="stylesheet" href="../../css/bootstrap.min.css">
+        <link rel="stylesheet" href="../../font-awesome-4.3.0/css/font-awesome.min.css">
+        <style>
+            /* Palet netral: warna hanya dipakai untuk aksi utama dan hasil validasi. */
+            body {
+                background: #f6f7f8;
+                padding: 75px 0 35px;
+                color: #30343b
+            }
+            .navbar-brand img {
+                height: 25px;
+                margin-top: -3px
+            }
+            .wrap {
+                max-width: 1200px;
+                margin: auto;
+                padding: 0 16px
+            }
+            .panel-box {
+                background: #fff;
+                border: 1px solid #dedfe3;
+                border-radius: 5px;
+                padding: 23px;
+                margin-bottom: 16px
+            }
+            h2 {
+                margin-top: 0;
+                color: #30343b;
+                font-weight: 600;
+                font-size: 25px
+            }
+            h3 {
+                color: #30343b;
+                font-weight: 600
+            }
+            h4 {
+                font-weight: 600
+            }
+            .small-muted {
+                color: #68717c
+            }
+            .upload-row {
+                display: flex;
+                gap: 12px;
+                align-items: flex-end;
+                flex-wrap: wrap
+            }
+            .upload-row .form-group {
+                flex: 1;
+                min-width: 270px;
+                margin: 0
+            }
+            .stat {
+                display: inline-block;
+                margin: 5px 7px 5px 0;
+                padding: 7px 11px;
+                border-radius: 3px;
+                background: #fafafa;
+                border: 1px solid #e2e3e6;
+                color: #474e58
+            }
+            .stat strong {
+                color: #20252c;
+                margin-left: 5px
+            }
+            .scroll {
+                overflow: auto;
+                max-height: 390px;
+                border: 1px solid #e1e2e5
+            }
+            .scroll .table {
+                margin-bottom: 0
+            }
+            .table td,.table th {
+                vertical-align: middle!important
+            }
+            .table th {
+                background: #f6f6f6;
+                white-space: nowrap;
+                color: #3e4248;
+                font-weight: 600
+            }
+            .tag {
+                display: inline-block;
+                padding: 2px 7px;
+                border: 1px solid #d8dade;
+                border-radius: 3px;
+                background: #f5f6f7;
+                color: #444a52;
+                font-weight: 600;
+                font-size: 12px
+            }
+            .tag-error {
+                color: #a94442;
+                background: #fff;
+                border-color: #ebccd1
+            }
+            .confirm-area {
+                border-top: 1px solid #e4e5e8;
+                margin-top: 20px;
+                padding-top: 18px
+            }
+            .alert ul {
+                margin-bottom: 0
+            }
+            .file-note {
+                margin: 10px 0 0
+            }
+            .step {
+                font-weight: 600;
+                color: #4b515b
+            }
+            .note {
+                background: #fafafa;
+                border: 1px solid #e2e3e6;
+                padding: 12px 14px;
+                margin-top: 14px;
+                color: #505761;
+                border-radius: 3px
+            }
+            .note p:last-child {
+                margin-bottom: 0
+            }
+            .section-heading {
+                margin-top: 22px
+            }
+            .import-steps {
+                padding-left: 21px;
+                margin: 12px 0 9px;
+                color: #414852
+            }
+            .import-steps li {
+                margin-bottom: 5px
+            }
+            .modal-header {
+                background: #fafafa;
+                border-top-left-radius: 5px;
+                border-top-right-radius: 5px
+            }
+            .modal-title {
+                font-size: 17px;
+                font-weight: 600
+            }
+            .btn+.btn {
+                margin-left: 6px
+            }
+            @media(max-width:767px) {
+                .panel-box {
+                    padding: 16px
+                }
+                .upload-row .form-group {
+                    min-width: 100%
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <nav class="navbar navbar-default navbar-fixed-top">
+            <div class="container-fluid">
+                <div class="navbar-header"><a class="navbar-brand" href="../../media.php"><img src="../../images/toto.png" alt="TOTO"></a></div>
+                <ul class="nav navbar-nav">
+                    <li><a href="../../media.php"><i class="fa fa-arrow-left"></i> Menu QA</a></li>
+                </ul>
+            </div>
+        </nav>
+        <main class="wrap">
+            <section class="panel-box">
+                <h2><i class="fa fa-file-excel-o"></i> Migrasi Masterdata QA — Excel</h2>
+                <p>Gunakan halaman ini untuk memasukkan data alat dan riwayat BBRAU melalui template Excel.</p>
+<?php if ($error):?>
+<div class="alert alert-danger alert-dismissible" role="alert">
+<button type="button" class="close" data-dismiss="alert" aria-label="Tutup"><span aria-hidden="true">&times;</span></button>
+<strong>Proses gagal.</strong> <?= mH($error)?>
+</div>
+<?php endif;?>
+<?php if ($success):?>
+<div class="alert alert-success alert-dismissible" role="alert">
+<button type="button" class="close" data-dismiss="alert" aria-label="Tutup"><span aria-hidden="true">&times;</span></button>
+<strong>Import berhasil.</strong> <?= intval($success['seksi_baru'] ?? 0)?> seksi baru, <?= intval($success['alat_baru'])?> alat baru, <?= intval($success['alat_dilewati'])?> alat existing dilewati, <?= intval($success['kalibrator_diperbarui'] ?? 0)?> kalibrator diperbarui, <?= intval($success['jenis_diperbarui'] ?? 0)?> jenis pemeriksaan diperbarui, <?= intval($success['riwayat_baru'])?> riwayat baru, <?= intval($success['riwayat_dilewati'])?> riwayat duplikat dilewati.
+</div>
+<?php endif;?>
+<p><a href="upload_master_csv.php?template=xlsx" class="btn btn-success"><i class="fa fa-download"></i> Download Template Migrasi (.xlsx)</a></p>
+                <ol class="import-steps">
+                    <li>Download template Excel lalu isi sheet <strong>MASTER_ALAT</strong>. Kolom KALIBRATOR dan JENIS_PEMERIKSAAN boleh kosong; isi KALIBRASI atau VERIFIKASI bila diperlukan.</li>
+                    <li>Isi sheet <strong>RIWAYAT_BBRAU</strong> jika ada riwayat lama. Boleh dikosongkan.</li>
+                    <li>Upload file, klik <strong>Preview &amp; Validasi</strong>, lalu periksa hasilnya sebelum disimpan.</li>
+                </ol>
+                <p class="small-muted">Panduan pengisian lengkap tersedia pada sheet <strong>REFERENSI_FORMAT</strong> di template Excel.</p>
+                <p class="step">Pilih file Excel untuk di-preview</p>
+                <form class="upload-row" method="post" enctype="multipart/form-data" action="upload_master_csv.php">
+<input type="hidden" name="csrf" value="<?= mH($csrf)?>"><input type="hidden" name="action" value="preview">
+<div class="form-group"><label for="fileXlsx">File Template Migrasi (.xlsx)</label><input class="form-control" id="fileXlsx" type="file" name="xlsx_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required></div>
+<button type="submit" class="btn btn-primary"><i class="fa fa-search"></i> Preview &amp; Validasi</button></form>
+                <p class="small-muted file-note">File harus berformat <strong>.xlsx</strong>, maksimal 5 MB.</p>
+            </section>
+<?php if ($pending && $plan):?>
+<section class="panel-box" id="preview">
+                <h3 style="margin-top:0"><i class="fa fa-list-alt"></i> Tahap 2 — Preview: <?= mH($pending['filename'])?></h3>
+                <div aria-label="Ringkasan preview"><span class="stat">Seksi baru <strong><?= intval($plan['counts']['seksi_baru'] ?? 0)?></strong></span><span class="stat">Alat baru <strong><?= intval($plan['counts']['master_baru'])?></strong></span><span class="stat">Alat sudah ada <strong><?= intval($plan['counts']['master_ada'])?></strong></span><span class="stat">Kalibrator diperbarui <strong><?= intval($plan['counts']['kalibrator_update'] ?? 0)?></strong></span><span class="stat">Jenis diperbarui <strong><?= intval($plan['counts']['jenis_update'] ?? 0)?></strong></span><span class="stat">Riwayat baru <strong><?= intval($plan['counts']['hist_baru'])?></strong></span><span class="stat">Riwayat sudah ada <strong><?= intval($plan['counts']['hist_ada'])?></strong></span><span class="stat">Error <strong><?= count($plan['errors'])?></strong></span></div>
+<?php if ($plan['errors']):?><div class="alert alert-danger"><strong><?= count($plan['errors'])?> masalah ditemukan; data BELUM disimpan.</strong><ul><?php foreach (array_slice($plan['errors'], 0, 100) as $e):?><li><?= mH($e)?></li><?php endforeach;?></ul><?php if (count($plan['errors']) > 100):?><p>Masih ada error lain. Periksa template.</p><?php endif;?></div><?php else:?><div class="note" role="status"><strong>Validasi selesai.</strong> Data siap di-import. Untuk alat existing, hanya KALIBRATOR dan JENIS_PEMERIKSAAN yang diisi di Excel dapat diperbarui; data lainnya tetap.</div><?php endif;?>
+<?php if (!empty($plan['seksi_baru'])):?><div class="note"><strong>Seksi baru akan ditambahkan saat import:</strong> <?= mH(implode(', ', $plan['seksi_baru']))?>.</div><?php endif;?>
+<h4 class="section-heading">MASTER_ALAT</h4>
+                <div class="scroll">
+                    <table class="table table-bordered table-condensed">
+                        <thead>
+                            <tr>
+                                <th>Baris</th>
+                                <th>No. Alat</th>
+                                <th>Nama Alat</th>
+                                <th>Format</th>
+                                <th>Kalibrator</th>
+                                <th>Jenis</th>
+                                <th>Status</th>
+                                <th>Catatan</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+<?php foreach (array_slice($plan['master'], 0, 100) as $item):?><tr>
+                                <td><?= intval($item['row'])?></td>
+                                <td><?= mH($item['no'])?></td>
+                                <td><?= mH($item['nama'])?></td>
+                                <td><?= mH($item['format'])?></td>
+                                <td><?= mH($item['kalibrator'] ?? '')?></td>
+                                <td><?= mH($item['jenis_pemeriksaan'] ?? 'KALIBRASI')?></td>
+                                <td><span class="tag <?= $item['status'] === 'ERROR'?'tag-error':'' ?>"><?= mH(['KALIBRATOR_UPDATE' => 'UPDATE KALIBRATOR', 'JENIS_UPDATE' => 'UPDATE JENIS', 'MASTER_UPDATE' => 'UPDATE DATA'][$item['status']] ?? $item['status'])?></span></td>
+                                <td><?= mH(implode('; ', $item['errors']))?></td>
+                            </tr><?php endforeach;?></tbody>
+                    </table>
+                </div>
+<?php if ($plan['history']):?><h4 class="section-heading">RIWAYAT_BBRAU</h4>
+                <div class="scroll">
+                    <table class="table table-bordered table-condensed">
+                        <thead>
+                            <tr>
+                                <th>Baris</th>
+                                <th>No. Alat</th>
+                                <th>Status</th>
+                                <th>Catatan</th>
+                            </tr>
+                        </thead>
+                        <tbody><?php foreach (array_slice($plan['history'], 0, 100) as $item):?><tr>
+                                <td><?= mH($item['row'])?></td>
+                                <td><?= mH($item['no'])?></td>
+                                <td><?= mH($item['status'])?></td>
+                                <td><?= mH(implode('; ', $item['errors']))?></td>
+                            </tr><?php endforeach;?></tbody>
+                    </table>
+                </div><?php endif;?>
+<div class="confirm-area">
+<button type="button" class="btn btn-primary" data-toggle="modal" data-target="#konfirmasiImportModal" <?= $plan['errors']?'disabled':'' ?>><i class="fa fa-database"></i> Konfirmasi &amp; Simpan Import</button>
+<form method="post" style="display:inline;margin-left:8px"><input type="hidden" name="csrf" value="<?= mH($csrf)?>"><input type="hidden" name="action" value="cancel"><button type="submit" class="btn btn-default">Batalkan Preview</button></form>
+                </div>
+            </section>
+<?php endif;?>
+
 </main>
-</body></html>
+<?php if ($pending && $plan && !$plan['errors']):?>
+<!-- Konfirmasi Bootstrap Modal, bukan confirm() browser. -->
+<div class="modal fade" id="konfirmasiImportModal" tabindex="-1" role="dialog" aria-labelledby="konfirmasiImportLabel" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-label="Tutup"><span aria-hidden="true">&times;</span></button><h4 class="modal-title" id="konfirmasiImportLabel">Konfirmasi Import Masterdata QA</h4>
+                    </div>
+                    <div class="modal-body">
+                        <p>Data dari <strong><?= mH($pending['filename'])?></strong> akan disimpan ke sistem QA.</p>
+                        <p>Seksi baru: <strong><?= intval($plan['counts']['seksi_baru'] ?? 0)?></strong> &nbsp;|&nbsp; Alat baru: <strong><?= intval($plan['counts']['master_baru'])?></strong> &nbsp;|&nbsp; Kalibrator diperbarui: <strong><?= intval($plan['counts']['kalibrator_update'] ?? 0)?></strong> &nbsp;|&nbsp; Jenis diperbarui: <strong><?= intval($plan['counts']['jenis_update'] ?? 0)?></strong> &nbsp;|&nbsp; Riwayat baru: <strong><?= intval($plan['counts']['hist_baru'])?></strong></p>
+                        <p class="small-muted">Pastikan hasil preview sudah sesuai sebelum melanjutkan.</p>
+                    </div>
+                    <div class="modal-footer">
+<button type="button" class="btn btn-default" data-dismiss="modal">Kembali</button>
+<form id="formConfirmImport" method="post" action="upload_master_csv.php" style="display:inline">
+<input type="hidden" name="csrf" value="<?= mH($csrf)?>">
+<input type="hidden" name="action" value="import">
+<input type="hidden" name="ticket" value="<?= mH($pending['ticket'])?>">
+<button type="submit" class="btn btn-primary" id="btnProsesImport"><i class="fa fa-check"></i> Ya, Simpan Import</button>
+</form>
+                    </div>
+                </div>
+            </div>
+        </div>
+<?php endif;?>
+<?php if ($success || ($error && ($_POST['action'] ?? '') === 'import')):?>
+<!-- Notifikasi hasil import Bootstrap Modal. Data pesan telah di-escape server-side. -->
+<div class="modal fade" id="hasilImportModal" tabindex="-1" role="dialog" aria-labelledby="hasilImportLabel" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-label="Tutup"><span aria-hidden="true">&times;</span></button>
+<h4 class="modal-title" id="hasilImportLabel"><?= $success ? 'Import Berhasil' : 'Import Gagal' ?></h4>
+                    </div>
+                    <div class="modal-body">
+<?php if ($success):?>
+<p>Data migrasi berhasil diproses dan disimpan.</p>
+                        <table class="table table-condensed">
+                            <tbody>
+                                <tr>
+                                    <td>Seksi baru</td>
+                                    <td class="text-right"><strong><?= intval($success['seksi_baru'] ?? 0)?></strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Alat baru</td>
+                                    <td class="text-right"><strong><?= intval($success['alat_baru'])?></strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Alat existing dilewati</td>
+                                    <td class="text-right"><strong><?= intval($success['alat_dilewati'])?></strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Kalibrator diperbarui</td>
+                                    <td class="text-right"><strong><?= intval($success['kalibrator_diperbarui'] ?? 0)?></strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Jenis pemeriksaan diperbarui</td>
+                                    <td class="text-right"><strong><?= intval($success['jenis_diperbarui'] ?? 0)?></strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Riwayat baru</td>
+                                    <td class="text-right"><strong><?= intval($success['riwayat_baru'])?></strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Riwayat duplikat dilewati</td>
+                                    <td class="text-right"><strong><?= intval($success['riwayat_dilewati'])?></strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
+<?php else:?>
+<p class="text-danger"><strong>Import tidak berhasil diselesaikan.</strong></p>
+                        <p><?= mH($error)?></p>
+<?php endif;?>
+</div>
+                    <div class="modal-footer"><button type="button" class="btn btn-primary" data-dismiss="modal">Tutup</button></div>
+                </div>
+            </div>
+        </div>
+<?php endif;?>
+<script src="../../js/jquery.js"></script>
+        <script src="../../js/bootstrap.min.js"></script>
+        <script>
+$(function(){
+    $('#formConfirmImport').on('submit',function(){
+        $('#btnProsesImport').prop('disabled',true).html('<i class="fa fa-spinner fa-spin"></i> Menyimpan...');
+    });
+    <?php if ($success || ($error && ($_POST['action'] ?? '') === 'import')):?>
+    $('#hasilImportModal').modal('show');
+    <?php endif;?>
+});
+</script>
+    </body>
+</html>

@@ -1,26 +1,26 @@
 ﻿<!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login | QA Kalibrasi</title>
-    <link rel="icon" type="image/png" href="/qa_kalibrasi/images/favicon-toto-qa.png?v=1">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.4.1/dist/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
-    <style>
-        .posisitengah {
-            margin: 0 auto;
-        }
-    </style>
-</head>
-<body style="background-color: #f4f6f9;">
-    <div class="container mt-5">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Login | QA Kalibrasi</title>
+        <link rel="icon" type="image/png" href="/qa_kalibrasi/images/favicon-toto-qa.png?v=1">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.4.1/dist/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+        <style>
+            .posisitengah {
+                margin: 0 auto;
+            }
+        </style>
+    </head>
+    <body style="background-color: #f4f6f9;">
+        <div class="container mt-5">
         <br>
         <div class="col-md-6 posisitengah">
             
             <img src="images/LogoTOTO.png?v=<?= time(); ?>" width="360" class="rounded mx-auto d-block" style="margin-bottom: 50px;">
             
             <div class="card mt-4" style="border-radius: 10px;">
-                <div class="card-body" padding: 30px;">
+                    <div class="card-body" padding: 30px;">
                     <form action="cek_login.php" method="POST" id="loginForm" autocomplete="on">
                         <div class="form-group">
                             <label for="exampleInputEmail1" style="font-weight: bold; color: #555;">User ID</label>

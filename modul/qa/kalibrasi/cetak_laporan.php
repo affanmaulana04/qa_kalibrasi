@@ -1,9 +1,12 @@
 <?php
 session_start();
-if (empty($_SESSION['login'])) {http_response_code(401);exit('Login diperlukan.');}
-require_once __DIR__.'/../../../inc/inc_koneksi.php';
-require_once __DIR__.'/../../../inc/qa_rbac.php';
-qaRbacRequireAny($konek,['kalibrasi','approval_pemeriksa','approval_penyetuju','laporan_hasil']);
+if (empty($_SESSION['login'])) {
+    http_response_code(401);
+    exit('Login diperlukan.');
+}
+require_once __DIR__ . '/../../../inc/inc_koneksi.php';
+require_once __DIR__ . '/../../../inc/qa_rbac.php';
+qaRbacRequireAny($konek, ['kalibrasi', 'approval_pemeriksa', 'approval_penyetuju', 'laporan_hasil']);
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -635,12 +638,7 @@ html, body {
 .sign-operator-name { font-weight: bold; min-height: 14px; margin-bottom: 2px; }
 .sign-role-label { font-weight: bold; }
 
-/* ================================================================
- * STANDARD UKURAN KOTAK VALIDASI
- * Mengikuti ukuran kotak validasi Format C.
- * Hanya area validasi/tanda tangan yang distandarkan; layout laporan
- * lainnya tidak diubah.
- * ================================================================ */
+
 .sign-b, .sign-d, .sign-j, .sign-k, .sign-l, .sign-m {
     width: 96mm !important;
     margin: 0 15mm 0 auto !important;
@@ -771,50 +769,261 @@ html, body {
 .report > .header > tbody > tr > td.approval { width:26% !important; }
 </style>
 <style id="qa-sz-only">
-/* Format S and Z only. Leave existing A-Y styling intact. */
-.report-sz{width:206mm;min-height:0;margin:2mm auto;border:.5mm solid #000;padding:0 0 1.5mm;background:#fff;font:8pt Arial,sans-serif;display:flex;flex-direction:column;color:#000}
-.report-sz *{box-sizing:border-box}
-.sz-company{text-align:center;font-weight:bold;padding:1mm 0}
-.sz-content{width:176mm;margin:0 auto;display:flex;flex-direction:column;flex:1}
-.sz-title{text-align:center;font:14pt Arial,sans-serif;margin:5mm 0 4mm}
-.sz-info,.sz-grid,.sz-details,.sz-sign{width:100%;border-collapse:collapse;table-layout:fixed}
-.sz-info td,.sz-grid th,.sz-grid td,.sz-details td,.sz-sign th,.sz-sign td{border:.25mm solid #000;vertical-align:middle;padding:.65mm .8mm;overflow-wrap:anywhere}
-.sz-info td:nth-child(1),.sz-info td:nth-child(3){width:20%}
-.sz-info td:nth-child(2),.sz-info td:nth-child(4){width:30%}
-/* Footer S/Z memakai 4 kolom 20% / 30% / 30% / 20% sesuai form acuan. */
-.sz-details{table-layout:fixed}
-.sz-details td{overflow-wrap:anywhere}
-/* Format S/Z: nilai paling kanan pada footer rata tengah, tanpa mengubah label atau keterangan. */
-.report-sz .sz-details tr > td:nth-child(4){text-align:center}
-.sz-info tr{height:5.3mm}.sz-details tr{height:5.5mm}
-.sz-results-heading{text-align:center;border:.25mm solid #000;border-bottom:0;font:10pt "Times New Roman",serif;padding:.9mm}
-.sz-grid{text-align:center;font:9pt "Times New Roman",serif}
-.sz-grid th{font-weight:normal;height:8mm}
-.sz-grid thead tr:nth-child(2) th{height:10mm}
-.sz-grid td{height:7mm}
-.sz-grid tbody tr + tr td{border-top-style:dotted}
-.sz-grid .sz-standard-cell{padding:0}
-.sz-standard-inner{display:grid;grid-template-columns:1fr 1fr;align-items:center;min-height:6mm}
-.sz-standard-inner span{padding:0 .6mm}
-.sz-grid .sz-vertical{writing-mode:vertical-rl;text-orientation:upright;letter-spacing:1.3mm;font-size:8pt;text-align:center;white-space:nowrap}
-.sz-details .sz-note{height:17mm;vertical-align:top}
-.sz-footer{margin-top:4mm;padding-top:0}
-.sz-city{width:96mm;margin-left:auto;padding:1mm 0}
-.sz-sign{width:96mm;margin-left:auto;text-align:center}
-.sz-sign th,.sz-sign td{font-weight:normal}.sz-sign .sz-sign-names td{height:26mm;vertical-align:bottom}.sz-sign .sz-sign-roles td{height:6mm}
-.sz-doc{text-align:right;margin:3mm 1mm 0;font-size:7pt}
-/* Format S background mengikuti kertas putih polos seperti form acuan. */
-.report-sz.sz-s .sz-results-heading,.report-sz.sz-s .sz-grid th,.report-sz.sz-s .sz-grid td{background:#fff!important;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.sz-s .sz-grid .sz-scale{width:9%}.sz-s .sz-grid .sz-std{width:30%}.sz-s .sz-grid .sz-hasil,.sz-s .sz-grid .sz-koreksi{width:30.5%}
-.sz-z .sz-grid .sz-scale{width:10%}.sz-z .sz-grid .sz-std{width:30%}.sz-z .sz-grid .sz-hasil{width:30%}.sz-z .sz-grid .sz-koreksi{width:30%}
-/* Format Z: label dan satuan dalam satu sel header tanpa garis horizontal. */
-.sz-z .sz-grid thead th{height:20mm}
-@media print{.report-sz{margin:2mm auto!important;break-inside:avoid;page-break-inside:avoid}
-.report-sz.sz-long{min-height:0;display:block;break-inside:auto;page-break-inside:auto}
-.report-sz.sz-long .sz-content{display:block}
-.report-sz.sz-long .sz-footer{margin-top:4mm}
-.report-sz.sz-long .sz-grid tr{break-inside:avoid;page-break-inside:avoid}}
-</style>
+            /* Format S and Z only. Leave existing A-Y styling intact. */
+            .report-sz {
+                width: 206mm;
+                min-height: 0;
+                margin: 2mm auto;
+                border: .5mm solid #000;
+                padding: 0 0 1.5mm;
+                background: #fff;
+                font: 8pt Arial,sans-serif;
+                display: flex;
+                flex-direction: column;
+                color: #000
+            }
+            .report-sz * {
+                box-sizing: border-box
+            }
+            .sz-company {
+                text-align: center;
+                font-weight: bold;
+                padding: 1mm 0
+            }
+            .sz-content {
+                width: 176mm;
+                margin: 0 auto;
+                display: flex;
+                flex-direction: column;
+                flex: 1
+            }
+            .sz-title {
+                text-align: center;
+                font: 14pt Arial,sans-serif;
+                margin: 5mm 0 4mm
+            }
+            .sz-info,.sz-grid,.sz-details,.sz-sign {
+                width: 100%;
+                border-collapse: collapse;
+                table-layout: fixed
+            }
+            .sz-info td,.sz-grid th,.sz-grid td,.sz-details td,.sz-sign th,.sz-sign td {
+                border: .25mm solid #000;
+                vertical-align: middle;
+                padding: .65mm .8mm;
+                overflow-wrap: anywhere
+            }
+            .sz-info td:nth-child(1),.sz-info td:nth-child(3) {
+                width: 20%
+            }
+            .sz-info td:nth-child(2),.sz-info td:nth-child(4) {
+                width: 30%
+            }
+            /* Footer S/Z memakai 4 kolom 20% / 30% / 30% / 20% sesuai form acuan. */
+            .sz-details {
+                table-layout: fixed
+            }
+            .sz-details td {
+                overflow-wrap: anywhere
+            }
+            /* Format S/Z: nilai paling kanan pada footer rata tengah, tanpa mengubah label atau keterangan. */
+            .report-sz .sz-details tr > td:nth-child(4) {
+                text-align: center
+            }
+            .sz-info tr {
+                height: 5.3mm
+            }
+            .sz-details tr {
+                height: 5.5mm
+            }
+            .sz-results-heading {
+                text-align: center;
+                border: .25mm solid #000;
+                border-bottom: 0;
+                font: 10pt "Times New Roman",serif;
+                padding: .9mm
+            }
+            .sz-grid {
+                text-align: center;
+                font: 9pt "Times New Roman",serif
+            }
+            .sz-grid th {
+                font-weight: normal;
+                height: 8mm
+            }
+            .sz-grid thead tr:nth-child(2) th {
+                height: 10mm
+            }
+            .sz-grid td {
+                height: 7mm
+            }
+            .sz-grid tbody tr + tr td {
+                border-top-style: dotted
+            }
+            .sz-grid .sz-standard-cell {
+                padding: 0
+            }
+            .sz-standard-inner {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                align-items: center;
+                min-height: 6mm
+            }
+            .sz-standard-inner span {
+                padding: 0 .6mm
+            }
+            .sz-grid .sz-vertical {
+                writing-mode: vertical-rl;
+                text-orientation: upright;
+                letter-spacing: 1.3mm;
+                font-size: 8pt;
+                text-align: center;
+                white-space: nowrap
+            }
+            .sz-details .sz-note {
+                height: 17mm;
+                vertical-align: top
+            }
+            .sz-footer {
+                margin-top: 4mm;
+                padding-top: 0
+            }
+            .sz-city {
+                width: 96mm;
+                margin-left: auto;
+                padding: 1mm 0
+            }
+            .sz-sign {
+                width: 96mm;
+                margin-left: auto;
+                text-align: center
+            }
+            .sz-sign th,.sz-sign td {
+                font-weight: normal
+            }
+            .sz-sign .sz-sign-names td {
+                height: 26mm;
+                vertical-align: bottom
+            }
+            .sz-sign .sz-sign-roles td {
+                height: 6mm
+            }
+            .sz-doc {
+                text-align: right;
+                margin: 3mm 1mm 0;
+                font-size: 7pt
+            }
+            /* Format S background mengikuti kertas putih polos seperti form acuan. */
+            .report-sz.sz-s .sz-results-heading,.report-sz.sz-s .sz-grid th,.report-sz.sz-s .sz-grid td {
+                background: #fff!important;
+                color: #000;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact
+            }
+            .sz-s .sz-grid .sz-scale {
+                width: 9%
+            }
+            .sz-s .sz-grid .sz-std {
+                width: 30%
+            }
+            .sz-s .sz-grid .sz-hasil,.sz-s .sz-grid .sz-koreksi {
+                width: 30.5%
+            }
+            .sz-z .sz-grid .sz-scale {
+                width: 10%
+            }
+            .sz-z .sz-grid .sz-std {
+                width: 30%
+            }
+            .sz-z .sz-grid .sz-hasil {
+                width: 30%
+            }
+            .sz-z .sz-grid .sz-koreksi {
+                width: 30%
+            }
+            /* Format Z: label dan satuan dalam satu sel header tanpa garis horizontal. */
+            .sz-z .sz-grid thead th {
+                height: 20mm
+            }
+            @media print {
+                .report-sz {
+                    margin: 2mm auto!important;
+                    break-inside: avoid;
+                    page-break-inside: avoid
+                }
+                .report-sz.sz-long {
+                    min-height: 0;
+                    display: block;
+                    break-inside: auto;
+                    page-break-inside: auto
+                }
+                .report-sz.sz-long .sz-content {
+                    display: block
+                }
+                .report-sz.sz-long .sz-footer {
+                    margin-top: 4mm
+                }
+                .report-sz.sz-long .sz-grid tr {
+                    break-inside: avoid;
+                    page-break-inside: avoid
+                }
+            }
+            .report-aa { width:206mm; min-height:293mm; margin:2mm auto; border:.5mm solid #000; background:#fff; color:#000; font:9pt "Times New Roman",serif; }
+            .report-aa * { box-sizing:border-box; }
+            .aa-company { height:5mm; text-align:center; font-weight:bold; }
+            .aa-title { height:15mm; display:flex; align-items:center; justify-content:center; font-size:16pt; }
+            .aa-info,.aa-results,.aa-detail { width:176mm; margin:0 auto; border-collapse:collapse; table-layout:fixed; }
+            .aa-info td,.aa-results th,.aa-results td,.aa-detail td { border:.25mm solid #000; padding:.55mm 1mm; vertical-align:middle; }
+            .aa-info td { height:6mm; }
+            .aa-info .aa-label { width:20%; }
+            .aa-info .aa-value { width:28%; }
+            .aa-info .aa-right-label { width:28%; }
+            .aa-info .aa-right-value { width:24%; text-align:center; }
+            .aa-results th,.aa-results td { text-align:center; font-weight:normal; height:8mm; }
+            .aa-results .aa-section { height:6mm; padding:0; }
+            .aa-results .aa-heading { height:12mm; }
+            .aa-results .aa-repeat td { border-top-style:dotted; border-bottom-style:dotted; }
+            .aa-detail { margin-top:13mm; }
+            .aa-detail td { height:6mm; }
+            .aa-detail .aa-note { height:29mm; vertical-align:top; }
+            .aa-city { width:95mm; margin:2mm 15mm 0 auto; padding:1mm 0; text-align:left; }
+            .aa-sign { width:95mm; margin:0 15mm 0 auto; border-collapse:collapse; table-layout:fixed; }
+            .aa-sign th,.aa-sign td { border:.25mm solid #000; text-align:center; font-weight:normal; padding:1mm; }
+            .aa-sign .aa-space td { height:28mm; vertical-align:bottom; font-style:italic; }
+            .aa-sign .aa-roles td { height:6mm; }
+            .aa-document { text-align:right; margin:1mm 15mm 0; font-size:8pt; }
+            .report-ab { width:206mm; min-height:293mm; margin:2mm auto; border:.5mm solid #000; background:#fff; color:#000; font:8.5pt "Times New Roman",serif; position:relative; }
+            .report-ab * { box-sizing:border-box; }
+            .ab-company { text-align:center; font-weight:bold; height:5mm; }
+            .ab-title { width:176mm; margin:0 auto; height:15mm; display:flex; align-items:center; justify-content:center; font:16pt "Times New Roman",serif; }
+            .ab-info,.ab-results,.ab-detail { width:176mm; margin:0 auto; border-collapse:collapse; table-layout:fixed; }
+            .ab-info td,.ab-results th,.ab-results td,.ab-detail td { border:.25mm solid #000; padding:.5mm .8mm; vertical-align:middle; }
+            .ab-info td { height:6mm; }
+            .ab-info .ab-label { width:17%; }
+            .ab-info .ab-value { width:41%; }
+            .ab-info .ab-right-label { width:25%; }
+            .ab-info .ab-right-value { width:17%; text-align:center; }
+            .ab-results th,.ab-results td { text-align:center; font-weight:normal; }
+            .ab-results th { height:6mm; }
+            .ab-results td { height:6mm; }
+            .ab-results .ab-section { height:6mm; }
+            .ab-results .ab-scale-header { padding-left:0; padding-right:0; font-size:7.5pt; }
+            .ab-results tbody tr:not(:last-child) td { border-bottom-style:dotted; }
+            .ab-results .ab-standard-text { white-space:nowrap; }
+            .ab-results .ab-standard-text span + span { margin-left:1.5mm; }
+            .ab-results .ab-reverse-empty { position:relative; overflow:visible; }
+            .ab-results .ab-reverse-diagonal { position:absolute; top:0; left:0; width:100%; z-index:2; pointer-events:none; }
+            .ab-results .ab-reverse-diagonal::after { background:linear-gradient(to top right, transparent calc(50% - .3px), #000 50%, transparent calc(50% + .3px)); }
+            .ab-results .ab-blank td { border-top-style:dotted; border-bottom-style:dotted; }
+            .ab-detail td { height:6mm; }
+            .ab-detail .ab-note { height:25mm; vertical-align:top; }
+            .ab-city { width:88mm; margin:1mm 15mm 0 auto; padding:.7mm 0; }
+            .ab-sign { width:88mm; margin:0 15mm 0 auto; border-collapse:collapse; table-layout:fixed; }
+            .ab-sign th,.ab-sign td { border:.25mm solid #000; text-align:center; font-weight:normal; padding:.6mm; }
+            .ab-sign .ab-sign-space td { height:27mm; vertical-align:bottom; font-style:italic; }
+            .ab-sign .ab-sign-role td { height:5mm; }
+            .ab-document { text-align:right; margin:1mm 15mm 0; font-size:7.5pt; }
+        </style>
 </head>
 <body>
 
@@ -827,7 +1036,7 @@ html, body {
 
 <script>
 (function () {
-    const raw = <?php if (isset($qaReportPayload)): ?><?=json_encode(json_encode($qaReportPayload, JSON_INVALID_UTF8_SUBSTITUTE), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE)?><?php else: ?>sessionStorage.getItem('cetak_data')<?php endif; ?>;
+    const raw = <?php if (isset($qaReportPayload)): ?><?= json_encode(json_encode($qaReportPayload, JSON_INVALID_UTF8_SUBSTITUTE), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE)?><?php else: ?>sessionStorage.getItem('cetak_data')<?php endif; ?>;
 
     if (!raw) {
         document.getElementById('report').innerHTML =
@@ -881,14 +1090,6 @@ html, body {
 
 
 
-    /* ================================================================
-     * NORMALISASI DATA CETAK
-     * ---------------------------------------------------------------
-     * Semua format A-T boleh datang dari versi payload yang berbeda
-     * (master, riwayat lama, atau hasil_json snapshot). Sebelum masuk
-     * renderer, satukan nama field agar template Excel tidak pernah
-     * menerima literal "undefined".
-     * ================================================================ */
     data = (data && typeof data === 'object') ? data : {};
 
     // Judul laporan mengikuti jenis laporan yang dipilih saat Update Hasil.
@@ -1134,8 +1335,6 @@ html, body {
         try { return predicate(safeObj(x)); } catch (_) { return false; }
     }) || {};
 
-    /* A / H: lengkapi nilai standar dari JSON master bila snapshot hasil
-       hanya menyimpan actual-nya. */
     if (data.format === 'A' && data.hasil_array.length) {
         const r0 = safeObj(data.hasil_array[0]);
         const goStd = findStd(x => String(pick(x.posisi, x.label)).toUpperCase() === 'GO');
@@ -1219,9 +1418,6 @@ html, body {
     }
 
     /* M: toleransi AXIS/ANGLE tidak selalu ikut tersimpan di row actual. */
-    /* N: standar dan toleransi adalah master registration points.
-       Pastikan row hasil lama yang hanya menyimpan actual/koreksi tetap
-       mendapatkan nilai STANDAR persis dari qa_part.titik_standar_json. */
     if (data.format === 'N' && data.hasil_array.length) {
         data.hasil_array = data.hasil_array.map((rawRow, i) => {
             const row = safeObj(rawRow);
@@ -1234,8 +1430,6 @@ html, body {
         });
     }
 
-    /* N: posisi/bagian dinamis yang ditambahkan petugas saat update.
-       Tetap dukung histori lama yang hanya memiliki field hasil tunggal. */
     if (data.format === 'N') {
         let nCols = Array.isArray(data.posisi_kolom) ? data.posisi_kolom : [];
         if (!nCols.length && data.hasil_array.length) {
@@ -1253,13 +1447,6 @@ html, body {
         });
     }
 
-    /* =================================================================
-     * UNIVERSAL MASTER-STANDARD MERGE A-T
-     * ---------------------------------------------------------------
-     * hasil_json menyimpan nilai actual/editable. Nilai standar yang readonly
-     * tetap bersumber dari qa_part.titik_standar_json ketika field tersebut
-     * belum ada di histori lama. Ini membuat semua format A-T konsisten.
-     * ================================================================= */
     const standardKeysByFormat = {
         B:['std_min','std_max'],
         C:['toleransi'],
@@ -1347,8 +1534,6 @@ html, body {
         }
     }
 
-    /* P: UI menyimpan row flat, sedangkan template Excel membutuhkan
-       item -> measurements[]. Bentuk ulang tanpa mengubah urutan data. */
     const normalizePItems = (rows) => {
         if (!Array.isArray(rows) || !rows.length) return [];
         if (rows.some(r => Array.isArray(safeObj(r).measurements))) {
@@ -1508,13 +1693,6 @@ html, body {
         });
     }
 
-/* ================================================================
- * RENDER CLEANUP
- * - Empty input -> blank cell with one diagonal strike.
- * - KETERANGAN stays blank when no content.
- * - Header creator date is hidden; footer validation date remains.
- * - Common typo/label cleanup and Format A print-only fields.
- * ================================================================ */
 <?php if (isset($qaReportPayload)): ?>
     // The embedded multi-alat renderer consumes the same normalized snapshot.
     window.qaExcelPrintData = data;
@@ -1900,6 +2078,156 @@ html, body {
         return;
     }
 
+    if (String(data.format || '').toUpperCase() === 'AB') {
+        const plainAB = value => value === null || value === undefined ? '' : String(value).trim();
+        const showAB = value => plainAB(value) ? qaEscText(plainAB(value)) : '///';
+        const dateAB = value => {
+            const match = plainAB(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+            return match ? match[3] + ' - ' + match[2] + ' - ' + match[1] : showAB(value);
+        };
+        const numberAB = value => {
+            const raw = plainAB(value).replace(',', '.');
+            return /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(raw) ? Number(raw) : NaN;
+        };
+        const actualAB = Array.isArray(data.hasil_array) ? data.hasil_array : [];
+        const mastersAB = Array.isArray(data.standard_points) && data.standard_points.length
+            ? data.standard_points : actualAB;
+        const reverseUnusedAB = mastersAB.length > 0 && mastersAB.every((_, i) =>
+            !plainAB((actualAB[i] || {}).hasil_berlawanan));
+        let bodyAB = '';
+        mastersAB.forEach(function(master, i) {
+            const row = actualAB[i] || {};
+            const standard = numberAB(master.standar);
+            const tolerance = numberAB(master.toleransi);
+            const range = Number.isFinite(standard) && Number.isFinite(tolerance) && tolerance >= 0
+                ? '(' + (standard - tolerance).toFixed(2) + ' ~ ' + (standard + tolerance).toFixed(2) + ')' : '';
+            const forward = plainAB(row.hasil_searah);
+            const reverse = plainAB(row.hasil_berlawanan);
+            const standardText = '<span class="ab-standard-text"><span>' + showAB(master.standar) + '</span>' +
+                '<span>' + (plainAB(master.toleransi) ? '±' + showAB(master.toleransi) : '') + '</span>' +
+                '<span>' + qaEscText(range) + '</span></span>';
+            const reverseCell = reverseUnusedAB
+                ? '<td class="ab-reverse-empty">' + (i === 0
+                    ? '<span class="diagonal-strike ab-reverse-diagonal" style="height:' + (mastersAB.length * 6) + 'mm"></span>' : '') + '</td>'
+                : '<td>' + qaEscText(reverse) + '</td>';
+            bodyAB += '<tr><td>' + showAB(master.skala) + '</td><td>' + standardText +
+                '</td><td>' + qaEscText(forward) + '</td>' + reverseCell + '</tr>';
+        });
+        for (let i = mastersAB.length; i < 9; i++) {
+            bodyAB += '<tr class="ab-blank"><td></td><td></td><td></td><td></td></tr>';
+        }
+        const humidityAB = plainAB(data.kelembapan);
+        const temperatureAB = plainAB(data.suhu);
+        const toleranceAB = plainAB(data.toleransi_global || data.toleransi);
+        document.getElementById('report').innerHTML = `
+            <div class="report-ab">
+                <div class="ab-company">PT. SURYA TOTO INDONESIA Tbk.</div>
+                <div class="ab-title">LAPORAN PEMERIKSAAN</div>
+                <table class="ab-info">
+                    <tr><td class="ab-label">NO. LAPORAN</td><td class="ab-value">${showAB(data.no_laporan)}</td><td class="ab-right-label">SEKSI</td><td class="ab-right-value"><b>${showAB(data.seksi_pemilik || data.seksi)}</b></td></tr>
+                    <tr><td>NAMA ALAT</td><td>${showAB(data.nama_part || data.nama_alat)}</td><td rowspan="2">PETUGAS PERIKSA</td><td rowspan="2" class="ab-right-value">${qaSignatureName(data.operator || data.petugas)}</td></tr>
+                    <tr><td>NO. ALAT</td><td>${showAB(data.no_part || data.no_alat)}</td></tr>
+                    <tr><td>SPESIFIKASI</td><td>${showAB(data.spesifikasi)}</td><td rowspan="2">TANGGAL PERIKSA</td><td rowspan="2" class="ab-right-value">${dateAB(data.tanggal_periksa)}</td></tr>
+                    <tr><td>RESOLUSI</td><td>${showAB(data.resolusi)}</td></tr>
+                </table>
+                <table class="ab-results">
+                    <colgroup><col style="width:5.5%"><col style="width:35.5%"><col style="width:27.5%"><col style="width:31.5%"></colgroup>
+                    <thead><tr><th colspan="4" class="ab-section">HASIL PEMERIKSAAN</th></tr>
+                        <tr><th rowspan="3" class="ab-scale-header">SKALA</th><th rowspan="2">NILAI STANDAR</th><th colspan="2">HASIL</th></tr>
+                        <tr><th>Searah jarum jam</th><th>Berlawanan arah jarum jam</th></tr>
+                        <tr><th>Nm</th><th>Nm</th><th>Nm</th></tr></thead>
+                    <tbody>${bodyAB}</tbody>
+                </table>
+                <table class="ab-detail">
+                    <tr><td style="width:17%">METODE</td><td style="width:41%">${showAB(data.metode || data.metode_uji)}</td><td style="width:25%">KELEMBABAN RUANGAN</td><td style="width:17%;text-align:center">${humidityAB ? showAB(qaHumidityValue(humidityAB)) + ' %' : '///'}</td></tr>
+                    <tr><td>STANDAR UJI</td><td>${showAB(data.standar_uji)}</td><td>STANDAR TOLERANSI</td><td style="text-align:center">${showAB(toleranceAB)}</td></tr>
+                    <tr><td>TRACEABILITY</td><td>${showAB(data.traceability)}</td><td>KEPUTUSAN</td><td style="text-align:center;font-weight:bold">${showAB(data.status_final || data.keputusan)}</td></tr>
+                    <tr><td>SUHU RUANGAN</td><td>${temperatureAB ? showAB(qaSuhuValue(temperatureAB)) + ' °C' : '///'}</td><td>PERIKSA BERIKUTNYA</td><td style="text-align:center">${dateAB(data.jadwal_berikutnya || data.periode_berikutnya)}</td></tr>
+                    <tr><td colspan="4" class="ab-note">KETERANGAN :<br>${qaKeterangan(data.keterangan)}</td></tr>
+                </table>
+                <div class="ab-city">TANGERANG, ${dateAB(data.tanggal_periksa)}</div>
+                <table class="ab-sign">
+                    <tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr>
+                    <tr class="ab-sign-space"><td>${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td>
+                        <td>${qaSignatureName(data.pemeriksa || data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td>
+                        <td>${qaSignatureName(data.penyetuju || data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td></tr>
+                    <tr class="ab-sign-role"><td>PETUGAS</td><td>FOREMAN</td><td>SUPERVISOR</td></tr>
+                </table>
+                <div class="ab-document">STIS-CMFG4-05/R4</div>
+            </div>`;
+        return;
+    }
+
+    if (data.format === 'AA') {
+        const escapeAA = value => value === null || value === undefined || String(value).trim() === ''
+            ? '///' : String(value).trim().replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        const plainAA = value => value === null || value === undefined ? '' : String(value).trim();
+        const dateAA = value => {
+            const match = plainAA(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+            return match ? match[3] + ' - ' + match[2] + ' - ' + match[1] : escapeAA(value);
+        };
+        const actual = Array.isArray(data.hasil_array) ? data.hasil_array : [];
+        const masters = Array.isArray(data.standard_points) && data.standard_points.length === 3
+            ? data.standard_points : (actual.length === 3 ? actual : []);
+        let body = '';
+        for (let group = 0; group < 3; group++) {
+            const master = masters[group] || actual[group * 3] || {};
+            for (let repeat = 0; repeat < 3; repeat++) {
+                const row = actual.length === 9 ? actual[group * 3 + repeat] || {} : {};
+                const standard = plainAA(master.standar || row.standar);
+                const measured = plainAA(row.hasil);
+                const difference = Number(measured.replace(',', '.')) - Number(standard.replace(',', '.'));
+                body += '<tr' + (repeat === 1 ? ' class="aa-repeat"' : '') + '>' +
+                    (repeat === 0 ? '<td rowspan="3">' + escapeAA(master.cairan_std || row.cairan_std) + '</td>' +
+                        '<td rowspan="3">' + escapeAA(standard) + '</td>' : '') +
+                    '<td>' + (measured ? escapeAA(measured) : '') + '</td><td>' +
+                    (measured && standard && Number.isFinite(difference)
+                        ? escapeAA(difference.toFixed(2)) : '') + '</td></tr>';
+            }
+        }
+        const result = plainAA(data.status_final || data.keputusan).toUpperCase();
+        const tolerance = plainAA(data.toleransi_global || data.toleransi);
+        const tolText = tolerance ? (/^\s*(?:±|\+\/-)/u.test(tolerance) ? tolerance : '± ' + tolerance) : '';
+        const humidity = plainAA(data.kelembapan);
+        const temperature = plainAA(data.suhu);
+        document.getElementById('report').innerHTML = `
+            <div class="report-aa">
+                <div class="aa-company">PT. SURYA TOTO INDONESIA Tbk.</div>
+                <div class="aa-title">LAPORAN PEMERIKSAAN</div>
+                <table class="aa-info">
+                    <tr><td class="aa-label">NO. LAPORAN</td><td class="aa-value">${escapeAA(data.no_laporan)}</td><td class="aa-right-label">SEKSI</td><td class="aa-right-value"><b>${escapeAA(data.seksi_pemilik || data.seksi)}</b></td></tr>
+                    <tr><td>NAMA ALAT</td><td>${escapeAA(data.nama_part || data.nama_alat)}</td><td rowspan="2">PETUGAS PERIKSA</td><td rowspan="2" class="aa-right-value">${qaSignatureName(data.operator || data.petugas)}</td></tr>
+                    <tr><td>NO. ALAT</td><td>${escapeAA(data.no_part || data.no_alat)}</td></tr>
+                    <tr><td>SPESIFIKASI</td><td>${escapeAA(data.spesifikasi)}</td><td rowspan="2">TANGGAL PERIKSA</td><td rowspan="2" class="aa-right-value">${dateAA(data.tanggal_periksa)}</td></tr>
+                    <tr><td>RESOLUSI</td><td>${escapeAA(data.resolusi)}</td></tr>
+                </table>
+                <table class="aa-results">
+                    <thead><tr><th colspan="4" class="aa-section">HASIL PEMERIKSAAN</th></tr>
+                    <tr class="aa-heading"><th rowspan="2" style="width:17%">CAIRAN STD</th><th colspan="2">HASIL PEMERIKSAAN</th><th rowspan="2" style="width:25%">KOREKSI</th></tr>
+                    <tr><th style="width:29%">STANDAR<br>( pH )</th><th style="width:29%">HASIL<br>( pH )</th></tr></thead>
+                    <tbody>${body}</tbody>
+                </table>
+                <table class="aa-detail">
+                    <tr><td>METODE</td><td>${escapeAA(data.metode || data.metode_uji)}</td><td>KELEMBABAN RUANGAN</td><td style="text-align:center">${humidity ? escapeAA(qaHumidityValue(humidity)) + ' %' : '///'}</td></tr>
+                    <tr><td>STANDAR UJI</td><td>${escapeAA(data.standar_uji)}</td><td>STANDAR TOLERANSI</td><td style="text-align:center">${escapeAA(tolText)}${tolText && !/pH/i.test(tolText) ? ' pH' : ''}</td></tr>
+                    <tr><td>TRACEABILITY</td><td>${escapeAA(data.traceability)}</td><td>KEPUTUSAN</td><td style="text-align:center;font-weight:bold">${escapeAA(result)}</td></tr>
+                    <tr><td>SUHU RUANGAN</td><td>${temperature ? escapeAA(qaSuhuValue(temperature)) + ' °C' : '///'}</td><td>PERIKSA BERIKUTNYA</td><td style="text-align:center">${dateAA(data.jadwal_berikutnya || data.periode_berikutnya)}</td></tr>
+                    <tr><td colspan="4" class="aa-note">KETERANGAN :<br>${qaKeterangan(data.keterangan)}</td></tr>
+                </table>
+                <div class="aa-city">TANGERANG, ${dateAA(data.tanggal_periksa)}</div>
+                <table class="aa-sign">
+                    <tr><th>DIBUAT</th><th>DIPERIKSA</th><th>DISETUJUI</th></tr>
+                    <tr class="aa-space"><td>${qaSignatureName(data.operator || data.petugas)}<br>${qaApprovalDate('pembuat')}</td>
+                        <td>${qaSignatureName(data.pemeriksa || data.foreman)}<br>${qaApprovalDate('pemeriksa')}</td>
+                        <td>${qaSignatureName(data.penyetuju || data.supervisor)}<br>${qaApprovalDate('penyetuju')}</td></tr>
+                    <tr class="aa-roles"><td>PETUGAS</td><td>FOREMAN</td><td>SUPERVISOR</td></tr>
+                </table>
+                <div class="aa-document">STIS-CMFG4-05/R4</div>
+            </div>`;
+        return;
+    }
+
 // ================= FORM U (LAPORAN KALIBRASI) =================
     if (String(data.format || '').toUpperCase() === 'U') {
         const eU=v=>(v===null||v===undefined||String(v).trim()===''?'///':String(v).trim().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'));
@@ -2043,8 +2371,6 @@ html, body {
         };
         const items = Array.isArray(data.hasil_array) ? data.hasil_array : [];
 
-        /* Format P = satu alat utama / satu nomor laporan.
-           TYPE + alat yang dipakai adalah sub-group di bawah NO 1. */
         function pStdPrint(m) {
             const std = String(m.std_label ?? '').trim();
             const mode = String(m.toleransi_mode || ((m.tol_plus !== undefined || m.tol_minus !== undefined) ? 'range' : 'pm'));
@@ -2251,8 +2577,6 @@ html, body {
         };
         const rows = Array.isArray(data.hasil_array) ? data.hasil_array : [];
 
-        /* Format O terbaru menyimpan GO dan NOT GO sebagai dua row hasil.
-           Di report keduanya harus tetap dianggap SATU nomor/al alat. */
         const groupsO = [];
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i] || {};
@@ -3109,11 +3433,6 @@ html, body {
             ? 'OK'
             : ((statusD === 'NOT GOOD' || statusD === 'NG') ? 'NG' : htmlD(data.keputusan || data.status_final));
 
-        /*
-         * Excel Format D membuat satu section untuk setiap kombinasi UNIT + MODE.
-         * Contoh: V/AC, mV/AC, mV/DC, ohm/(kosong).
-         * Dengan cara ini print registrasi dan update memakai bentuk tabel yang sama.
-         */
         const groupsD = [];
         rowsD.forEach((row, index) => {
             const r = row && typeof row === 'object' ? row : {};
@@ -3743,13 +4062,6 @@ html, body {
         const notGo = hasil.not_go || {};
         const alatStandar = hasil.alat_standar || data.alat_standar || {};
 
-        /*
-        * Format A:
-        * - STANDAR UJI di header = input header "Standar Uji"
-        * - SPEK + NO ALAT pada section ALAT STANDAR = input
-        *   STD Spesifikasi + STD No Alat dari masing-masing GO / NOT GO
-        * - STD UKURAN tetap memakai std_out / std_pitch
-        */
         const alatStandarGo = {
             no_alat: pick(
                 go.std_no_alat,
@@ -3844,10 +4156,6 @@ html, body {
             const pitch = block.pitch || {};
 
             return {
-                /*
-                * SECTION ALAT STANDAR
-                * Ambil langsung dari STD Spesifikasi / STD No Alat.
-                */
                 stdSpesifikasi: val(
                     pick(
                         block.std_spesifikasi,
@@ -3866,10 +4174,6 @@ html, body {
                     )
                 ),
 
-                /*
-                * SECTION STD UKURAN
-                * Nilai seperti 23.789 ±0.011 harus tetap berada di sini.
-                */
                 stdOut: val(block.std_out),
                 tolOut: val(block.tol_out),
                 rangeOut: val(block.range_out),
@@ -3878,9 +4182,6 @@ html, body {
                 tolPitch: val(block.tol_pitch),
                 rangePitch: val(block.range_pitch),
 
-                /*
-                * HASIL UKUR
-                */
                 outDep: val(out.dep),
                 outTen: val(out.ten),
                 outBel: val(out.bel),
@@ -3946,10 +4247,6 @@ html, body {
             data.keterangan ||
             '';
 
-        /*
-        * Hindari °C dan % menjadi double jika input user
-        * sudah mengandung simbolnya.
-        */
         const suhuRaw = String(data.suhu || '')
             .trim()
             .replace(/\s*°?\s*C\s*$/i, '');
@@ -5088,8 +5385,9 @@ html, body {
 </script>
 <?php if (isset($qaReportPayload)): ?>
 <script>
-<?php readfile(__DIR__.'/../../../js/qa_excel_report.js'); ?>
-</script>
+            <?php readfile(__DIR__ . '/../../../js/qa_excel_report.js'); ?>
+
+        </script>
 <?php endif; ?>
 </body>
 </html>

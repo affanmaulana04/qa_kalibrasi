@@ -6,13 +6,14 @@ if (empty($_SESSION['login'])) {
     exit;
 }
 
-require_once __DIR__.'/../../../inc/inc_koneksi.php';
-require_once __DIR__.'/../../../inc/qa_rbac.php';
+require_once __DIR__ . '/../../../inc/inc_koneksi.php';
+require_once __DIR__ . '/../../../inc/qa_rbac.php';
 $monthlyPermissions = ['jadwal_bulanan', 'jadwal_bulanan_internal', 'jadwal_bulanan_external'];
 qaRbacRequireAny($konek, $monthlyPermissions);
 $monthlyAvailableFormats = [];
-foreach (['1','2','3'] as $formatCode) {
-    if (qaRbacCan($konek, qaRbacMonthlyPermission($formatCode))) $monthlyAvailableFormats[] = $formatCode;
+foreach (['1', '2', '3'] as $formatCode) {
+    if (qaRbacCan($konek, qaRbacMonthlyPermission($formatCode)))
+        $monthlyAvailableFormats[] = $formatCode;
 }
 $monthlyDefaultFormat = $monthlyAvailableFormats[0];
 
@@ -26,7 +27,7 @@ $monthlyReportOptions = [
     'errors' => [],
 ];
 if (isset($_GET['format'])) {
-    if (in_array((string)$_GET['format'], ['1','2','3'], true)) {
+    if (in_array((string)$_GET['format'], ['1', '2', '3'], true)) {
         $monthlyReportOptions['format'] = (string)$_GET['format'];
         qaRbacRequire($konek, qaRbacMonthlyPermission($monthlyReportOptions['format']));
     } else {
@@ -34,7 +35,8 @@ if (isset($_GET['format'])) {
     }
 }
 foreach (['bulan' => [1, 12], 'tahun' => [1900, 9999]] as $name => $range) {
-    if (!isset($_GET[$name])) continue;
+    if (!isset($_GET[$name]))
+        continue;
     $value = is_string($_GET[$name]) ? filter_var($_GET[$name], FILTER_VALIDATE_INT, [
         'options' => ['min_range' => $range[0], 'max_range' => $range[1]]
     ]) : false;

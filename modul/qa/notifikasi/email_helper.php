@@ -25,15 +25,7 @@ if (!defined('QA_REPORT_URL')) {
 }
 
 
-/**
- * Membentuk URL cetak. Jika token tersedia, report_qa.php akan
- * membaca snapshot email terkait, bukan data qa_part terbaru.
- *
- * @param string $printToken
- * @return string
- */
-function qaBuildReportUrl($printToken = '')
-{
+function qaBuildReportUrl($printToken = '') {
     $url = QA_REPORT_URL;
     $printToken = trim((string)$printToken);
 
@@ -54,21 +46,6 @@ function qaBuildReportUrl($printToken = '')
 // KIRIM EMAIL
 // ============================================================
 
-/**
- * Mengirim email QA.
- *
- * Parameter $cc bersifat opsional agar pemanggilan lama (mis. reminder
- * mingguan) tetap kompatibel. Format $cc yang didukung:
- * - ['email1@contoh.com', 'email2@contoh.com']
- * - [['email' => 'email1@contoh.com', 'name' => 'Nama 1'], ...]
- *
- * @param string $email
- * @param string $namaPenerima
- * @param string $subjek
- * @param string $isiHtml
- * @param array<int,mixed>|string|null $cc
- * @return array{success:bool,message:string}
- */
 function qaKirimEmail(
     $email,
     $namaPenerima,
@@ -153,12 +130,7 @@ function qaKirimEmail(
 // FORMAT TANGGAL
 // ============================================================
 
-/**
- * @param mixed $tanggal
- * @return string
- */
-function qaFormatTanggal($tanggal)
-{
+function qaFormatTanggal($tanggal) {
     if (
         !$tanggal
         || $tanggal === '0000-00-00'
@@ -178,14 +150,7 @@ function qaFormatTanggal($tanggal)
 }
 
 
-/**
- * Format tanggal untuk teks email, contoh: 28 September 2026.
- *
- * @param mixed $tanggal
- * @return string
- */
-function qaFormatTanggalIndonesia($tanggal)
-{
+function qaFormatTanggalIndonesia($tanggal) {
     if (!$tanggal || $tanggal === '0000-00-00') {
         return '-';
     }
@@ -222,12 +187,7 @@ function qaFormatTanggalIndonesia($tanggal)
 // ESCAPE HTML
 // ============================================================
 
-/**
- * @param mixed $value
- * @return string
- */
-function qaEsc($value)
-{
+function qaEsc($value) {
     return htmlspecialchars(
         (string)$value,
         ENT_QUOTES,
@@ -240,12 +200,7 @@ function qaEsc($value)
 // STATUS EMAIL
 // ============================================================
 
-/**
- * @param int|string $selisihHari
- * @return array{label:string,bg:string,color:string,border:string}
- */
-function qaStatusEmail($selisihHari)
-{
+function qaStatusEmail($selisihHari) {
     $selisihHari = (int)$selisihHari;
 
     if ($selisihHari < 0) {
@@ -279,12 +234,6 @@ function qaStatusEmail($selisihHari)
 // TABEL EMAIL CORPORATE
 // ============================================================
 
-/**
- * @param array<int,array<string,mixed>> $rows
- * @param int $nomorAwal
- * @param bool $overdueSection
- * @return string
- */
 function qaTabelEmail(
     $rows,
     $nomorAwal = 1,
@@ -363,8 +312,7 @@ function qaTabelEmail(
 // LEGEND CORPORATE
 // ============================================================
 
-function qaLegendEmail()
-{
+function qaLegendEmail() {
     return
         '<table role="presentation" cellpadding="0" cellspacing="0" border="0" '
         . 'style="margin-top:14px;font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#536273;">'
@@ -384,17 +332,6 @@ function qaLegendEmail()
 // TEMPLATE EMAIL CORPORATE
 // ============================================================
 
-/**
- * @param string $sapaan
- * @param string $subjek
- * @param string $intro
- * @param array<int,array<string,mixed>> $jadwal
- * @param array<int,array<string,mixed>> $terlewat
- * @param string $printToken
- * @param string $periodeMulai Format Y-m-d
- * @param string $periodeSelesai Format Y-m-d
- * @return string
- */
 function qaTemplateEmail(
     $sapaan,
     $subjek,

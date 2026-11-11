@@ -1,8 +1,7 @@
 <?php
 
 /** Catat hasil pengiriman tanpa menghentikan reminder jika database log gagal. */
-function qaSimpanLogEmailValidasi($konek, $uid, $email, $jenis, $jumlahPending, $hasil, $isTest = false, $isCc = false)
-{
+function qaSimpanLogEmailValidasi($konek, $uid, $email, $jenis, $jumlahPending, $hasil, $isTest = false, $isCc = false) {
     $stmt = null;
     try {
         $pemeriksaan = $jenis === 'PEMERIKSAAN' ? (int)$jumlahPending : 0;

@@ -31,7 +31,7 @@ function loginResponse($status, $message = '', $code = '', $redirect = '') {
 $_SESSION['jamlogin'] = gmdate("H:i:s", time() + 60 * 60 * 7);
 
 $userid = trim((string)($_POST['userid'] ?? ''));
-$pass   = (string)($_POST['password'] ?? '');
+$pass = (string)($_POST['password'] ?? '');
 
 if ($userid === '' || $pass === '') {
     loginResponse('error', 'Username dan password wajib diisi.', 'required');
@@ -62,19 +62,19 @@ if ((string)($r['pword'] ?? '') !== md5($pass)) {
     loginResponse('error', 'Password salah.', 'password');
 }
 
-$_SESSION['userid']         = $r['uid'];
-$_SESSION['username']       = $r['uname'];
-$_SESSION['nama_lengkap']   = $r['uname'];
-$_SESSION['role']           = $r['role'];
-$_SESSION['login']          = 1;
-$_SESSION['admin']          = $r['admin'] ?? 'N';
-$_SESSION['sapaan']         = $r['sapaan'] ?? '';
-$_SESSION['seksi_user']     = $r['seksi'] ?? '';
-$_SESSION['email_user']     = $r['email_pembuat'] ?? '';
+$_SESSION['userid'] = $r['uid'];
+$_SESSION['username'] = $r['uname'];
+$_SESSION['nama_lengkap'] = $r['uname'];
+$_SESSION['role'] = $r['role'];
+$_SESSION['login'] = 1;
+$_SESSION['admin'] = $r['admin'] ?? 'N';
+$_SESSION['sapaan'] = $r['sapaan'] ?? '';
+$_SESSION['seksi_user'] = $r['seksi'] ?? '';
+$_SESSION['email_user'] = $r['email_pembuat'] ?? '';
 $_SESSION['namaemail_user'] = $r['uname'];
-$_SESSION['pembuat']        = $r['pembuat'] ?? 'N';
-$_SESSION['pemeriksa']      = $r['pemeriksa'] ?? 'N';
-$_SESSION['penyetuju']      = $r['penyetuju'] ?? 'N';
+$_SESSION['pembuat'] = $r['pembuat'] ?? 'N';
+$_SESSION['pemeriksa'] = $r['pemeriksa'] ?? 'N';
+$_SESSION['penyetuju'] = $r['penyetuju'] ?? 'N';
 
 $up = mysqli_prepare($konek, "UPDATE `user` SET online='Y', pc_login=? WHERE uid=?");
 if ($up) {

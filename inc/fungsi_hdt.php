@@ -1,11 +1,11 @@
 <?php
-function sukses_masuk($userid,$name){
-	//header('location:media.php?module=home');
-	
-	
-	header('location:media.php?module=home');
-	// Apabila username dan password ditemukan
-/*	$login=mysql_query("SELECT * FROM admins WHERE username='$username' AND password='$pass' AND blokir='N'");
+function sukses_masuk($userid, $name) {
+    //header('location:media.php?module=home');
+    
+    
+    header('location:media.php?module=home');
+    // Apabila username dan password ditemukan
+    /*	$login=mysql_query("SELECT * FROM admins WHERE username='$username' AND password='$pass' AND blokir='N'");
 	$ketemu=mysql_num_rows($login);
 	$r=mysql_fetch_array($login);
 	if ($ketemu > 0){
@@ -43,7 +43,7 @@ function sukses_masuk($userid,$name){
 		header('location:media.php?module=home');
 	}
 	*/
-//	echo "<script>alert('".$userid." - ".$name."');</script>";
-	return false;
+    //	echo "<script>alert('".$userid." - ".$name."');</script>";
+    return false;
 }
 ?>

@@ -2,59 +2,6 @@
 
 
 
-/**
-
- * ============================================================
-
- * DAILY VALIDASI REMINDER QA + MAGIC LOGIN
-
- * ============================================================
-
- *
-
- * Email dipisah berdasarkan tahap validasi:
-
- * - menunggu_pemeriksa  -> user.pemeriksa = 'Y'
-
- * - menunggu_penyetuju  -> user.penyetuju = 'Y'
-
- *
-
- * Setiap email mendapatkan magic-login token milik user penerima.
-
- * Tombol "Buka Transaksi Validasi":
-
- *   email -> validasi_login.php?token=... -> auto login user penerima
-
- *   -> transaksi_kalibrasi.php
-
- *
-
- * Production:
-
- *   Windows Task Scheduler, setiap hari pukul 15:00.
-
- *
-
- * Test:
-
- *   php daily_validasi_reminder.php --test --email=alamat@email.com
-
- *
-
- * Catatan:
-
- * - Jalankan 03_validasi_login_token.sql terlebih dahulu.
-
- * - validasi_login.php harus sudah ada di modul/qa.
-
- * - CC1/CC2 disiapkan melalui qa_email_validasi_config.
-
- * - Jika CC diisi nanti, CC menerima salinan INFORMASI terpisah tanpa magic-login token.
-
- * ============================================================
-
- */
 
 
 
@@ -123,8 +70,10 @@ foreach ($argv ?? [] as $arg) {
 
 
 
-if (PHP_SAPI !== 'cli') exit("Hanya dapat dijalankan melalui CLI.\n");
-if (!$isTest && $testEmail !== '') exit("--email hanya boleh bersama --test.\n");
+if (PHP_SAPI !== 'cli')
+    exit("Hanya dapat dijalankan melalui CLI.\n");
+if (!$isTest && $testEmail !== '')
+    exit("--email hanya boleh bersama --test.\n");
 
 if ($isTest && $testEmail === '') {
 
@@ -144,41 +93,24 @@ $logFile = __DIR__ . '/daily_validasi_reminder.log';
 
 
 
-function qaDailyValidasiLog($message)
-
-{
+function qaDailyValidasiLog($message) {
 
     global $logFile;
 
 
 
     file_put_contents(
-
         $logFile,
-
         '[' . date('Y-m-d H:i:s') . '] ' . (string)$message . PHP_EOL,
-
         FILE_APPEND
-
     );
 
 }
 
 
 
-/**
 
- * @param mysqli $konek
-
- * @param string $table
-
- * @return bool
-
- */
-
-function qaValidasiTableExists($konek, $table)
-
-{
+function qaValidasiTableExists($konek, $table) {
 
     $table = preg_replace('/[^A-Za-z0-9_]/', '', (string)$table);
 
@@ -204,23 +136,8 @@ function qaValidasiTableExists($konek, $table)
 
 
 
-/**
 
- * Mengambil transaksi pending sesuai status validasi.
-
- *
-
- * @param mysqli $konek
-
- * @param string $statusValidasi
-
- * @return array<int,array<string,mixed>>
-
- */
-
-function qaAmbilPendingValidasi($konek, $statusValidasi)
-
-{
+function qaAmbilPendingValidasi($konek, $statusValidasi) {
 
     $statusValidasi = trim((string)$statusValidasi);
 
@@ -234,17 +151,6 @@ function qaAmbilPendingValidasi($konek, $statusValidasi)
 
 
 
-    /*
-
-     * Pending validasi belum difinalisasi, sehingga alat masih berada
-
-     * di qa_part. Karena itu listing reminder tidak perlu JOIN ke semua
-
-     * tabel arsip. Ini juga mencegah query reminder gagal diam-diam
-
-     * apabila struktur tabel arsip berbeda.
-
-     */
 
     $stmt = $konek->prepare("
 
@@ -336,27 +242,8 @@ function qaAmbilPendingValidasi($konek, $statusValidasi)
 
 
 
-/**
 
- * Ambil user aktif berdasarkan flag pemeriksa/penyetuju.
-
- *
-
- * @param mysqli $konek
-
- * @param string $kolomRole
-
- * @param bool $isTest
-
- * @param string $testEmail
-
- * @return array<int,array<string,mixed>>
-
- */
-
-function qaAmbilPenerimaValidasi($konek, $kolomRole, $isTest, $testEmail)
-
-{
+function qaAmbilPenerimaValidasi($konek, $kolomRole, $isTest, $testEmail) {
 
     if (!in_array($kolomRole, ['pemeriksa', 'penyetuju'], true)) {
 
@@ -387,8 +274,8 @@ function qaAmbilPenerimaValidasi($konek, $kolomRole, $isTest, $testEmail)
 
     $rbacFilter = "UPPER(COALESCE(u.{$kolomRole}, 'N')) = 'Y'";
     if (qaRbacReady($konek)) {
-        $permission=$kolomRole==='pemeriksa'?'approval_pemeriksa':'approval_penyetuju';
-        $rbacFilter="((NOT EXISTS (SELECT 1 FROM qa_user_roles a0 WHERE a0.uid=u.uid)
+        $permission = $kolomRole === 'pemeriksa'?'approval_pemeriksa':'approval_penyetuju';
+        $rbacFilter = "((NOT EXISTS (SELECT 1 FROM qa_user_roles a0 WHERE a0.uid=u.uid)
             AND UPPER(COALESCE(u.{$kolomRole},'N'))='Y')
             OR EXISTS (SELECT 1 FROM qa_user_roles a
                 INNER JOIN qa_roles r ON r.id=a.role_id AND r.aktif=1
@@ -433,9 +320,7 @@ function qaAmbilPenerimaValidasi($konek, $kolomRole, $isTest, $testEmail)
     if ($isTest) {
 
         $safeEmail = $konek->real_escape_string(
-
             strtolower(trim((string)$testEmail))
-
         );
 
 
@@ -457,9 +342,7 @@ function qaAmbilPenerimaValidasi($konek, $kolomRole, $isTest, $testEmail)
     if (!$res) {
 
         qaDailyValidasiLog(
-
             'ERROR USER ' . strtoupper($kolomRole) . ' | ' . $konek->error
-
         );
 
         return [];
@@ -508,44 +391,13 @@ function qaAmbilPenerimaValidasi($konek, $kolomRole, $isTest, $testEmail)
 
 
 
-/**
-
- * Membuat magic-login token untuk satu penerima.
-
- *
-
- * Token asli hanya dikirim melalui URL email.
-
- * Database hanya menyimpan SHA-256 hash token.
-
- *
-
- * @param mysqli $konek
-
- * @param string $userUid
-
- * @param string $email
-
- * @param string $jenisValidasi pemeriksaan|persetujuan
-
- * @param string $baseUrl
-
- * @return array{success:bool,url:string,token_id:int,message:string}
-
- */
 
 function qaBuatMagicLoginValidasi(
-
     $konek,
-
     $userUid,
-
     $email,
-
     $jenisValidasi,
-
     $baseUrl
-
 ) {
 
     $userUid = trim((string)$userUid);
@@ -689,19 +541,12 @@ function qaBuatMagicLoginValidasi(
 
 
     $stmt->bind_param(
-
         'sssss',
-
         $tokenHash,
-
         $userUid,
-
         $jenisValidasi,
-
         $email,
-
         $expiredAt
-
     );
 
 
@@ -758,23 +603,8 @@ function qaBuatMagicLoginValidasi(
 
 
 
-/**
 
- * Cabut token apabila email gagal dikirim.
-
- *
-
- * @param mysqli $konek
-
- * @param int $tokenId
-
- * @return void
-
- */
-
-function qaCabutMagicLoginValidasi($konek, $tokenId)
-
-{
+function qaCabutMagicLoginValidasi($konek, $tokenId) {
 
     $tokenId = (int)$tokenId;
 
@@ -818,23 +648,8 @@ function qaCabutMagicLoginValidasi($konek, $tokenId)
 
 
 
-/**
 
- * Ambil konfigurasi CC berdasarkan jenis validasi.
-
- *
-
- * @param mysqli $konek
-
- * @param string $jenisValidasi PEMERIKSAAN|PERSETUJUAN
-
- * @return array<int,string> daftar UID CC
-
- */
-
-function qaAmbilUidCcValidasi($konek, $jenisValidasi)
-
-{
+function qaAmbilUidCcValidasi($konek, $jenisValidasi) {
 
     $jenisValidasi = strtoupper(trim((string)$jenisValidasi));
 
@@ -870,7 +685,8 @@ function qaAmbilUidCcValidasi($konek, $jenisValidasi)
 
             $uid = trim((string)$row['user_uid']);
 
-            if ($uid !== '') $uids[] = $uid;
+            if ($uid !== '')
+                $uids[] = $uid;
 
         }
 
@@ -909,9 +725,7 @@ function qaAmbilUidCcValidasi($konek, $jenisValidasi)
     if (!$stmt) {
 
         qaDailyValidasiLog(
-
             'ERROR CONFIG CC ' . $jenisValidasi . ' | ' . $konek->error
-
         );
 
         return [];
@@ -966,23 +780,8 @@ function qaAmbilUidCcValidasi($konek, $jenisValidasi)
 
 
 
-/**
 
- * Ambil data user untuk penerima salinan CC.
-
- *
-
- * @param mysqli $konek
-
- * @param string $uid
-
- * @return array<string,mixed>|null
-
- */
-
-function qaAmbilUserCcValidasi($konek, $uid)
-
-{
+function qaAmbilUserCcValidasi($konek, $uid) {
 
     $uid = trim((string)$uid);
 
@@ -1052,48 +851,13 @@ function qaAmbilUserCcValidasi($konek, $uid)
 
 
 
-/**
-
- * Kirim salinan informasi CC secara TERPISAH.
-
- *
-
- * Penting:
-
- * - Tidak menggunakan $mail->addCC() pada email utama.
-
- * - Tidak menyertakan magic-login URL milik penerima utama.
-
- * - Dengan begitu CC tidak bisa auto-login sebagai penerima utama.
-
- *
-
- * @param mysqli $konek
-
- * @param string $jenisValidasi PEMERIKSAAN|PERSETUJUAN
-
- * @param array<string,mixed> $penerimaUtama
-
- * @param array<int,array<string,mixed>> $rows
-
- * @param bool $isTest
-
- * @return int jumlah email CC berhasil dikirim
-
- */
 
 function qaKirimSalinanCcValidasi(
-
     $konek,
-
     $jenisValidasi,
-
     $penerimaUtama,
-
     $rows,
-
     $isTest
-
 ) {
 
     $uids = qaAmbilUidCcValidasi($konek, $jenisValidasi);
@@ -1133,13 +897,11 @@ function qaKirimSalinanCcValidasi(
         if (!$userCc) {
 
             qaDailyValidasiLog(
-
                 'SKIP CC ' . $jenisValidasi
 
                 . ' | UID ' . $uidCc
 
                 . ' tidak aktif/tidak punya email.'
-
             );
 
             continue;
@@ -1175,37 +937,23 @@ function qaKirimSalinanCcValidasi(
         if ($jenisValidasi === 'PEMERIKSAAN') {
 
             $htmlCc = qaTemplateEmailValidasiPemeriksa(
-
                 $userCc,
-
                 $rows,
-
                 '',
-
                 date('Y-m-d'),
-
                 true,
-
                 $namaUtama
-
             );
 
         } else {
 
             $htmlCc = qaTemplateEmailValidasiPenyetuju(
-
                 $userCc,
-
                 $rows,
-
                 '',
-
                 date('Y-m-d'),
-
                 true,
-
                 $namaUtama
-
             );
 
         }
@@ -1213,15 +961,10 @@ function qaKirimSalinanCcValidasi(
 
 
         $hasilCc = qaKirimEmail(
-
             $emailCc,
-
             trim((string)($userCc['uname'] ?? '')),
-
             $subject,
-
             $htmlCc
-
         );
 
 
@@ -1235,25 +978,21 @@ function qaKirimSalinanCcValidasi(
             $sent++;
 
             qaDailyValidasiLog(
-
                 'BERHASIL CC ' . $jenisValidasi
 
                 . ' | to=' . $emailCc
 
                 . ' | untuk=' . $uidUtama
-
             );
 
         } else {
 
             qaDailyValidasiLog(
-
                 'GAGAL CC ' . $jenisValidasi
 
                 . ' | to=' . $emailCc
 
                 . ' | ' . (string)($hasilCc['message'] ?? 'Unknown error')
-
             );
 
         }
@@ -1290,7 +1029,8 @@ if ($isTest) {
     $testUser = ['uname' => 'Tim QA (Preview)', 'sapaan' => 'Bapak/Ibu'];
     $sent = 0;
     foreach ($pendingTest as $jenisTest => $rowsTest) {
-        if (!$rowsTest) continue; // Jangan kirim email kosong.
+        if (!$rowsTest)
+            continue; // Jangan kirim email kosong.
         $htmlTest = $jenisTest === 'PEMERIKSAAN'
             ? qaTemplateEmailValidasiPemeriksa($testUser, $rowsTest, '', date('Y-m-d'), true, 'Tim QA')
             : qaTemplateEmailValidasiPenyetuju($testUser, $rowsTest, '', date('Y-m-d'), true, 'Tim QA');
@@ -1301,7 +1041,8 @@ if ($isTest) {
         $okTest = !empty($resultTest['success']);
         echo $jenisTest . ': ' . count($rowsTest) . ' data, '
             . ($okTest ? 'TERKIRIM' : 'GAGAL: ' . ($resultTest['message'] ?? 'Unknown')) . "\n";
-        if ($okTest) $sent++;
+        if ($okTest)
+            $sent++;
     }
     echo "Selesai. Email test terkirim: $sent. Tidak ada token/login atau perubahan status QA.\n";
     exit;
@@ -1316,11 +1057,9 @@ if ($isTest) {
 if (!qaValidasiTableExists($konek, 'qa_validasi_login_token')) {
 
     qaDailyValidasiLog(
-
         'ERROR | tabel qa_validasi_login_token belum ada. '
 
         . 'Jalankan 03_validasi_login_token.sql.'
-
     );
 
 
@@ -1364,31 +1103,23 @@ qaDailyValidasiLog('DAILY VALIDASI START' . ($isTest ? ' [TEST]' : ''));
 
 
 $pendingPemeriksa = qaAmbilPendingValidasi(
-
     $konek,
-
     'menunggu_pemeriksa'
-
 );
 
 
 
 $pendingPenyetuju = qaAmbilPendingValidasi(
-
     $konek,
-
     'menunggu_penyetuju'
-
 );
 
 
 
 qaDailyValidasiLog(
-
     'PENDING | pemeriksa=' . count($pendingPemeriksa)
 
     . ' | penyetuju=' . count($pendingPenyetuju)
-
 );
 
 
@@ -1414,15 +1145,10 @@ $testUserFound = false;
 if ($pendingPemeriksa) {
 
     $usersPemeriksa = qaAmbilPenerimaValidasi(
-
         $konek,
-
         'pemeriksa',
-
         $isTest,
-
         $testEmail
-
     );
 
 
@@ -1442,17 +1168,11 @@ if ($pendingPemeriksa) {
 
 
         $magic = qaBuatMagicLoginValidasi(
-
             $konek,
-
             $uid,
-
             $email,
-
             'pemeriksaan',
-
             $magicLoginBaseUrl
-
         );
 
 
@@ -1460,13 +1180,11 @@ if ($pendingPemeriksa) {
         if (empty($magic['success'])) {
 
             qaDailyValidasiLog(
-
                 'GAGAL TOKEN PEMERIKSA | uid=' . $uid
 
                 . ' | email=' . $email
 
                 . ' | ' . (string)($magic['message'] ?? 'Unknown error')
-
             );
 
             continue;
@@ -1484,21 +1202,15 @@ if ($pendingPemeriksa) {
 
 
         $html = qaTemplateEmailValidasiPemeriksa(
-
             $user,
-
             $pendingPemeriksa,
-
             (string)$magic['url'],
-
             date('Y-m-d')
-
         );
 
 
 
         qaDailyValidasiLog(
-
             'KIRIM PEMERIKSA | uid=' . $uid
 
             . ' | email=' . $email
@@ -1506,21 +1218,15 @@ if ($pendingPemeriksa) {
             . ' | pending=' . count($pendingPemeriksa)
 
             . ' | token_id=' . (int)$magic['token_id']
-
         );
 
 
 
         $hasil = qaKirimEmail(
-
             $email,
-
             trim((string)($user['uname'] ?? '')),
-
             $subject,
-
             $html
-
         );
 
 
@@ -1534,11 +1240,9 @@ if ($pendingPemeriksa) {
             $totalSent++;
 
             qaDailyValidasiLog(
-
                 'BERHASIL PEMERIKSA | ' . $email
 
                 . ' | token_id=' . (int)$magic['token_id']
-
             );
 
 
@@ -1548,17 +1252,11 @@ if ($pendingPemeriksa) {
             if (!$isTest) {
 
                 $totalCcSent += qaKirimSalinanCcValidasi(
-
                     $konek,
-
                     'PEMERIKSAAN',
-
                     $user,
-
                     $pendingPemeriksa,
-
                     false
-
                 );
 
             }
@@ -1566,23 +1264,18 @@ if ($pendingPemeriksa) {
         } else {
 
             qaCabutMagicLoginValidasi(
-
                 $konek,
-
                 (int)$magic['token_id']
-
             );
 
 
 
             qaDailyValidasiLog(
-
                 'GAGAL PEMERIKSA | ' . $email
 
                 . ' | token dicabut'
 
                 . ' | ' . (string)($hasil['message'] ?? 'Unknown error')
-
             );
 
         }
@@ -1592,9 +1285,7 @@ if ($pendingPemeriksa) {
 } else {
 
     qaDailyValidasiLog(
-
         'SKIP PEMERIKSA | tidak ada transaksi menunggu pemeriksa.'
-
     );
 
 }
@@ -1612,15 +1303,10 @@ if ($pendingPemeriksa) {
 if ($pendingPenyetuju) {
 
     $usersPenyetuju = qaAmbilPenerimaValidasi(
-
         $konek,
-
         'penyetuju',
-
         $isTest,
-
         $testEmail
-
     );
 
 
@@ -1640,17 +1326,11 @@ if ($pendingPenyetuju) {
 
 
         $magic = qaBuatMagicLoginValidasi(
-
             $konek,
-
             $uid,
-
             $email,
-
             'persetujuan',
-
             $magicLoginBaseUrl
-
         );
 
 
@@ -1658,13 +1338,11 @@ if ($pendingPenyetuju) {
         if (empty($magic['success'])) {
 
             qaDailyValidasiLog(
-
                 'GAGAL TOKEN PENYETUJU | uid=' . $uid
 
                 . ' | email=' . $email
 
                 . ' | ' . (string)($magic['message'] ?? 'Unknown error')
-
             );
 
             continue;
@@ -1682,21 +1360,15 @@ if ($pendingPenyetuju) {
 
 
         $html = qaTemplateEmailValidasiPenyetuju(
-
             $user,
-
             $pendingPenyetuju,
-
             (string)$magic['url'],
-
             date('Y-m-d')
-
         );
 
 
 
         qaDailyValidasiLog(
-
             'KIRIM PENYETUJU | uid=' . $uid
 
             . ' | email=' . $email
@@ -1704,21 +1376,15 @@ if ($pendingPenyetuju) {
             . ' | pending=' . count($pendingPenyetuju)
 
             . ' | token_id=' . (int)$magic['token_id']
-
         );
 
 
 
         $hasil = qaKirimEmail(
-
             $email,
-
             trim((string)($user['uname'] ?? '')),
-
             $subject,
-
             $html
-
         );
 
 
@@ -1732,11 +1398,9 @@ if ($pendingPenyetuju) {
             $totalSent++;
 
             qaDailyValidasiLog(
-
                 'BERHASIL PENYETUJU | ' . $email
 
                 . ' | token_id=' . (int)$magic['token_id']
-
             );
 
 
@@ -1746,17 +1410,11 @@ if ($pendingPenyetuju) {
             if (!$isTest) {
 
                 $totalCcSent += qaKirimSalinanCcValidasi(
-
                     $konek,
-
                     'PERSETUJUAN',
-
                     $user,
-
                     $pendingPenyetuju,
-
                     false
-
                 );
 
             }
@@ -1764,23 +1422,18 @@ if ($pendingPenyetuju) {
         } else {
 
             qaCabutMagicLoginValidasi(
-
                 $konek,
-
                 (int)$magic['token_id']
-
             );
 
 
 
             qaDailyValidasiLog(
-
                 'GAGAL PENYETUJU | ' . $email
 
                 . ' | token dicabut'
 
                 . ' | ' . (string)($hasil['message'] ?? 'Unknown error')
-
             );
 
         }
@@ -1790,9 +1443,7 @@ if ($pendingPenyetuju) {
 } else {
 
     qaDailyValidasiLog(
-
         'SKIP PENYETUJU | tidak ada transaksi menunggu penyetuju.'
-
     );
 
 }
@@ -1802,33 +1453,22 @@ if ($pendingPenyetuju) {
 if ($isTest && !$testUserFound) {
 
     $debugPemeriksa = qaAmbilPenerimaValidasi(
-
         $konek,
-
         'pemeriksa',
-
         true,
-
         $testEmail
-
     );
 
     $debugPenyetuju = qaAmbilPenerimaValidasi(
-
         $konek,
-
         'penyetuju',
-
         true,
-
         $testEmail
-
     );
 
 
 
     qaDailyValidasiLog(
-
         'TEST NO SEND | email=' . $testEmail
 
         . ' | pending_pemeriksa=' . count($pendingPemeriksa)
@@ -1838,7 +1478,6 @@ if ($isTest && !$testUserFound) {
         . ' | user_pemeriksa=' . count($debugPemeriksa)
 
         . ' | user_penyetuju=' . count($debugPenyetuju)
-
     );
 
 
@@ -1862,7 +1501,6 @@ if ($isTest && !$testUserFound) {
 
 
 qaDailyValidasiLog(
-
     'SELESAI | proses=' . $totalProcessed
 
     . ' | email_terkirim=' . $totalSent
@@ -1872,7 +1510,6 @@ qaDailyValidasiLog(
     . ' | pending_pemeriksa=' . count($pendingPemeriksa)
 
     . ' | pending_penyetuju=' . count($pendingPenyetuju)
-
 );
 
 

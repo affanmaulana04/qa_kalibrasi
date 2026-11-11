@@ -1,26 +1,4 @@
 <?php
-/**
- * ============================================================
- * MAGIC LOGIN VALIDASI QA
- * ============================================================
- *
- * URL yang akan dipakai dari email:
- *   validasi_login.php?token=<TOKEN_ACAK>
- *
- * Flow:
- * 1. Token dari URL di-hash SHA-256.
- * 2. Sistem mencari hash token pada qa_validasi_login_token.
- * 3. Cek token aktif + belum expired.
- * 4. Cek user tidak diblokir dan masih memiliki role yang sesuai.
- * 5. Session lama (jika ada) diganti menjadi session penerima email.
- * 6. Redirect langsung ke transaksi_kalibrasi.php.
- *
- * Catatan keamanan:
- * - Token asli tidak disimpan di database.
- * - UID/password tidak pernah ditaruh di URL.
- * - Link email berfungsi sebagai kredensial sementara sampai expired_at.
- * ============================================================
- */
 
 session_start();
 date_default_timezone_set('Asia/Jakarta');
@@ -39,8 +17,7 @@ if (!isset($konek) || !($konek instanceof mysqli)) {
     exit('Koneksi database tidak tersedia.');
 }
 
-function qaMagicLoginFail($message, $statusCode = 400)
-{
+function qaMagicLoginFail($message, $statusCode = 400) {
     http_response_code((int)$statusCode);
 
     $safeMessage = htmlspecialchars((string)$message, ENT_QUOTES, 'UTF-8');
@@ -127,11 +104,11 @@ if (strtoupper(trim((string)($row['block'] ?? 'N'))) === 'Y') {
 $jenisValidasi = strtolower(trim((string)$row['jenis_validasi']));
 
 if ($jenisValidasi === 'pemeriksaan') {
-    if (!qaRbacCanForUser($konek,(string)$row['uid'],'approval_pemeriksa')) {
+    if (!qaRbacCanForUser($konek, (string)$row['uid'], 'approval_pemeriksa')) {
         qaMagicLoginFail('Akun ini tidak lagi memiliki hak sebagai Pemeriksa.', 403);
     }
 } elseif ($jenisValidasi === 'persetujuan') {
-    if (!qaRbacCanForUser($konek,(string)$row['uid'],'approval_penyetuju')) {
+    if (!qaRbacCanForUser($konek, (string)$row['uid'], 'approval_penyetuju')) {
         qaMagicLoginFail('Akun ini tidak lagi memiliki hak sebagai Penyetuju.', 403);
     }
 } else {
@@ -156,21 +133,21 @@ if ($remoteIp !== '') {
     }
 }
 
-$_SESSION['jamlogin']        = gmdate('H:i:s', time() + (60 * 60 * 7));
-$_SESSION['nama_pc']         = $pcName;
-$_SESSION['userid']          = $row['uid'];
-$_SESSION['username']        = $row['uname'];
-$_SESSION['nama_lengkap']    = $row['uname'];
-$_SESSION['role']            = $row['role'];
-$_SESSION['login']           = 1;
-$_SESSION['admin']           = $row['admin'] ?? 'N';
-$_SESSION['sapaan']          = $row['sapaan'] ?? '';
-$_SESSION['seksi_user']      = $row['seksi'] ?? '';
-$_SESSION['email_user']      = $row['email_pembuat'] ?? '';
-$_SESSION['namaemail_user']  = $row['uname'];
-$_SESSION['pembuat']         = $row['pembuat'] ?? 'N';
-$_SESSION['pemeriksa']       = $row['pemeriksa'] ?? 'N';
-$_SESSION['penyetuju']       = $row['penyetuju'] ?? 'N';
+$_SESSION['jamlogin'] = gmdate('H:i:s', time() + (60 * 60 * 7));
+$_SESSION['nama_pc'] = $pcName;
+$_SESSION['userid'] = $row['uid'];
+$_SESSION['username'] = $row['uname'];
+$_SESSION['nama_lengkap'] = $row['uname'];
+$_SESSION['role'] = $row['role'];
+$_SESSION['login'] = 1;
+$_SESSION['admin'] = $row['admin'] ?? 'N';
+$_SESSION['sapaan'] = $row['sapaan'] ?? '';
+$_SESSION['seksi_user'] = $row['seksi'] ?? '';
+$_SESSION['email_user'] = $row['email_pembuat'] ?? '';
+$_SESSION['namaemail_user'] = $row['uname'];
+$_SESSION['pembuat'] = $row['pembuat'] ?? 'N';
+$_SESSION['pemeriksa'] = $row['pemeriksa'] ?? 'N';
+$_SESSION['penyetuju'] = $row['penyetuju'] ?? 'N';
 
 // Penanda audit bahwa login ini berasal dari magic link validasi.
 $_SESSION['qa_magic_login'] = 1;

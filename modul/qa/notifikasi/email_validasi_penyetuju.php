@@ -1,20 +1,14 @@
 <?php
 
-/**
- * Template email validasi QA - Corporate TOTO.
- * Fokus: ringkas, formal, minim dekorasi, dan aman untuk email client.
- */
 
 if (!function_exists('qaValidasiEmailEsc')) {
-    function qaValidasiEmailEsc($value)
-    {
+    function qaValidasiEmailEsc($value) {
         return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
     }
 }
 
 if (!function_exists('qaValidasiTanggal')) {
-    function qaValidasiTanggal($value)
-    {
+    function qaValidasiTanggal($value) {
         if (!$value || $value === '0000-00-00' || $value === '0000-00-00 00:00:00') {
             return '-';
         }
@@ -25,8 +19,7 @@ if (!function_exists('qaValidasiTanggal')) {
 }
 
 if (!function_exists('qaValidasiTanggalIndonesia')) {
-    function qaValidasiTanggalIndonesia($value)
-    {
+    function qaValidasiTanggalIndonesia($value) {
         $ts = strtotime((string)$value);
         if (!$ts) {
             return '-';
@@ -43,8 +36,7 @@ if (!function_exists('qaValidasiTanggalIndonesia')) {
 }
 
 if (!function_exists('qaValidasiSapaanNama')) {
-    function qaValidasiSapaanNama($sapaan, $nama)
-    {
+    function qaValidasiSapaanNama($sapaan, $nama) {
         $sapaan = trim((string)$sapaan);
         $nama = trim((string)$nama);
 
@@ -57,8 +49,7 @@ if (!function_exists('qaValidasiSapaanNama')) {
 }
 
 if (!function_exists('qaValidasiHasilStyle')) {
-    function qaValidasiHasilStyle($raw)
-    {
+    function qaValidasiHasilStyle($raw) {
         $hasil = strtoupper(trim((string)$raw));
 
         if ($hasil === '') {
@@ -86,15 +77,6 @@ if (!function_exists('qaValidasiHasilStyle')) {
 }
 
 
-/**
- * @param array<string,mixed> $penerima
- * @param array<int,array<string,mixed>> $rows
- * @param string $magicLoginUrl
- * @param string $tanggalKirim Format Y-m-d
- * @param bool $isCcInformasi
- * @param string $namaPenerimaUtama
- * @return string
- */
 function qaTemplateEmailValidasiPenyetuju(
     $penerima,
     $rows,
@@ -102,8 +84,7 @@ function qaTemplateEmailValidasiPenyetuju(
     $tanggalKirim,
     $isCcInformasi = false,
     $namaPenerimaUtama = ''
-)
-{
+) {
     $nama = trim((string)($penerima['uname'] ?? ''));
     $sapaan = trim((string)($penerima['sapaan'] ?? ''));
     $namaTujuan = qaValidasiSapaanNama($sapaan, $nama);

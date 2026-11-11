@@ -7,21 +7,19 @@ if (empty($_SESSION['login'])) {
 }
 
 require_once __DIR__ . '/../../inc/inc_koneksi.php';
-require_once __DIR__.'/../../inc/qa_rbac.php';
-qaRbacRequire($konek,'konfigurasi_email');
+require_once __DIR__ . '/../../inc/qa_rbac.php';
+qaRbacRequire($konek, 'konfigurasi_email');
 
 /** @var mysqli $konek */
 if (!isset($konek) || !($konek instanceof mysqli)) {
     die('Koneksi database tidak tersedia.');
 }
 
-function evEsc($value)
-{
+function evEsc($value) {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
 
-function evTableExists($konek, $table)
-{
+function evTableExists($konek, $table) {
     $table = preg_replace('/[^A-Za-z0-9_]/', '', (string)$table);
 
     if ($table === '') {
@@ -66,7 +64,7 @@ if ($stmtAdmin) {
     $stmtAdmin->close();
 }
 
-if (!qaRbacCan($konek,'konfigurasi_email')) {
+if (!qaRbacCan($konek, 'konfigurasi_email')) {
     http_response_code(403);
 
     die(
@@ -490,9 +488,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
-        // ====================================================
-        // HAPUS KONFIGURASI
-        // ====================================================
+            // ====================================================
+            // HAPUS KONFIGURASI
+            // ====================================================
 
         } elseif ($action === 'delete') {
 
@@ -694,137 +692,150 @@ if ($tableReady) {
 ?>
 <!DOCTYPE html>
 <html lang="id">
-
-<head>
-    <link rel="icon" type="image/png" href="/qa_kalibrasi/images/favicon-toto-qa.png?v=1">
-
-<meta charset="utf-8">
-
-<meta
+    <head>
+        <link rel="icon" type="image/png" href="/qa_kalibrasi/images/favicon-toto-qa.png?v=1">
+        <meta charset="utf-8">
+        <meta
     name="viewport"
     content="width=device-width, initial-scale=1"
 >
-
-<title>
+        <title>
     Konfigurasi Email Validasi QA
 </title>
-
-<link
+        <link
     href="../../css/bootstrap.min.css"
     rel="stylesheet"
 >
-
-<link
+        <link
     href="../../font-awesome-4.3.0/css/font-awesome.min.css"
     rel="stylesheet"
 >
-
-<style>
-
-body {
-    padding-top:80px;
-    background:#f4f6f9;
-}
-
-.qa-card {
-    background:#fff;
-    border-radius:10px;
-    padding:24px;
-    margin-bottom:22px;
-    box-shadow:0 4px 15px rgba(0,0,0,.06);
-}
-
-.qa-card h3 {
-    margin-top:0;
-}
-
-.hint {
-    color:#777;
-    font-size:12px;
-    line-height:1.6;
-}
-
-.config-info {
-    margin-top:15px;
-    margin-bottom:20px;
-    padding:12px 15px;
-    background:#f7f9fb;
-    border-left:4px solid #337ab7;
-}
-
-.table > thead > tr > th {
-    background:#eef2f6;
-    vertical-align:middle;
-}
-
-.table > tbody > tr > td {
-    vertical-align:middle;
-}
-
-.badge-role {
-    display:inline-block;
-    padding:4px 8px;
-    border-radius:4px;
-    font-size:11px;
-    font-weight:700;
-}
-
-.badge-pemeriksa {
-    background:#eaf3ff;
-    border:1px solid #bfd7f0;
-    color:#23527c;
-}
-
-.badge-penyetuju {
-    background:#eef8ee;
-    border:1px solid #c7dfc7;
-    color:#2e6b38;
-}
-
-.type-tujuan {
-    font-weight:700;
-    color:#123b6d;
-}
-
-.type-mengetahui {
-    color:#777;
-}
-
-.email-live {
-    font-weight:600;
-}
-
-.navbar-brand img {
-    height:25px;
-    margin-top:-3px;
-}
-
-
-.qa-user-picker { position: relative; }
-.qa-user-picker-input { position: relative; }
-.qa-user-picker-input input { padding-right: 38px; cursor: text; }
-.qa-user-picker-arrow { position: absolute; right: 12px; top: 0; height: 34px;
-    display: flex; align-items: center; cursor: pointer; color: #555; }
-.qa-user-picker-menu { display: none; position: absolute; z-index: 1050; top: 100%;
-    left: 0; right: 0; max-height: 250px; overflow-y: auto; background: #fff;
-    border: 1px solid #ccc; border-top: 0; box-shadow: 0 5px 12px rgba(0,0,0,.12); }
-.qa-user-picker.open .qa-user-picker-menu { display: block; }
-.qa-user-picker-option { display: block; width: 100%; text-align: left; border: 0;
-    background: #fff; padding: 9px 12px; color: #333; white-space: normal; }
-.qa-user-picker-option:hover, .qa-user-picker-option:focus { background: #f1f3f5; outline: none; }
-.qa-user-picker-empty { padding: 10px 12px; color: #777; }
-
-</style>
-
-</head>
-
-<body>
-
-<nav class="navbar navbar-default navbar-fixed-top">
-
-<div class="container-fluid">
-
-<div class="navbar-header">
+        <style>
+            body {
+                padding-top: 80px;
+                background: #f4f6f9;
+            }
+            .qa-card {
+                background: #fff;
+                border-radius: 10px;
+                padding: 24px;
+                margin-bottom: 22px;
+                box-shadow: 0 4px 15px rgba(0,0,0,.06);
+            }
+            .qa-card h3 {
+                margin-top: 0;
+            }
+            .hint {
+                color: #777;
+                font-size: 12px;
+                line-height: 1.6;
+            }
+            .config-info {
+                margin-top: 15px;
+                margin-bottom: 20px;
+                padding: 12px 15px;
+                background: #f7f9fb;
+                border-left: 4px solid #337ab7;
+            }
+            .table > thead > tr > th {
+                background: #eef2f6;
+                vertical-align: middle;
+            }
+            .table > tbody > tr > td {
+                vertical-align: middle;
+            }
+            .badge-role {
+                display: inline-block;
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: 700;
+            }
+            .badge-pemeriksa {
+                background: #eaf3ff;
+                border: 1px solid #bfd7f0;
+                color: #23527c;
+            }
+            .badge-penyetuju {
+                background: #eef8ee;
+                border: 1px solid #c7dfc7;
+                color: #2e6b38;
+            }
+            .type-tujuan {
+                font-weight: 700;
+                color: #123b6d;
+            }
+            .type-mengetahui {
+                color: #777;
+            }
+            .email-live {
+                font-weight: 600;
+            }
+            .navbar-brand img {
+                height: 25px;
+                margin-top: -3px;
+            }
+            .qa-user-picker {
+                position: relative;
+            }
+            .qa-user-picker-input {
+                position: relative;
+            }
+            .qa-user-picker-input input {
+                padding-right: 38px;
+                cursor: text;
+            }
+            .qa-user-picker-arrow {
+                position: absolute;
+                right: 12px;
+                top: 0;
+                height: 34px;
+                display: flex;
+                align-items: center;
+                cursor: pointer;
+                color: #555;
+            }
+            .qa-user-picker-menu {
+                display: none;
+                position: absolute;
+                z-index: 1050;
+                top: 100%;
+                left: 0;
+                right: 0;
+                max-height: 250px;
+                overflow-y: auto;
+                background: #fff;
+                border: 1px solid #ccc;
+                border-top: 0;
+                box-shadow: 0 5px 12px rgba(0,0,0,.12);
+            }
+            .qa-user-picker.open .qa-user-picker-menu {
+                display: block;
+            }
+            .qa-user-picker-option {
+                display: block;
+                width: 100%;
+                text-align: left;
+                border: 0;
+                background: #fff;
+                padding: 9px 12px;
+                color: #333;
+                white-space: normal;
+            }
+            .qa-user-picker-option:hover, .qa-user-picker-option:focus {
+                background: #f1f3f5;
+                outline: none;
+            }
+            .qa-user-picker-empty {
+                padding: 10px 12px;
+                color: #777;
+            }
+        </style>
+    </head>
+    <body>
+        <nav class="navbar navbar-default navbar-fixed-top">
+            <div class="container-fluid">
+                <div class="navbar-header">
 
 <a
     class="navbar-brand"
@@ -839,10 +850,8 @@ body {
 </a>
 
 </div>
-
-<ul class="nav navbar-nav navbar-left">
-
-<li>
+                <ul class="nav navbar-nav navbar-left">
+                    <li>
 
 <a href="../../media.php">
 
@@ -853,22 +862,18 @@ Kembali ke Menu Utama
 </a>
 
 </li>
-
-</ul>
-
-<ul class="nav navbar-nav navbar-right">
-
-<li>
+                </ul>
+                <ul class="nav navbar-nav navbar-right">
+                    <li>
 
 <a href="#">
 
 <i class="fa fa-user"></i>
 
 <?php
-echo
-    evEsc(
-        $adminName
-    );
+echo evEsc(
+    $adminName
+);
 ?>
 
 (Admin)
@@ -876,8 +881,7 @@ echo
 </a>
 
 </li>
-
-<li>
+                    <li>
 
 <a href="../../logout.php">
 
@@ -886,21 +890,15 @@ Logout
 </a>
 
 </li>
-
-</ul>
-
-</div>
-
-</nav>
-
-<div
+                </ul>
+            </div>
+        </nav>
+        <div
     class="container-fluid"
     style="padding:0 30px 30px;"
 >
-
-<div class="qa-card">
-
-<h3>
+            <div class="qa-card">
+                <h3>
 
 <i class="fa fa-envelope"></i>
 
@@ -916,11 +914,10 @@ Konfigurasi Email Pemeriksa &amp; Penyetuju
 >
 
 <?php
-echo
-    evEsc(
-        $flash
-    );
-?>
+echo evEsc(
+    $flash
+);
+    ?>
 
 </div>
 
@@ -967,8 +964,7 @@ terlebih dahulu.
 >
 
 <div class="col-md-2">
-
-<div class="form-group">
+                        <div class="form-group">
 
 <label>
 Role
@@ -996,12 +992,9 @@ Penyetuju
 </select>
 
 </div>
-
-</div>
-
-<div class="col-md-2">
-
-<div class="form-group">
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
 
 <label>
 Kategori
@@ -1029,12 +1022,9 @@ Mengetahui
 </select>
 
 </div>
-
-</div>
-
-<div class="col-md-6">
-
-<div class="form-group">
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
 
 <label>
 User / Email
@@ -1058,8 +1048,7 @@ User / Email
 <option
 
     value="<?php
-        echo
-            evEsc(
+            echo evEsc(
                 $u['uid']
             );
     ?>"
@@ -1068,17 +1057,16 @@ User / Email
 
 <?php
 
-echo
-    evEsc(
-        $u['uid']
+echo evEsc(
+    $u['uid']
         . ' - '
         . $u['nama']
         . ' ('
         . $u['email']
         . ')'
-    );
+);
 
-?>
+    ?>
 
 </option>
 
@@ -1087,22 +1075,18 @@ echo
 </select>
 
 <div class="qa-user-picker" id="qa-user-picker">
-    <div class="qa-user-picker-input">
+                                <div class="qa-user-picker-input">
         <input type="text" id="qa-user-search" class="form-control"
                placeholder="Cari UID, nama, atau email..." autocomplete="new-password" name="qa_lookup_only" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" readonly required>
         <span class="qa-user-picker-arrow" id="qa-user-arrow" aria-hidden="true">&#9662;</span>
     </div>
-    <div class="qa-user-picker-menu" id="qa-user-menu" role="listbox"></div>
-</div>
-
-
-</div>
-
-</div>
-
-<div class="col-md-2">
-
-<div class="form-group">
+                                <div class="qa-user-picker-menu" id="qa-user-menu" role="listbox">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
 
 <label>
 &nbsp;
@@ -1120,14 +1104,10 @@ Tambah
 </button>
 
 </div>
-
-</div>
-
-</form>
-
-<div class="table-responsive">
-
-<table
+                    </div>
+                </form>
+                <div class="table-responsive">
+                    <table
     class="
         table
         table-bordered
@@ -1135,12 +1115,9 @@ Tambah
         table-hover
     "
 >
-
-<thead>
-
-<tr>
-
-<th
+                        <thead>
+                            <tr>
+                                <th
     class="text-center"
     style="width:55px;"
 >
@@ -1148,8 +1125,7 @@ Tambah
 No
 
 </th>
-
-<th
+                                <th
     class="text-center"
     style="width:130px;"
 >
@@ -1157,8 +1133,7 @@ No
 Role
 
 </th>
-
-<th
+                                <th
     class="text-center"
     style="width:130px;"
 >
@@ -1166,26 +1141,22 @@ Role
 Jenis
 
 </th>
-
-<th style="width:130px;">
+                                <th style="width:130px;">
 
 UID
 
 </th>
-
-<th>
+                                <th>
 
 Nama
 
 </th>
-
-<th>
+                                <th>
 
 Email Aktif
 
 </th>
-
-<th
+                                <th
     class="text-center"
     style="width:90px;"
 >
@@ -1193,12 +1164,9 @@ Email Aktif
 Aksi
 
 </th>
-
-</tr>
-
-</thead>
-
-<tbody>
+                            </tr>
+                        </thead>
+                        <tbody>
 
 <?php if ($configRows): ?>
 
@@ -1207,14 +1175,12 @@ Aksi
 <?php foreach ($configRows as $row): ?>
 
 <tr>
-
-<td class="text-center">
+                                <td class="text-center">
 
 <?php echo $no++; ?>
 
 </td>
-
-<td class="text-center">
+                                <td class="text-center">
 
 <?php
 if (
@@ -1224,7 +1190,7 @@ if (
     ===
     'PEMERIKSAAN'
 ):
-?>
+    ?>
 
 <span
     class="
@@ -1253,8 +1219,7 @@ Penyetuju
 <?php endif; ?>
 
 </td>
-
-<td class="text-center">
+                                <td class="text-center">
 
 <?php
 if (
@@ -1264,7 +1229,7 @@ if (
     ===
     'TUJUAN'
 ):
-?>
+    ?>
 
 <span class="type-tujuan">
 
@@ -1283,63 +1248,57 @@ Mengetahui
 <?php endif; ?>
 
 </td>
-
-<td>
+                                <td>
 
 <b>
 
 <?php
-echo
-    evEsc(
+    echo evEsc(
         $row[
             'user_uid'
         ]
     );
-?>
+    ?>
 
 </b>
 
 </td>
-
-<td>
+                                <td>
 
 <?php
-echo
-    evEsc(
+    echo evEsc(
         $row[
             'uname'
         ]
     );
-?>
+    ?>
 
 </td>
-
-<td>
+                                <td>
 
 <?php
 
-$emailLive =
-    trim(
-        (string)(
-            $row[
-                'email_live'
-            ]
-            ?? ''
-        )
-    );
+    $emailLive =
+        trim(
+            (string)(
+                $row[
+                    'email_live'
+                ]
+                ?? ''
+            )
+        );
 
-?>
+    ?>
 
 <?php if ($emailLive !== ''): ?>
 
 <span class="email-live">
 
 <?php
-echo
-    evEsc(
+    echo evEsc(
         $emailLive
     );
-?>
+    ?>
 
 </span>
 
@@ -1354,8 +1313,7 @@ Email pemakai tidak tersedia
 <?php endif; ?>
 
 </td>
-
-<td class="text-center">
+                                <td class="text-center">
 
 <button type="button" class="btn btn-danger btn-xs qa-delete-button"
         data-id="<?php echo (int)$row['id']; ?>"
@@ -1365,16 +1323,14 @@ Email pemakai tidak tersedia
 </button>
 
 </td>
-
-</tr>
+                            </tr>
 
 <?php endforeach; ?>
 
 <?php else: ?>
 
 <tr>
-
-<td
+                                <td
     colspan="7"
     class="text-center text-muted"
 >
@@ -1382,33 +1338,27 @@ Email pemakai tidak tersedia
 Belum ada konfigurasi email.
 
 </td>
-
-</tr>
+                            </tr>
 
 <?php endif; ?>
 
 </tbody>
-
-</table>
-
-</div>
+                    </table>
+                </div>
 
 <?php endif; ?>
 
 </div>
-
-</div>
-
-
-<div class="modal fade" id="qaDeleteModal" tabindex="-1" role="dialog" aria-labelledby="qaDeleteTitle">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
+        </div>
+        <div class="modal fade" id="qaDeleteModal" tabindex="-1" role="dialog" aria-labelledby="qaDeleteTitle">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
                 <button type="button" class="close" data-dismiss="modal" aria-label="Tutup"><span aria-hidden="true">&times;</span></button>
                 <h4 class="modal-title" id="qaDeleteTitle">Konfirmasi Hapus</h4>
-            </div>
-            <div class="modal-body">Yakin ingin menghapus penerima email <strong id="qaDeleteName"></strong>?</div>
-            <div class="modal-footer">
+                    </div>
+                    <div class="modal-body">Yakin ingin menghapus penerima email <strong id="qaDeleteName"></strong>?</div>
+                    <div class="modal-footer">
                 <button type="button" class="btn btn-default" data-dismiss="modal">Batal</button>
                 <form method="post" style="display:inline;">
                     <input type="hidden" name="csrf" value="<?php echo evEsc($csrf); ?>">
@@ -1416,99 +1366,103 @@ Belum ada konfigurasi email.
                     <input type="hidden" name="id" id="qaDeleteId" value="">
                     <button type="submit" class="btn btn-danger">Hapus</button>
                 </form>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-</div>
-
-<script src="../../js/jquery.js"></script>
-
-<script src="../../js/bootstrap.min.js"></script>
-
-<script>
-$(document).on('click', '.qa-delete-button', function () {
-    $('#qaDeleteId').val($(this).attr('data-id'));
-    $('#qaDeleteName').text($(this).attr('data-name'));
-});
-(function () {
-    var select = document.getElementById('user_uid');
-    var picker = document.getElementById('qa-user-picker');
-    var input = document.getElementById('qa-user-search');
-    var menu = document.getElementById('qa-user-menu');
-    var arrow = document.getElementById('qa-user-arrow');
-    if (!select || !picker || !input || !menu || !arrow) return;
-
-    var options = Array.prototype.slice.call(select.options).filter(function (option) {
-        return option.value !== '';
-    });
-
-    function render(query) {
-        var term = (query || '').toLocaleLowerCase().trim();
-        menu.innerHTML = '';
-        var count = 0;
-        options.forEach(function (option) {
-            if (option.textContent.toLocaleLowerCase().indexOf(term) === -1) return;
-            var item = document.createElement('button');
-            item.type = 'button';
-            item.className = 'qa-user-picker-option';
-            item.setAttribute('role', 'option');
-            item.textContent = option.textContent.trim();
-            item.addEventListener('click', function () {
-                select.value = option.value;
-                input.value = option.textContent.trim();
-                input.setCustomValidity('');
-                picker.classList.remove('open');
+        <script src="../../js/jquery.js"></script>
+        <script src="../../js/bootstrap.min.js"></script>
+        <script>
+            $(document).on('click', '.qa-delete-button', function() {
+                $('#qaDeleteId').val($(this).attr('data-id'));
+                $('#qaDeleteName').text($(this).attr('data-name'));
             });
-            menu.appendChild(item);
-            count++;
-        });
-        if (!count) {
-            var empty = document.createElement('div');
-            empty.className = 'qa-user-picker-empty';
-            empty.textContent = 'Tidak ada user ditemukan';
-            menu.appendChild(empty);
-        }
-    }
+            (function() {
+                var select = document.getElementById('user_uid');
+                var picker = document.getElementById('qa-user-picker');
+                var input = document.getElementById('qa-user-search');
+                var menu = document.getElementById('qa-user-menu');
+                var arrow = document.getElementById('qa-user-arrow');
+                if (!select || !picker || !input || !menu || !arrow) return;
 
-    function open() {
-        render(input.value === (select.selectedIndex > 0 ? select.options[select.selectedIndex].textContent.trim() : '') ? '' : input.value);
-        picker.classList.add('open');
-    }
+                var options = Array.prototype.slice.call(select.options).filter(function(option) {
+                    return option.value !== '';
+                });
 
-    input.addEventListener('focus', function () { input.removeAttribute('readonly'); open(); });
-    input.addEventListener('click', open);
-    input.addEventListener('input', function () {
-        select.value = '';
-        input.setCustomValidity('');
-        render(input.value);
-        picker.classList.add('open');
-    });
-    arrow.addEventListener('click', function () {
-        if (picker.classList.contains('open')) picker.classList.remove('open');
-        else { input.focus(); open(); }
-    });
-    document.addEventListener('click', function (event) {
-        if (!picker.contains(event.target)) picker.classList.remove('open');
-    });
-    input.addEventListener('keydown', function (event) {
-        if (event.key === 'Escape') picker.classList.remove('open');
-        if (event.key === 'Enter' && picker.classList.contains('open')) {
-            var first = menu.querySelector('.qa-user-picker-option');
-            if (first) { event.preventDefault(); first.click(); }
-        }
-    });
-    var form = select.closest('form');
-    if (form) form.addEventListener('submit', function (event) {
-        if (!select.value) {
-            event.preventDefault();
-            input.setCustomValidity('Pilih user dari daftar.');
-            input.reportValidity();
-            open();
-        }
-    });
-})();
-</script>
+                function render(query) {
+                    var term = (query || '').toLocaleLowerCase().trim();
+                    menu.innerHTML = '';
+                    var count = 0;
+                    options.forEach(function(option) {
+                        if (option.textContent.toLocaleLowerCase().indexOf(term) === -1) return;
+                        var item = document.createElement('button');
+                        item.type = 'button';
+                        item.className = 'qa-user-picker-option';
+                        item.setAttribute('role', 'option');
+                        item.textContent = option.textContent.trim();
+                        item.addEventListener('click', function() {
+                            select.value = option.value;
+                            input.value = option.textContent.trim();
+                            input.setCustomValidity('');
+                            picker.classList.remove('open');
+                        });
+                        menu.appendChild(item);
+                        count++;
+                    });
+                    if (!count) {
+                        var empty = document.createElement('div');
+                        empty.className = 'qa-user-picker-empty';
+                        empty.textContent = 'Tidak ada user ditemukan';
+                        menu.appendChild(empty);
+                    }
+                }
 
-</body>
+                function open() {
+                    render(input.value === (select.selectedIndex > 0 ? select.options[select.selectedIndex].textContent.trim() : '') ? '' : input.value);
+                    picker.classList.add('open');
+                }
 
+                input.addEventListener('focus', function() {
+                    input.removeAttribute('readonly');
+                    open();
+                });
+                input.addEventListener('click', open);
+                input.addEventListener('input', function() {
+                    select.value = '';
+                    input.setCustomValidity('');
+                    render(input.value);
+                    picker.classList.add('open');
+                });
+                arrow.addEventListener('click', function() {
+                    if (picker.classList.contains('open')) picker.classList.remove('open');
+                    else {
+                        input.focus();
+                        open();
+                    }
+                });
+                document.addEventListener('click', function(event) {
+                    if (!picker.contains(event.target)) picker.classList.remove('open');
+                });
+                input.addEventListener('keydown', function(event) {
+                    if (event.key === 'Escape') picker.classList.remove('open');
+                    if (event.key === 'Enter' && picker.classList.contains('open')) {
+                        var first = menu.querySelector('.qa-user-picker-option');
+                        if (first) {
+                            event.preventDefault();
+                            first.click();
+                        }
+                    }
+                });
+                var form = select.closest('form');
+                if (form) form.addEventListener('submit', function(event) {
+                    if (!select.value) {
+                        event.preventDefault();
+                        input.setCustomValidity('Pilih user dari daftar.');
+                        input.reportValidity();
+                        open();
+                    }
+                });
+            })();
+        </script>
+    </body>
 </html>

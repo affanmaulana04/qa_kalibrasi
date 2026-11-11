@@ -1,28 +1,12 @@
 <?php
 
-/**
- * ============================================================
- * WEEKLY REMINDER QA
- * ============================================================
- *
- * Fungsi:
- * - Mengirim reminder jadwal kalibrasi mingguan
- * - Setiap anggota QA menerima daftar yang sama, satu email per alamat
- * - Jadwal: Senin s/d Jumat pada minggu berjalan
- * - Jadwal terlewat tetap ditampilkan jika belum dikalibrasi
- * Test email langsung:
- * php weekly_reminder.php --test --email=alamat@email.com
- *
- * Production:
- * Waktu pengiriman sepenuhnya diatur oleh Windows Task Scheduler.
- *
- * ============================================================
- */
 
 date_default_timezone_set('Asia/Jakarta');
 
 require_once __DIR__ . '/../../../inc/inc_koneksi.php';
 require_once __DIR__ . '/email_helper.php';
+require_once __DIR__ . '/../../../inc/qa_seksi_akses.php';
+require_once __DIR__ . '/../../../inc/qa_jadwal.php';
 
 
 // ============================================================
@@ -77,6 +61,8 @@ if (!$konek) {
 }
 
 
+qaSinkronJadwalMendatang($konek);
+
 // ============================================================
 // PERIODE WEEKDAYS: SENIN - JUMAT
 // ============================================================
@@ -98,12 +84,7 @@ $selesai = date(
 
 $logFile = __DIR__ . '/weekly_reminder.log';
 
-/**
- * @param mixed $message
- * @return void
- */
-function qaWeeklyLog($message)
-{
+function qaWeeklyLog($message) {
     global $logFile;
 
     file_put_contents(
@@ -140,11 +121,6 @@ $sqlPenerima = "
     SELECT uid, uname, sapaan, email_pembuat
     FROM `user`
     WHERE UPPER(COALESCE(block, 'N')) <> 'Y'
-      AND (
-          UPPER(COALESCE(pembuat, 'N')) = 'Y'
-          OR UPPER(COALESCE(pemeriksa, 'N')) = 'Y'
-          OR UPPER(COALESCE(penyetuju, 'N')) = 'Y'
-      )
       AND email_pembuat IS NOT NULL
       AND TRIM(email_pembuat) <> ''
     ORDER BY uname ASC, uid ASC
@@ -161,6 +137,15 @@ if (!$resultPenerima) {
 $penerimaList = [];
 
 while ($r = $resultPenerima->fetch_assoc()) {
+    $canSchedule = false;
+    foreach (['kalibrasi', 'masterdata', 'jadwal_harian', 'jadwal_bulanan', 'jadwal_bulanan_internal', 'jadwal_bulanan_external'] as $permission) {
+        if (qaRbacCanForUser($konek, $r['uid'], $permission)) {
+            $canSchedule = true;
+            break;
+        }
+    }
+    if (!$canSchedule)
+        continue;
     $email = strtolower(trim((string)$r['email_pembuat']));
 
     if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -199,11 +184,6 @@ if ($isTest && $testEmail !== '') {
 
     } else {
 
-        /*
-         * Email test tidak terdaftar.
-         * Dalam kondisi ini tetap izinkan test
-         * dengan mengambil semua jadwal hanya jika --all-sections diberikan.
-         */
 
         qaWeeklyLog(
             'EMAIL TEST TIDAK TERDAFTAR: ' .
@@ -251,12 +231,6 @@ if (empty($penerimaList)) {
 // BIND PARAMETER DINAMIS
 // ============================================================
 
-/**
- * @param mysqli_stmt $stmt
- * @param string $types
- * @param array<int,mixed> $params
- * @return void
- */
 function qaBindDynamic(
     $stmt,
     $types,
@@ -403,7 +377,8 @@ foreach ($penerimaList as $penerima) {
     $terlewatRows = [];
 
 
-    $sectionCondition = '1=1';
+    // Tidak mengirim detail alat ke user yang akses seksinya belum ditentukan.
+    $sectionCondition = $userUid !== '' ? qaSeksiSql($konek, 'p.seksi_pemilik', $userUid) : '1=0';
     $params = [];
     $types = '';
 
@@ -640,10 +615,6 @@ foreach ($penerimaList as $penerima) {
 
         if (!empty($params)) {
 
-            /*
-             * Parameter dibuat ulang karena
-             * bind_param menggunakan reference.
-             */
 
             $paramsOverdue = [];
             $typesOverdue = '';
