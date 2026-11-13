@@ -8,16 +8,19 @@ require_once __DIR__ . '/../../../inc/inc_koneksi.php';
 require_once __DIR__ . '/../../../inc/qa_rbac.php';
 require_once __DIR__ . '/../../../inc/qa_seksi_akses.php';
 require_once __DIR__ . '/../../../inc/qa_jadwal.php';
+require_once __DIR__ . '/../../../inc/qa_jadwal_validasi.php';
 // Protected independently of the report page/iframe. No cross-format access via URL.
 $requestedMode = strtolower(trim((string)($_GET['mode'] ?? 'both')));
 if (!in_array($requestedMode, ['internal', 'external', 'both'], true)) {
     http_response_code(400);
     exit('Format laporan tidak valid.');
 }
-if ($requestedMode === 'internal' || $requestedMode === 'both') {
+$validationPreview = ($_GET['validation_preview'] ?? '') === '1'
+    && qaRbacCanAny($konek, ['kalibrasi', 'masterdata', 'approval_pemeriksa', 'approval_penyetuju']);
+if (!$validationPreview && ($requestedMode === 'internal' || $requestedMode === 'both')) {
     qaRbacRequire($konek, 'jadwal_bulanan_internal');
 }
-if ($requestedMode === 'external' || $requestedMode === 'both') {
+if (!$validationPreview && ($requestedMode === 'external' || $requestedMode === 'both')) {
     qaRbacRequire($konek, 'jadwal_bulanan_external');
 }
 
@@ -52,6 +55,7 @@ $monthNames = [
 ];
 $periodeLabel = ($monthNames[$month] ?? strtoupper(date('F', mktime(0, 0, 0, $month, 1)))) . ' ' . $year;
 $namaPetugas = trim((string)($_SESSION['nama_lengkap'] ?? ($_SESSION['userid'] ?? '')));
+$jadwalSignatures=qaJadwalSignatures($konek, sprintf('%04d-%02d',$year,$month));
 
 $seksiOptions = [];
 $qSeksi = mysqli_query($konek, "SELECT nama_seksi FROM qa_seksi_master ORDER BY nama_seksi ASC");
@@ -234,6 +238,7 @@ uasort($groups, fn ($a, $b) => strcasecmp($a['seksi'] . $a['nama_part'], $b['sek
 $reportRows = array_values($groups);
 
 function renderReport($mode, $reportRows, $daysInMonth, $year, $month, $holidayDates, $periodeLabel, $seksi, $namaPetugas, $pageBreak = false) {
+    global $jadwalSignatures;
     $internal = $mode === 'internal';
     if (!$internal)
         $reportRows = array_values(array_filter($reportRows, static function ($g) {
@@ -270,9 +275,9 @@ function renderReport($mode, $reportRows, $daysInMonth, $year, $month, $holidayD
                                     <th>DISETUJUI</th>
                                 </tr>
                                 <tr>
-                                    <td><?= h($namaPetugas ?: '-')?></td>
-                                    <td>&nbsp;</td>
-                                    <td>&nbsp;</td>
+                                    <td><?= h($jadwalSignatures['dibuat'])?></td>
+                                    <td><?= h($jadwalSignatures['diperiksa'])?></td>
+                                    <td><?= h($jadwalSignatures['disetujui'])?></td>
                                 </tr>
                                 <tr>
                                     <td>PETUGAS</td>

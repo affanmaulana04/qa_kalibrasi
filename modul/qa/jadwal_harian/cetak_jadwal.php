@@ -7,7 +7,10 @@ if ($_SESSION['login'] == 0) {
 require_once __DIR__ . '/../../../inc/inc_koneksi.php';
 require_once __DIR__ . '/../../../inc/qa_rbac.php';
 require_once __DIR__ . '/../../../inc/qa_seksi_akses.php';
-qaRbacRequire($konek, 'jadwal_harian');
+require_once __DIR__ . '/../../../inc/qa_jadwal_validasi.php';
+$validationPreview = ($_GET['validation_preview'] ?? '') === '1'
+    && qaRbacCanAny($konek, ['kalibrasi', 'masterdata', 'approval_pemeriksa', 'approval_penyetuju']);
+if (!$validationPreview) qaRbacRequire($konek, 'jadwal_harian');
 
 // Tombol Kembali mengikuti asal navigasi. URL langsung/menu kembali ke Media,
 // sedangkan akses dari Master Data (atau ?from=masterdata) kembali ke Master Data.
@@ -19,6 +22,7 @@ $backLabel = $fromMasterdata ? 'Kembali ke Master Data' : 'Kembali ke Menu Utama
 
 $filter_seksi = isset($_GET['seksi']) ? mysqli_real_escape_string($konek, $_GET['seksi']) : 'ALL';
 $filter_tgl = isset($_GET['tgl']) ? mysqli_real_escape_string($konek, $_GET['tgl']) : date('Y-m-d');
+$signatures = qaJadwalSignatures($konek, substr($filter_tgl, 0, 7));
 
 $where = qaSeksiSql($konek, 'seksi_pemilik') . " AND status = 'aktif' AND jadwal_kalibrasi <= '$filter_tgl'";
 if ($filter_seksi !== 'ALL') {
@@ -170,7 +174,7 @@ while ($r = mysqli_fetch_assoc($query)) {
         </style>
     </head>
     <body>
-        <div class="no-print">
+        <div class="no-print" <?= $validationPreview ? 'style="display:none"' : '' ?>>
         <a href="<?= htmlspecialchars($backUrl, ENT_QUOTES, 'UTF-8')?>" style="color:#fff; font-weight:bold; text-decoration:none;">&larr; <?= htmlspecialchars($backLabel, ENT_QUOTES, 'UTF-8')?></a><br>
         <button class="btn-action" onclick="window.print()">Cetak Jadwal Harian</button>
     </div>
@@ -205,12 +209,9 @@ foreach ($data_per_seksi as $seksi => $items) {
                             <th width="33%">DISETUJUI</th>
                         </tr>
                         <tr>
-                            <td>
-                            </td>
-                            <td>
-                            </td>
-                            <td>
-                            </td>
+                            <td><?= htmlspecialchars($signatures['dibuat'], ENT_QUOTES, 'UTF-8') ?></td>
+                            <td><?= htmlspecialchars($signatures['diperiksa'], ENT_QUOTES, 'UTF-8') ?></td>
+                            <td><?= htmlspecialchars($signatures['disetujui'], ENT_QUOTES, 'UTF-8') ?></td>
                         </tr>
                         <tr>
                             <th>PETUGAS</th>

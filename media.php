@@ -30,7 +30,8 @@ $can_calendar = qaRbacCan($konek, 'tanggal_merah');
 $can_users = qaRbacCan($konek, 'pengguna');
 $can_mail = qaRbacCan($konek, 'konfigurasi_email');
 $can_csv = qaRbacCan($konek, 'upload_master');
-$can_manage_tables = $can_users || $can_mail || $can_calendar || $can_csv;
+$can_schedule_validation = qaRbacCanAny($konek, ['jadwal_bulanan_internal', 'jadwal_bulanan_external']) || $can_daily || $can_pembuat || $can_master || $can_pemeriksa || $can_penyetuju;
+$can_manage_tables = $can_users || $can_mail || $can_calendar || $can_csv || $can_schedule_validation;
 $can_qa = $can_pembuat || $can_pemeriksa || $can_penyetuju || $can_master;
 $can_reports = $can_bbrau || $can_monthly || $can_daily || $can_results;
 ?>
@@ -264,6 +265,7 @@ $can_reports = $can_bbrau || $can_monthly || $can_daily || $can_results;
                         <?php if ($can_users): ?><li><a href="modul/tabel/pemakai.php">Data Pemakai Aplikasi</a></li><?php endif; ?>
                         <?php if ($is_admin): ?><li><a href="modul/akses/roles.php">Custom Role & Hak Akses</a></li><?php endif; ?>
                         <?php if ($can_mail): ?><li><a href="modul/tabel/email_validasi.php">Konfigurasi Email Validasi</a></li><?php endif; ?>
+                        <?php if ($can_schedule_validation): ?><li><a href="modul/tabel/parameter_validasi_jadwal.php">Parameter Validasi Jadwal</a></li><?php endif; ?>
                         <?php if ($can_calendar): ?><li><a href="modul/qa/tanggal_merah/tanggal_merah.php">Custom Tanggal Merah</a></li><?php endif; ?>
                         <?php if ($can_csv): ?><li><a href="modul/tabel/upload_master_csv.php">Upload Master Data CSV</a></li><?php endif; ?>
                     </ul>
