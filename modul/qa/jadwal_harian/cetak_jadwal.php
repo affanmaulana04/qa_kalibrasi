@@ -9,7 +9,7 @@ require_once __DIR__ . '/../../../inc/qa_rbac.php';
 require_once __DIR__ . '/../../../inc/qa_seksi_akses.php';
 require_once __DIR__ . '/../../../inc/qa_jadwal_validasi.php';
 $validationPreview = ($_GET['validation_preview'] ?? '') === '1'
-    && qaRbacCanAny($konek, ['kalibrasi', 'masterdata', 'approval_pemeriksa', 'approval_penyetuju']);
+    && qaRbacCanAny($konek, ['pengajuan_jadwal', 'approval_pemeriksa', 'approval_penyetuju']);
 if (!$validationPreview) qaRbacRequire($konek, 'jadwal_harian');
 
 // Tombol Kembali mengikuti asal navigasi. URL langsung/menu kembali ke Media,

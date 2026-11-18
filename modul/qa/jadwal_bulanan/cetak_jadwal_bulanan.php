@@ -16,7 +16,7 @@ if (!in_array($requestedMode, ['internal', 'external', 'both'], true)) {
     exit('Format laporan tidak valid.');
 }
 $validationPreview = ($_GET['validation_preview'] ?? '') === '1'
-    && qaRbacCanAny($konek, ['kalibrasi', 'masterdata', 'approval_pemeriksa', 'approval_penyetuju']);
+    && qaRbacCanAny($konek, ['pengajuan_jadwal', 'approval_pemeriksa', 'approval_penyetuju']);
 if (!$validationPreview && ($requestedMode === 'internal' || $requestedMode === 'both')) {
     qaRbacRequire($konek, 'jadwal_bulanan_internal');
 }

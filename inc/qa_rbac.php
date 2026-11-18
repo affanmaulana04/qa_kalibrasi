@@ -8,8 +8,9 @@
 function qaRbacCatalog() {
     return [
         'kalibrasi' => ['QA Kalibrasi', 'Cek / daftar alat, Update Hasil, dan cetak laporan alat'],
-        'approval_pemeriksa' => ['Validasi', 'Memeriksa hasil kalibrasi (tahap Pemeriksa)'],
-        'approval_penyetuju' => ['Validasi', 'Menyetujui hasil kalibrasi (tahap Penyetuju)'],
+        'pengajuan_jadwal' => ['Validasi Jadwal', 'Mengajukan validasi jadwal bulanan dan harian'],
+        'approval_pemeriksa' => ['Validasi', 'Memeriksa hasil kalibrasi dan jadwal (tahap Pemeriksa)'],
+        'approval_penyetuju' => ['Validasi', 'Menyetujui hasil kalibrasi dan jadwal (tahap Penyetuju)'],
         'masterdata' => ['Master Data', 'Melihat master alat dan jadwal di Master Data'],
         'jadwal_harian' => ['Report', 'Melihat / mencetak jadwal kalibrasi harian'],
         'jadwal_bulanan' => ['Report', 'Melihat / mencetak Format 1 — Daftar Rencana Kalibrasi Bulanan'],
@@ -112,6 +113,7 @@ function qaRbacCan($db, $permission) {
     $any = $flags['pembuat'] || $flags['pemeriksa'] || $flags['penyetuju'];
     $legacy = [
         'kalibrasi' => $any,
+        'pengajuan_jadwal' => $flags['pembuat'],
         'approval_pemeriksa' => $flags['pemeriksa'],
         'approval_penyetuju' => $flags['penyetuju'],
         'masterdata' => $any,
@@ -244,6 +246,6 @@ function qaRbacCanForUser($db, $uid, $permission) {
             return $allowed;
         }
     }
-    $map = ['approval_pemeriksa' => 'pemeriksa', 'approval_penyetuju' => 'penyetuju', 'kalibrasi' => 'pembuat'];
+    $map = ['pengajuan_jadwal' => 'pembuat', 'approval_pemeriksa' => 'pemeriksa', 'approval_penyetuju' => 'penyetuju', 'kalibrasi' => 'pembuat'];
     return isset($map[$permission]) && strtoupper((string)($row[$map[$permission]] ?? 'N')) === 'Y';
 }

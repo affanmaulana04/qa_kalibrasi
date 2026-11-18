@@ -4,7 +4,7 @@ if (empty($_SESSION['login'])) { header('Location: ../../index.php'); exit; }
 require_once __DIR__.'/../../inc/inc_koneksi.php';
 require_once __DIR__.'/../../inc/qa_rbac.php';
 require_once __DIR__.'/../../inc/qa_jadwal_validasi.php';
-$canCreate=qaRbacCanAny($konek,['kalibrasi','masterdata']);
+$canCreate=qaRbacCan($konek,'pengajuan_jadwal');
 $canCheck=qaRbacCan($konek,'approval_pemeriksa');
 $canApprove=qaRbacCan($konek,'approval_penyetuju');
 $canView=qaRbacCanAny($konek,['jadwal_bulanan_internal','jadwal_bulanan_external','jadwal_harian']);
