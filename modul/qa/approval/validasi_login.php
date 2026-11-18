@@ -182,5 +182,6 @@ if ($upToken) {
     $upToken->close();
 }
 
-header('Location: transaksi_kalibrasi.php');
+$target = strtolower(trim((string)($_GET['target'] ?? '')));
+header('Location: ' . ($target === 'jadwal' ? '../../tabel/parameter_validasi_jadwal.php' : 'transaksi_kalibrasi.php'));
 exit;

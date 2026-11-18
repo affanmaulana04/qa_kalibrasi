@@ -1450,6 +1450,13 @@ if ($pendingPenyetuju) {
 
 
 
+require_once __DIR__ . '/jadwal_validasi_reminder.php';
+$jadwalReminder = qaJadwalReminderRun($konek, $isTest, $testEmail, $magicLoginBaseUrl);
+$totalProcessed += $jadwalReminder['processed'];
+$totalSent += $jadwalReminder['sent'];
+$totalCcSent += $jadwalReminder['cc'];
+$testUserFound = $testUserFound || $jadwalReminder['test_user_found'];
+
 if ($isTest && !$testUserFound) {
 
     $debugPemeriksa = qaAmbilPenerimaValidasi(

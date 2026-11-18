@@ -15,13 +15,6 @@ $canPreviewExternal=$canPreviewAll||qaRbacCan($konek,'jadwal_bulanan_external');
 $canPreviewDaily=$canPreviewAll||qaRbacCan($konek,'jadwal_harian');
 $initialPreview=$canPreviewInternal?'internal':($canPreviewExternal?'external':'daily');
 function jh($v) { return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8'); }
-function jadwalEmailNotice($db,$jenis,$periode,$pembuat) {
-    require_once __DIR__.'/../qa/notifikasi/jadwal_validasi_email.php';
-    $result=qaKirimEmailValidasiJadwal($db,$jenis,$periode,$pembuat);
-    if ($result['success']) return ' Email notifikasi terkirim ke '.$result['sent'].' penerima.';
-    error_log('Email validasi jadwal '.$periode.' gagal: '.$result['message']);
-    return ' Email notifikasi belum terkirim; periksa penerima dan konfigurasi SMTP.';
-}
 $ready=qaJadwalEnsure($konek);
 $year=(int)date('Y');
 $months=[1=>'Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
@@ -44,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
                 else {
                     $stmt=$konek->prepare("INSERT INTO qa_jadwal_validasi (periode,status_validasi,dibuat_oleh,dibuat_at,updated_at) VALUES (?,'menunggu_pemeriksa',?,NOW(),NOW()) ON DUPLICATE KEY UPDATE status_validasi='menunggu_pemeriksa',dibuat_oleh=VALUES(dibuat_oleh),dibuat_at=NOW(),diperiksa_oleh=NULL,diperiksa_at=NULL,disetujui_oleh=NULL,disetujui_at=NULL,keterangan=NULL,updated_at=NOW()");
                     if ($stmt) { $stmt->bind_param('ss',$periode,$name); $ok=$stmt->execute(); $stmt->close(); } else $ok=false;
-                    $notice=$ok?'Jadwal berhasil diajukan ke Pemeriksa.'.jadwalEmailNotice($konek,'PEMERIKSAAN',$periode,$name) : '';
+                    $notice=$ok?'Jadwal berhasil diajukan ke Pemeriksa. Email reminder akan dikirim oleh jadwal pengiriman validasi harian.' : '';
                     if (!$ok) $error='Gagal mengajukan jadwal.';
                 }
             } elseif (in_array($action,['setuju_pemeriksa','tolak_pemeriksa'],true) && $canCheck) {
@@ -57,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
                     $ok=$stmt->execute() && $stmt->affected_rows===1; $stmt->close();
                     if ($ok) {
                         $notice='Keputusan Pemeriksa berhasil disimpan.';
-                        if ($status==='menunggu_penyetuju') $notice.=jadwalEmailNotice($konek,'PERSETUJUAN',$periode,$current['dibuat_oleh']);
+                        if ($status==='menunggu_penyetuju') $notice.=' Email reminder Penyetuju akan dikirim oleh jadwal pengiriman validasi harian.';
                     } else $error='Status jadwal berubah. Muat ulang halaman.';
                 }
             } elseif (in_array($action,['setuju_penyetuju','tolak_penyetuju'],true) && $canApprove) {
