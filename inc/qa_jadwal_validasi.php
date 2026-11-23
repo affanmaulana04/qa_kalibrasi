@@ -26,12 +26,22 @@ function qaJadwalGet($db, $periode) {
     $stmt->close();
     return $row ?: null;
 }
+function qaJadwalTanggalTtd($value) {
+    $value = trim((string)$value);
+    if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})(?:\s|$)/', $value, $m)) return '';
+    return $m[3] . '-' . $m[2] . '-' . $m[1];
+}
 function qaJadwalSignatures($db, $periode) {
-    if (!qaJadwalEnsure($db)) return ['dibuat'=>'','diperiksa'=>'','disetujui'=>''];
+    if (!qaJadwalEnsure($db)) return ['dibuat'=>'','dibuat_tanggal'=>'','diperiksa'=>'','diperiksa_tanggal'=>'','disetujui'=>'','disetujui_tanggal'=>''];
     $row=qaJadwalGet($db,$periode);
+    $diperiksa=in_array($row['status_validasi'] ?? '', ['menunggu_penyetuju','final_disetujui','ditolak_penyetuju'],true);
+    $disetujui=($row['status_validasi'] ?? '')==='final_disetujui';
     return [
         'dibuat'=>$row['dibuat_oleh'] ?? '',
-        'diperiksa'=>in_array($row['status_validasi'] ?? '', ['menunggu_penyetuju','final_disetujui','ditolak_penyetuju'],true) ? ($row['diperiksa_oleh'] ?? '') : '',
-        'disetujui'=>($row['status_validasi'] ?? '')==='final_disetujui' ? ($row['disetujui_oleh'] ?? '') : ''
+        'dibuat_tanggal'=>qaJadwalTanggalTtd($row['dibuat_at'] ?? ''),
+        'diperiksa'=>$diperiksa ? ($row['diperiksa_oleh'] ?? '') : '',
+        'diperiksa_tanggal'=>$diperiksa ? qaJadwalTanggalTtd($row['diperiksa_at'] ?? '') : '',
+        'disetujui'=>$disetujui ? ($row['disetujui_oleh'] ?? '') : '',
+        'disetujui_tanggal'=>$disetujui ? qaJadwalTanggalTtd($row['disetujui_at'] ?? '') : ''
     ];
 }

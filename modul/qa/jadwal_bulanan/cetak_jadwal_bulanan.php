@@ -275,9 +275,9 @@ function renderReport($mode, $reportRows, $daysInMonth, $year, $month, $holidayD
                                     <th>DISETUJUI</th>
                                 </tr>
                                 <tr>
-                                    <td><?= h($jadwalSignatures['dibuat'])?></td>
-                                    <td><?= h($jadwalSignatures['diperiksa'])?></td>
-                                    <td><?= h($jadwalSignatures['disetujui'])?></td>
+                                    <td><?= h($jadwalSignatures['dibuat'])?><?php if ($jadwalSignatures['dibuat_tanggal'] !== ''): ?><span class="approval-date"><?= h($jadwalSignatures['dibuat_tanggal'])?></span><?php endif; ?></td>
+                                    <td><?= h($jadwalSignatures['diperiksa'])?><?php if ($jadwalSignatures['diperiksa_tanggal'] !== ''): ?><span class="approval-date"><?= h($jadwalSignatures['diperiksa_tanggal'])?></span><?php endif; ?></td>
+                                    <td><?= h($jadwalSignatures['disetujui'])?><?php if ($jadwalSignatures['disetujui_tanggal'] !== ''): ?><span class="approval-date"><?= h($jadwalSignatures['disetujui_tanggal'])?></span><?php endif; ?></td>
                                 </tr>
                                 <tr>
                                     <td>PETUGAS</td>
@@ -537,6 +537,10 @@ function renderReport($mode, $reportRows, $daysInMonth, $year, $month, $holidayD
             }
             .approval-table th {
                 height: auto;
+            }
+            .approval-date {
+                display: block;
+                margin-top: 2px;
             }
             .schedule-table > thead > tr > th.report-heading-cell {
                 border: 0!important;

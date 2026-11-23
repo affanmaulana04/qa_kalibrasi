@@ -86,7 +86,7 @@ $labels=['menunggu_pemeriksa'=>'Menunggu Pemeriksa','menunggu_penyetuju'=>'Menun
     if ($canCheck && $status==='menunggu_pemeriksa') { $mode='validasi'; $step='pemeriksa'; $button='Detail & Validasi'; }
     elseif ($canApprove && $status==='menunggu_penyetuju') { $mode='validasi'; $step='penyetuju'; $button='Detail & Validasi'; }
     elseif ($canCreate && (!$r || strncmp($status,'ditolak_',8)===0)) { $mode='ajukan'; $button=$r?'Ajukan Ulang':'Ajukan'; }
-?><tr><td><b><?=jh($monthName.' '.$year)?></b></td><td class="status"><?=jh($labels[$status]??'Belum divalidasi')?></td><td><?=jh($r['dibuat_oleh']??'-')?></td><td><?=jh($r['diperiksa_oleh']??'-')?></td><td><?=jh($r['disetujui_oleh']??'-')?></td><td><?=jh($r['keterangan']??'-')?></td><td>
+?><tr><td><b><?=jh($monthName.' '.$year)?></b></td><td class="status"><?=jh($labels[$status]??'Belum divalidasi')?></td><td><?=jh($r['dibuat_oleh']??'-')?><?php if (!empty($r['dibuat_at'])): ?><br><small><?=jh(qaJadwalTanggalTtd($r['dibuat_at']))?></small><?php endif; ?></td><td><?=jh($r['diperiksa_oleh']??'-')?><?php if (!empty($r['diperiksa_at'])): ?><br><small><?=jh(qaJadwalTanggalTtd($r['diperiksa_at']))?></small><?php endif; ?></td><td><?=jh($r['disetujui_oleh']??'-')?><?php if (!empty($r['disetujui_at'])): ?><br><small><?=jh(qaJadwalTanggalTtd($r['disetujui_at']))?></small><?php endif; ?></td><td><?=jh($r['keterangan']??'-')?></td><td>
 <button type="button" class="btn btn-sm <?= $mode==='detail'?'btn-default':'btn-primary' ?> open-jadwal-modal"
     data-month="<?=$month?>" data-label="<?=jh($monthName.' '.$year)?>" data-mode="<?=$mode?>" data-step="<?=$step?>"
     data-status="<?=jh($labels[$status]??'Belum divalidasi')?>"

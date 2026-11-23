@@ -143,6 +143,11 @@ while ($r = mysqli_fetch_assoc($query)) {
                 border: 1px solid #000;
                 height: 50px;
             }
+            .sign-date {
+                display: block;
+                font-size: 9px;
+                margin-top: 3px;
+            }
             @media print {
                 @page {
                     size: A4 landscape;
@@ -209,9 +214,9 @@ foreach ($data_per_seksi as $seksi => $items) {
                             <th width="33%">DISETUJUI</th>
                         </tr>
                         <tr>
-                            <td><?= htmlspecialchars($signatures['dibuat'], ENT_QUOTES, 'UTF-8') ?></td>
-                            <td><?= htmlspecialchars($signatures['diperiksa'], ENT_QUOTES, 'UTF-8') ?></td>
-                            <td><?= htmlspecialchars($signatures['disetujui'], ENT_QUOTES, 'UTF-8') ?></td>
+                            <td><?= htmlspecialchars($signatures['dibuat'], ENT_QUOTES, 'UTF-8') ?><?php if ($signatures['dibuat_tanggal'] !== ''): ?><span class="sign-date"><?= htmlspecialchars($signatures['dibuat_tanggal'], ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?></td>
+                            <td><?= htmlspecialchars($signatures['diperiksa'], ENT_QUOTES, 'UTF-8') ?><?php if ($signatures['diperiksa_tanggal'] !== ''): ?><span class="sign-date"><?= htmlspecialchars($signatures['diperiksa_tanggal'], ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?></td>
+                            <td><?= htmlspecialchars($signatures['disetujui'], ENT_QUOTES, 'UTF-8') ?><?php if ($signatures['disetujui_tanggal'] !== ''): ?><span class="sign-date"><?= htmlspecialchars($signatures['disetujui_tanggal'], ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?></td>
                         </tr>
                         <tr>
                             <th>PETUGAS</th>
