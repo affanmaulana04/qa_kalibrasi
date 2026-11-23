@@ -1048,6 +1048,7 @@ html, body {
     const qaEscText = (v) => String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
     const qaSignatureName = (v) => { if (v === null || v === undefined) return ''; const s = String(v).trim(); if (!s || s === '///') return ''; return qaEscText(s); };
     const qaApprovalDate = (role) => {
+        if ((role === 'pemeriksa' || role === 'penyetuju') && !data['signature_' + role]) return '';
         let value = '';
         if (role === 'pembuat') {
             value = data.tanggal_periksa || data.tanggal_pengecekan || data.tanggal || '';
@@ -1494,6 +1495,10 @@ html, body {
         const keys = standardKeysByFormat[data.format] || [];
         data.hasil_array = data.hasil_array.map(function(rawRow, idx) {
             const row = safeObj(rawRow);
+            // Grouped P rows already carry their own type and standard tool.
+            // Filling their blank fields from master points can print a stale
+            // size or U/Part on the wrong measurement line.
+            if (data.format === 'P' && Array.isArray(row.measurements)) return {...row};
             const master = stdAt(idx);
             const merged = { ...master, ...row };
             keys.forEach(function(key) {
@@ -1720,6 +1725,16 @@ html, body {
         root.querySelectorAll('table tr').forEach(tr => {
             const table = tr.closest('table');
             if (!table) return;
+            // The shared print header aligns all values to the same left edge.
+            // The generic right-header centering below breaks that layout.
+            if (table.classList.contains('excel-info') || (data.format === 'P' && table.closest('.head-p'))) {
+                const labels = Array.from(tr.children);
+                labels.forEach(label => {
+                    if (String(label.textContent || '').trim().toUpperCase() === 'SEKSI' && label.nextElementSibling)
+                        label.nextElementSibling.style.setProperty('font-weight', 'bold', 'important');
+                });
+                return;
+            }
             const cells = Array.from(tr.children).filter(el => el.tagName === 'TD' || el.tagName === 'TH');
             cells.forEach((label, index) => {
                 const value = label.nextElementSibling;
@@ -2407,39 +2422,49 @@ html, body {
             let ms = Array.isArray(item.measurements) ? item.measurements : [];
             if (!ms.length) ms = [{}];
             const n = ms.length;
+            const typeParts = [item.type || item.type_ukuran, item.ukuran, item.upart]
+                .map(value => String(value ?? '').trim()).filter(Boolean);
+            let previousStandardName = '';
+            let previousStandardNumber = '';
 
             return ms.map((m, j) => {
-                const firstInGroup = j === 0;
                 const firstOverall = globalRowIndex === 0;
                 let cells = '';
 
                 // NO, NO ALAT, KEP, tanggal berikutnya, dan NO GAMBAR hanya satu
                 // logical tool dan di-rowspan ke seluruh detail Format P.
                 if (firstOverall) {
-                    cells += `<td rowspan="${totalRows}">1</td>`;
-                    cells += `<td rowspan="${totalRows}">${esc(mainNoAlat)}</td>`;
+                    cells += `<td rowspan="${totalRows}" class="p-tool-no">1</td>`;
+                    cells += `<td rowspan="${totalRows}" class="p-tool-id">${esc(mainNoAlat)}</td>`;
                 }
 
-                // Setiap TYPE DAN UKURAN adalah sub-group di bawah NO 1.
-                // Nama alat ukur + no alat ikut rowspan sepanjang STD dalam group tersebut.
-                if (firstInGroup) {
-                    const typeHtml = esc(item.type || item.type_ukuran || '') +
-                        (item.ukuran ? '<br>'+esc(item.ukuran) : '') +
-                        (item.upart ? '<br>'+esc(item.upart) : '');
-                    cells += `<td rowspan="${n}" class="type-cell">${typeHtml}</td>`;
-                    cells += `<td rowspan="${n}">${esc(item.alat_nama || (m && m.alat_nama))}</td>`;
-                    cells += `<td rowspan="${n}">${esc(item.alat_no || (m && m.alat_no))}</td>`;
-                }
+                // Sheet17 prints type, size and U/Part on successive result rows.
+                // Keep one cell per measurement row so its dotted separators align.
+                const typeLine = typeParts[j] || '';
+                const extraTypeLines = j === n - 1 ? typeParts.slice(n).map(esc).join('<br>') : '';
+                cells += `<td class="type-cell">${typeLine ? esc(typeLine) : ''}${extraTypeLines ? (typeLine ? '<br>' : '') + extraTypeLines : ''}</td>`;
+                const standardName = String((m && m.alat_nama) || item.alat_nama || '');
+                const standardNumber = String((m && m.alat_no) || item.alat_no || '');
+                const printName = j === 0 || standardName !== previousStandardName ? standardName : '';
+                const printNumber = j === 0 || standardNumber !== previousStandardNumber ? standardNumber : '';
+                cells += `<td>${printName ? esc(printName) : ''}</td>`;
+                cells += `<td>${printNumber ? esc(printNumber) : ''}</td>`;
+                previousStandardName = standardName;
+                previousStandardNumber = standardNumber;
 
                 const stdDisplay = esc(pStdPrint(m));
                 const dec = (v) => { const x=String(v??'').replace(',','.').replace(/^[+-]/,''); return x.includes('.') ? x.split('.')[1].length : 0; };
                 const rangeDp = String(m.toleransi_mode||'pm')==='range' ? Math.max(2,dec(m.tol_plus),dec(m.tol_minus)) : Math.max(dec(m.std_label),dec(m.toleransi));
                 const rangeFmt = (v) => { const n=Number(v); if(!Number.isFinite(n)) return esc(v); return n.toFixed(rangeDp); };
-                const rangeDisplay = `( ${rangeFmt(m.min)} ~ ${rangeFmt(m.max)} )`;
-                cells += `<td class="std-label"><div>${stdDisplay}</div><div style="margin-top:2px;font-size:0.92em;white-space:nowrap;">${rangeDisplay}</div></td>`;
+                const hasRange = m.min !== undefined && m.min !== null && String(m.min).trim() !== '' &&
+                    m.max !== undefined && m.max !== null && String(m.max).trim() !== '';
+                const rangeDisplay = hasRange ? `( ${rangeFmt(m.min)} ~ ${rangeFmt(m.max)} )` : '';
+                cells += `<td class="std-label"><div>${stdDisplay}</div>${rangeDisplay ? `<div style="margin-top:2px;font-size:0.92em;white-space:nowrap;">${rangeDisplay}</div>` : ''}</td>`;
                 // Aktual 1 & Aktual 2 tetap berada dalam satu cell tanpa garis pemisah.
                 // Beri jarak vertikal agar keduanya terbaca sebagai dua hasil pengukuran.
-                cells += `<td class="actual-p"><div>${esc(m.actual1)}</div><div style="margin-top:4px;">${esc(m.actual2)}</div></td>`;
+                const actual1 = m.actual1 !== undefined && m.actual1 !== null && String(m.actual1).trim() !== '' ? esc(m.actual1) : '';
+                const actual2 = m.actual2 !== undefined && m.actual2 !== null && String(m.actual2).trim() !== '' ? esc(m.actual2) : '';
+                cells += `<td class="actual-p">${actual2 ? `<div>${actual1}</div><div style="margin-top:4px;">${actual2}</div>` : `<div class="p-single-actual">${actual1}</div>`}</td>`;
 
                 if (firstOverall) {
                     cells += `<td rowspan="${totalRows}" style="font-weight:bold;">${esc(sharedKeputusan)}</td>`;

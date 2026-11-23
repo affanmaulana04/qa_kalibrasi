@@ -75,7 +75,14 @@
 
     function infoRow(table, label, value, label2, value2) {
         const row = el('tr');
-        row.append(cell('td', label), cell('td', value), cell('td', label2), cell('td', value2));
+        if (p.format !== 'J') {
+            const first = cell('td', String(value).replace(/^\s*:\s*/, ''));
+            const second = cell('td', String(value2).replace(/^\s*:\s*/, ''));
+            first.className = second.className = 'excel-info-value';
+            row.append(cell('td', label), first, cell('td', label2), second);
+        } else {
+            row.append(cell('td', label), cell('td', value), cell('td', label2), cell('td', value2));
+        }
         table.append(row);
     }
     const reportKind = String(p.jenis_laporan || '').trim().toLowerCase() ||
@@ -85,7 +92,7 @@
         reportKind === 'periksa' ? 'LAPORAN PEMERIKSAAN' :
         p.format === 'J' ? 'LAPORAN VERIFIKASI' : 'LAPORAN PEMERIKSAAN GAUGE';
     const title = el('div', excelTitle, 'excel-title');
-    const info = el('table', null, 'excel-info');
+    const info = el('table', null, p.format === 'J' ? 'excel-info' : 'excel-info excel-info-aligned' + (p.format === 'P' ? ' excel-info-p' : ''));
     if (p.format === 'J') {
         report.append(title, info);
         infoRow(info, 'NO LAPORAN', p.no_laporan, 'SEKSI', p.seksi_pemilik);
@@ -278,8 +285,12 @@
         .excel-title{text-align:center;font-size:15pt;margin:0 0 4mm;font-weight:normal}
         .excel-date{font-size:8pt;margin-bottom:2mm}
         .excel-info{width:100%;border-collapse:collapse;table-layout:fixed;font-size:8pt;margin-bottom:2mm}
-        .excel-info td{border:0;padding:0.7mm 0.5mm;vertical-align:top}
+        .excel-info td{border:0;padding:0.7mm 0.5mm;vertical-align:top;text-align:left!important}
         .excel-info td:nth-child(odd){width:20%}.excel-info td:nth-child(even){width:30%}
+        .excel-info-p td:nth-child(1){width:18%}.excel-info-p td:nth-child(2){width:32%}
+        .excel-info-p td:nth-child(3){width:22%}.excel-info-p td:nth-child(4){width:28%}
+        .excel-info-aligned td.excel-info-value{position:relative;padding-left:3.5mm;overflow-wrap:anywhere}
+        .excel-info-aligned td.excel-info-value::before{content:':' ;position:absolute;left:0}
         .excel-sign{width:100%;border-collapse:collapse;table-layout:fixed;font-size:8pt;text-align:center}
         .excel-sign td,.excel-sign th{border:0.2mm solid black;padding:1mm 0.5mm;font-weight:normal}
         .excel-sign-names td{height:17mm;vertical-align:bottom}.excel-sign-date{font-size:7pt}
@@ -292,6 +303,12 @@
         .excel-report .excel-grid .small-h{font-size:8pt}
         .excel-report .excel-grid .excel-actual-p > div{display:inline-block;width:50%;margin:0!important}
         .excel-report .excel-grid .excel-standard-p > div{display:inline-block;width:50%;margin:0!important;font-size:8pt!important;white-space:normal!important;vertical-align:middle}
+        .excel-report .excel-grid .excel-actual-p > div.p-single-actual,.excel-report .excel-grid .excel-standard-p > div:only-child{width:100%}
+        .excel-report .grid-p tbody tr>td{border-top:0.2mm dotted #777;border-bottom:0.2mm dotted #777}
+        .excel-report .grid-p tbody tr:first-child>td{border-top:0.2mm solid #000}
+        .excel-report .grid-p tbody tr:last-child>td{border-bottom:0.2mm solid #000}
+        .excel-report .grid-p tbody td[rowspan]{border-bottom:0.2mm solid #000}
+        .excel-report .grid-p tbody td.p-tool-no,.excel-report .grid-p tbody td.p-tool-id{vertical-align:top;padding-top:2mm}
         .excel-note{min-height:12mm;padding:2mm 0;font-size:8pt;white-space:pre-line}
         .excel-document-code{text-align:right;font-size:8pt;margin-top:2mm}
         .excel-results-title{text-align:center;border:0.2mm solid black;border-bottom:0;padding:1mm;font-size:9pt}

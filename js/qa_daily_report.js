@@ -47,6 +47,51 @@
         if (className) el.className = className;
         return el;
     }
+    function reportSuffix(value) {
+        const number = String(value || '').trim().replace(/^:\s*/, '');
+        const match = number.match(/^[^/]+\/(Lap\/(?:Kalibrasi|Periksa|Pemeriksaan|Verifikasi)\/[IVXLCDM]+\/\d{4})$/i);
+        return match ? match[1] : '';
+    }
+    function fallbackReportSuffix(group) {
+        const title = String(group.report.querySelector('.excel-title')?.textContent || '').toUpperCase();
+        const kind = title.includes('VERIFIKASI') ? 'Verifikasi' : title.includes('KALIBRASI') ? 'Kalibrasi' : 'Periksa';
+        const roman = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'][Number(source.date.slice(5, 7)) - 1];
+        return 'Lap/' + kind + '/' + roman + '/' + source.date.slice(0, 4);
+    }
+    function combinedReportNumber(group, sequence) {
+        if (group.entries.length === 1)
+            return String(group.entries[0].record.payload.no_laporan || '').trim().replace(/^:\s*/, '');
+        const suffixes = group.entries.map(entry => reportSuffix(entry.record.payload.no_laporan));
+        const originalSuffixes = Array.from(new Set(suffixes.filter(Boolean).map(value => value.toUpperCase())));
+        if (originalSuffixes.length > 1 || (originalSuffixes.length && suffixes.some(value => !value)))
+            throw new Error('Jenis, bulan, atau tahun pada nomor laporan asal berbeda. Pilih transaksi dengan format nomor yang sama.');
+        const originalSuffix = suffixes.find(Boolean) || fallbackReportSuffix(group);
+        return String(sequence).padStart(2, '0') + '/' + originalSuffix;
+    }
+    function combinedToolName(group) {
+        const names = Array.from(new Set(group.entries.map(entry => String(entry.record.payload.nama_part || entry.fields.name || '').trim()).filter(Boolean)));
+        if (names.length === 1) return names[0];
+        if (group.record.payload.format === 'P') {
+            const types = Array.from(new Set(group.entries.map(entry => {
+                const first = entry.record.payload.hasil_array?.[0] || {};
+                return String(first.type || first.type_ukuran || '').trim();
+            }).filter(Boolean)));
+            if (types.length === 1 && names.every(name => name.toLocaleLowerCase('id').includes(types[0].toLocaleLowerCase('id'))))
+                return types[0];
+        }
+        return names.join(', ');
+    }
+    function showToolNameInResult(entry) {
+        // Format P already has the workbook's TYPE DAN UKURAN and
+        // ALAT YANG DIPAKAI fields; adding a name changes that layout.
+        if (entry.record.payload.format === 'P') return;
+        const number = String(entry.record.payload.no_part || '').trim();
+        const name = String(entry.record.payload.nama_part || '').trim();
+        if (!number || !name) return;
+        const cell = Array.from(entry.body.querySelectorAll('td')).find(td => td.textContent.trim() === number);
+        if (!cell) throw new Error('Nomor alat ' + number + ' tidak ditemukan pada hasil format ' + entry.record.payload.format + '.');
+        cell.append(node('small', name, 'daily-tool-name'));
+    }
     // Copy the original report's layout, never its scripts or event handlers.
     function safeCopy(original) {
         if (original.nodeType === Node.TEXT_NODE) return document.createTextNode(original.textContent);
@@ -81,7 +126,10 @@
                 frame.remove();
                 reject(new Error('Waktu pemuatan transaksi habis. Coba kembali.'));
             }, 20000);
-            frame.onload = () => {
+            // The original renderer finishes its header cleanup in a queued
+            // timer. Copying on load can capture different intermediate layouts
+            // for otherwise identical tools and split them into separate pages.
+            frame.onload = () => setTimeout(() => {
                 try {
                     const doc = frame.contentDocument;
                     const original = doc.querySelector('#report > .report');
@@ -99,7 +147,7 @@
                     frame.remove();
                     reject(err);
                 }
-            };
+            }, 50);
             frame.src = 'laporan_hasil_kalibrasi.php?' + params;
             document.body.appendChild(frame);
         });
@@ -133,17 +181,27 @@
             el.dataset.dailyField = key;
             el.replaceChildren();
         }
-        // Only these values may be collected across tools. The rest of the original
-        // header (standards, method, environment, approvals) must match exactly.
+        // Collect these header values across tools; environment and approvals
+        // remain part of the grouping key.
         for (const cell of report.querySelectorAll('td,th')) {
             if (cell.querySelector('table') || cell.closest('[data-daily-results]')) continue;
             const label = cell.textContent.trim().replace(/[.:]/g, '').replace(/\s+/g, ' ').toUpperCase();
             if (label === 'NO LAPORAN') field(cell.nextElementSibling, 'report');
             if (label === 'NAMA ALAT') field(cell.nextElementSibling, 'name');
+            if (label === 'METODE') field(cell.nextElementSibling, 'method');
+            if (label === 'ALAT STANDAR' || label === 'STANDAR UJI / NO ALAT' || label === 'ALAT VERIFIKASI')
+                field(cell.nextElementSibling, 'standard');
+            if (label === 'TRACEABILITY') field(cell.nextElementSibling, 'traceability');
             if (label === 'KETERANGAN') field(cell.nextElementSibling, 'note');
         }
         const note = report.querySelector('.excel-note,.ket-h,.ket-i,.ket-j,.ket-o,.ket-p,.ket-q,.ket-t');
-        if (note) field(note, 'note', /^\s*KETERANGAN\s*:\s*/i);
+        // H, I and J put the note inside a table. Keep that table and its cell
+        // intact; replacing the table's children breaks the printed layout.
+        if (note && !fields.note) {
+            const noteCell = note.matches('table') ? note.querySelector('td') : note;
+            field(noteCell, 'note', /^\s*KETERANGAN\s*:\s*/i);
+            if (noteCell) noteCell.dataset.dailyNoteLabel = '1';
+        }
         // Ignore only the emptied per-tool identity fields and result rows; other
         // metadata and approvals must match for reports to be combined.
         const key = record.payload.format + '|' + record.status + '|' + report.outerHTML;
@@ -156,17 +214,19 @@
         };
     }
 
-    function fillFields(report, entries, headerEntries) {
+    function fillFields(report, entries, combinedNumber, combinedName, headerFields) {
         for (const el of report.querySelectorAll('[data-daily-field]')) {
             const key = el.dataset.dailyField;
-            // Never drop No. Laporan or Nama Alat for the other transactions.
-            // The combined header must list each distinct identifier.
-            const candidates = (key === 'name' || key === 'report') ? headerEntries : entries;
-            const values = Array.from(new Set(candidates.map(e => e.fields[key]).filter(Boolean)));
+            // List only the tools printed on this page, so a long selection
+            // cannot overflow every page's header.
+            const values = key === 'report' ? [combinedNumber]
+                : key === 'name' ? [combinedName]
+                : ['method', 'standard', 'traceability'].includes(key) ? [headerFields[key] || '']
+                : Array.from(new Set(entries.map(e => e.fields[key]).filter(Boolean)));
             el.replaceChildren();
             if (el.dataset.dailyPrefix) el.append(document.createTextNode(el.dataset.dailyPrefix));
-            if (key === 'note' && (/^ket-/.test(el.className) || el.classList.contains('excel-note'))) el.append(node('b', 'KETERANGAN :'), node('br'));
-            // Keep all distinct names and original report numbers visible on every page.
+            if (key === 'note' && el.dataset.dailyNoteLabel) el.append(node('b', 'KETERANGAN :'), node('br'));
+            // Show each report number once, even when multiple tools share it.
             values.forEach((value, i) => {
                 if (i) el.append(node('br'));
                 el.append(document.createTextNode(value));
@@ -185,19 +245,30 @@
         const css = doc.createElement('style');
         css.textContent = styles + `
             @page portraitA4 { size:A4 portrait; margin:0; }
-            .daily-sheet { width:210mm; margin:0 auto 20px; background:white; display:flow-root; }
+            @page landscapeA4 { size:A4 landscape; margin:0; }
+            html, body { margin:0!important; padding:0!important; }
+            body { background:#e9ecef!important; }
+            .daily-sheet { width:210mm; margin:0 auto 20px; background:white; display:flow-root; box-shadow:0 2px 8px #0002; }
             .daily-sheet.landscape { width:297mm; }
             .daily-sheet.landscape > .report { width:293mm!important; min-height:0!important; margin:2mm auto!important; }
-            .daily-sheet.portrait > .report { max-width:none; min-height:0!important; }
+            .daily-sheet.portrait > .report { width:206mm!important; max-width:none!important; min-height:0!important; margin:2mm auto!important; }
+            .daily-sheet.landscape.is-complete > .report { min-height:206mm!important; }
+            .daily-sheet.portrait.is-complete > .report { min-height:293mm!important; }
+            .daily-tool-name { display:block; margin-top:1mm; font-size:.85em; font-weight:normal; overflow-wrap:anywhere; }
             [data-daily-results] tbody { break-inside:avoid; }
             @media print {
-                .daily-sheet { margin:0; break-after:page; page:portraitA4; }
+                body { background:white!important; }
+                .daily-sheet { margin:0; box-shadow:none; break-after:page; page:portraitA4; }
                 .daily-sheet.landscape { page:landscapeA4; }
                 .daily-sheet:last-child { break-after:auto; }
             }
         `;
         doc.head.append(css);
+        let combinedSequence = 0;
         for (const group of groups.values()) {
+            const combinedNumber = combinedReportNumber(group, group.entries.length > 1 ? ++combinedSequence : 0);
+            const combinedName = combinedToolName(group);
+            const headerFields = group.entries[0].fields;
             let current;
             const pages = [];
 
@@ -216,24 +287,26 @@
             }
             newPage();
             for (const entry of group.entries) {
+                showToolNameInResult(entry);
                 const body = entry.body;
                 current.entries.push(entry);
                 current.report.querySelector('[data-daily-results]').append(body);
-                fillFields(current.report, current.entries, group.entries);
+                fillFields(current.report, current.entries, combinedNumber, combinedName, headerFields);
                 // Keep each transaction's rowspans together and repeat the original
                 // full header/footer on continuation pages.
                 const maxHeight = (group.landscape ? 210 : 297) * 96 / 25.4;
                 if (current.entries.length > 1 && current.sheet.getBoundingClientRect().height > maxHeight - 8) {
                     current.entries.pop();
                     body.remove();
-                    fillFields(current.report, current.entries, group.entries);
+                    fillFields(current.report, current.entries, combinedNumber, combinedName, headerFields);
                     newPage();
                     current.entries.push(entry);
                     current.report.querySelector('[data-daily-results]').append(body);
-                    fillFields(current.report, current.entries, group.entries);
+                    fillFields(current.report, current.entries, combinedNumber, combinedName, headerFields);
                 }
             }
             pages.forEach((page, index) => {
+                page.sheet.classList.add('is-complete');
                 const walker = doc.createTreeWalker(page.report, NodeFilter.SHOW_TEXT);
                 while (walker.nextNode()) {
                     const text = walker.currentNode;

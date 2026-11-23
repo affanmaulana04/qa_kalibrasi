@@ -299,7 +299,7 @@ $dailyScriptVersion = substr(hash_file('sha256', __DIR__ . '/../../../js/qa_dail
         <main class="daily-container">
             <section class="daily-card no-print">
                 <h2>Laporan Kalibrasi Multi-Alat</h2>
-                <p>Laporan dengan lebih dari satu nomor alat dalam satu tabel hasil pemeriksaan.</p>
+                <p>Laporan dengan lebih dari satu nomor alat dalam satu tabel hasil pemeriksaan. Nomor urut gabungan dimulai dari 01 pada pratinjau; jenis laporan, bulan, dan tahun mengikuti nomor laporan asal.</p>
                 <form method="get" class="daily-filter">
                     <div class="form-group"><label for="dailySection">Seksi</label><select id="dailySection" name="seksi" class="form-control" required><option value="">Pilih seksi</option><?php foreach ($sections as $name => $unused): ?><option value="<?= dailyH($name)?>" <?= $section === $name?'selected':''?>><?= dailyH($name)?></option><?php endforeach; ?></select></div>
                     <div class="form-group"><label for="dailyDate">Tanggal kalibrasi</label><input id="dailyDate" type="date" name="tanggal" class="form-control" value="<?= dailyH($date)?>" required></div>
@@ -318,7 +318,7 @@ $dailyScriptVersion = substr(hash_file('sha256', __DIR__ . '/../../../js/qa_dail
                                 <th>No. Alat</th>
                                 <th>Nama Alat</th>
                                 <th>Format</th>
-                                <th>No. Transaksi / Laporan</th>
+                                <th>No. Laporan</th>
                                 <th>Dibuat</th>
                                 <th>Tanggal Periksa</th>
                                 <th>Status Validasi</th>
@@ -330,7 +330,7 @@ $dailyScriptVersion = substr(hash_file('sha256', __DIR__ . '/../../../js/qa_dail
                                 <td><?= dailyH($p['no_part'])?></td>
                                 <td><?= dailyH($p['nama_part'])?></td>
                                 <td><?= dailyH($p['format'])?></td>
-                                <td><?= dailyH($p['nomor_pengecekan'])?><br><?= dailyH($p['no_laporan'])?></td>
+                                <td><?= dailyH($p['no_laporan'])?></td>
                                 <td><?= dailyH($record['created_at'])?></td>
                                 <td><?= dailyH($p['tanggal_periksa'])?></td>
                                 <td><?= dailyH($record['status'])?><?= $p['hasil_array']?'':' · Rincian hasil kosong'?></td>

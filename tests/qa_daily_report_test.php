@@ -53,6 +53,8 @@ dailyCheck($p['format'] === 'A' && $p['seksi_pemilik'] === 'OLD SECTION' && $p['
 dailyCheck($p['tanggal_periksa'] === '2026-10-15' && $p['jadwal_berikutnya'] === '2027-09-01', 'original inspection and next date preserved');
 dailyCheck($p['pemeriksa'] === 'Reviewer' && $p['signature_pemeriksa'] && !$p['signature_penyetuju'] && $p['penyetuju'] === '', 'latest rejection does not become an approval signature');
 dailyCheck($p['hasil_array'] === $snapshot['rows'], 'all measurement rows preserved');
+$legacyNumber = qaDailyPayload(array_replace($base, ['no_laporan' => ': 01/Lap/Periksa/VII/2026']), [], []);
+dailyCheck($legacyNumber['no_laporan'] === '01/Lap/Periksa/VII/2026', 'legacy report number prefix is cleaned for aligned printing');
 dailyTestInsert('qa_alat_rusak', ['no_part' => 'ARCH_RUSAK_20261015000000', 'nama_part' => 'Archived tool', 'seksi_pemilik' => 'ARCH SECTION', 'format_laporan' => 'H', 'alat_registry_id' => 502]);
 dailyTestInsert('qa_pengecekan', array_replace($base, ['no_part' => 'ARCH', 'alat_registry_id' => 502, 'alat_id' => 999, 'hasil_json' => '[{"hasil":"1"}]', 'status_kalibrasi' => 'RUSAK']));
 $records = qaDailyRecords($konek, '2026-10-15');
