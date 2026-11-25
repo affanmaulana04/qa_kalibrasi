@@ -1266,6 +1266,8 @@ html, body {
 
     data.status_final = pick(data.status_final, data.keputusan, headerSnap.status_final, headerSnap.keputusan);
     data.keputusan = pick(data.keputusan, data.status_final);
+    const qaNoNextDate = ['NG', 'NOT GOOD', 'BAD', 'RUSAK', 'RUSAK VISUAL', 'DISCONTINUE', 'DITARIK TECHNICAL']
+        .includes(String(data.status_final).trim().toUpperCase());
     data.tanggal_periksa = pick(
         data.tanggal_periksa, data.tanggal, data.tanggal_pengecekan,
         headerSnap.tanggal_periksa, snapshot.tanggal_periksa
@@ -1274,6 +1276,11 @@ html, body {
         data.jadwal_berikutnya, data.periksa_berikut,
         data.periode_berikutnya, footerSnap.jadwal_berikutnya
     );
+    if (qaNoNextDate) {
+        data.jadwal_berikutnya = '-';
+        data.periksa_berikut = '-';
+        data.periode_berikutnya = '-';
+    }
     data.operator = pick(data.operator, data.petugas, data.created_by, headerSnap.operator, headerSnap.petugas);
     data.petugas = data.operator || data.petugas || '';
     data.keterangan = pick(data.keterangan, footerSnap.keterangan);
@@ -1297,6 +1304,11 @@ html, body {
 
     data.hasil_array = toArray(data.hasil_array);
     if (!data.hasil_array.length) data.hasil_array = toArray(data.rows);
+    if (qaNoNextDate) {
+        data.hasil_array.forEach(function(row) {
+            if (row && typeof row === 'object') row.periksa_berikut = '-';
+        });
+    }
     data.rows = data.hasil_array;
 
     /* Standard point tersimpan sebagai JSON saat registrasi. */
@@ -1410,9 +1422,13 @@ html, body {
                 std_no_alat: pick(row.std_no_alat, std.std_no_alat),
                 std_out: pick(row.std_out, std.std_out),
                 tol_out: pick(row.tol_out, std.tol_out),
+                tol_out_lower: pick(row.tol_out_lower, std.tol_out_lower),
+                tol_out_upper: pick(row.tol_out_upper, std.tol_out_upper),
                 range_out: pick(row.range_out, std.range_out),
                 std_pitch: pick(row.std_pitch, std.std_pitch),
                 tol_pitch: pick(row.tol_pitch, std.tol_pitch),
+                tol_pitch_lower: pick(row.tol_pitch_lower, std.tol_pitch_lower),
+                tol_pitch_upper: pick(row.tol_pitch_upper, std.tol_pitch_upper),
                 range_pitch: pick(row.range_pitch, std.range_pitch)
             };
         });
@@ -1794,6 +1810,30 @@ html, body {
                 if (next !== el.textContent) el.textContent = next;
             }
         });
+        const months = {
+            januari:1, january:1, februari:2, february:2, maret:3, march:3,
+            april:4, mei:5, may:5, juni:6, june:6, juli:7, july:7, agustus:8, august:8,
+            september:9, oktober:10, october:10, november:11, desember:12, december:12
+        };
+        const pad = value => String(value).padStart(2, '0');
+        const dateText = (year, month, day, original) => {
+            const y = Number(year), m = Number(month), d = Number(day);
+            const valid = new Date(Date.UTC(y, m - 1, d));
+            return valid.getUTCFullYear() === y && valid.getUTCMonth() + 1 === m && valid.getUTCDate() === d
+                ? `${pad(d)}-${pad(m)}-${year}` : original;
+        };
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        while (walker.nextNode()) {
+            const node = walker.currentNode;
+            const oldText = node.nodeValue;
+            const newText = oldText
+                .replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (full, y, m, d) => dateText(y, m, d, full))
+                .replace(/\b(\d{1,2})\s*[-./]\s*(\d{1,2})\s*[-./]\s*(\d{4})\b/g,
+                    (full, d, m, y) => dateText(y, m, d, full))
+                .replace(/\b(\d{1,2})\s+(Januari|January|Februari|February|Maret|March|April|Mei|May|Juni|June|Juli|July|Agustus|August|September|Oktober|October|November|Desember|December)\s+(\d{4})\b/gi,
+                    (full, d, month, y) => dateText(y, months[month.toLowerCase()], d, full));
+            if (newText !== oldText) node.nodeValue = newText;
+        }
     };
     const qaReportObserver = new MutationObserver(() => setTimeout(qaCleanReport, 0));
     qaReportObserver.observe(document.getElementById('report'), { childList:true, subtree:true });
@@ -1920,7 +1960,7 @@ html, body {
         const parts=['SUHU','HUMIDITY'];
         let body='';
         parts.forEach(part=>{
-            body+='<tr class="y-section"><td colspan="4">'+(part==='HUMIDITY'?'HUMIDITY ( % )':'SUHU')+'</td></tr>';
+            body+='<tr class="y-section"><td colspan="4">'+(part==='HUMIDITY'?'HUMIDITY':'SUHU')+'</td></tr>';
             rows.filter(r=>String(r?.bagian||'').toUpperCase()===part).forEach((r,i)=>{
                 const std=num(r.standar),hasil=num(r.hasil),diff=Number.isFinite(std)&&Number.isFinite(hasil)?std-hasil:NaN;
                 body+='<tr class="y-result"><td>'+(i+1)+'</td><td class="y-standard"><div class="y-standard-inner"><span>'+print(r.standar)+'</span><span>±'+print(r.toleransi)+'</span></div></td><td>'+print(r.hasil)+'</td><td>'+display(diff)+'</td></tr>';
@@ -3117,8 +3157,8 @@ html, body {
                     <tr>
                         <th rowspan="2">NO</th>
                         <th colspan="2">ALAT YANG DIVERIFIKASI</th>
-                        <th rowspan="2">SPESIFIKASI<br>ALAT VERIFIKASI</th>
-                        <th rowspan="2">HASIL<br>VERIFIKASI</th>
+                        <th rowspan="2">SPESIFIKASI<br>ALAT / PART VERIFIKASI</th>
+                        <th rowspan="2">HASIL VERIFIKASI<br></th>
                         <th rowspan="2">TGL. VERIFIKASI<br>BERIKUT</th>
                     </tr>
                     <tr>
@@ -3178,14 +3218,36 @@ html, body {
             const bulan=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
             return m[3]+' '+bulan[parseInt(m[2],10)-1]+' '+m[1];
         };
-        const stdCellH = (v,t,r) => {
-            let s = escH(v);
-            if (t) s += (s ? '<br>' : '') + '<span class="small-h">' + escH(t) + '</span>';
-            if (r) {
-                let rClean = String(r).trim().replace(/^\s*\(\s*(.*?)\s*\)\s*$/, '$1');
-                s += (s ? '<br>' : '') + '<span class="small-h">(' + escH(rClean) + ')</span>';
+        const stdCellH = (row, dimension) => {
+            const v = row['std_' + dimension];
+            let t = row['tol_' + dimension];
+            let range = row['range_' + dimension];
+            const lowerText = row['tol_' + dimension + '_lower'];
+            const upperText = row['tol_' + dimension + '_upper'];
+            if (lowerText !== undefined && upperText !== undefined &&
+                String(lowerText).trim() !== '' && String(upperText).trim() !== '') {
+                const parse = value => /^[+-](?:\d+(?:[.,]\d*)?|[.,]\d+)$/.test(String(value).trim())
+                    ? Number(String(value).replace(',', '.')) : NaN;
+                const std = Number(String(v).replace(',', '.'));
+                const lower = parse(lowerText);
+                const upper = parse(upperText);
+                if ([std, lower, upper].every(Number.isFinite) && lower <= upper) {
+                    t = String(lowerText).trim() + ' / ' + String(upperText).trim();
+                    const precision = Math.min(6, Math.max(
+                        String(v).split(/[.,]/)[1]?.length || 0,
+                        String(lowerText).split(/[.,]/)[1]?.length || 0,
+                        String(upperText).split(/[.,]/)[1]?.length || 0
+                    ));
+                    range = '(' + (std + lower).toFixed(precision) + ' ~ ' + (std + upper).toFixed(precision) + ')';
+                }
             }
-            return s || '///';
+            let cell = escH(v);
+            if (t) cell += (cell ? '<br>' : '') + '<span class="small-h">' + escH(t) + '</span>';
+            if (range) {
+                const clean = String(range).trim().replace(/^\s*\(\s*(.*?)\s*\)\s*$/, '$1');
+                cell += (cell ? '<br>' : '') + '<span class="small-h">(' + escH(clean) + ')</span>';
+            }
+            return cell || '///';
         };
         const firstH = rowsH[0] || {};
         const kodeWarnaH = data.kode_warna || firstH.kode_warna || '';
@@ -3203,8 +3265,8 @@ html, body {
                 <td>${escH(r.std_spesifikasi)}</td>
                 <td>${escH(r.std_no_alat)}</td>
                 <td><b>${escH(r.posisi_ukur)}</b></td>
-                <td>${stdCellH(r.std_out,r.tol_out,r.range_out)}</td>
-                <td>${stdCellH(r.std_pitch,r.tol_pitch,r.range_pitch)}</td>
+                <td>${stdCellH(r, 'out')}</td>
+                <td>${stdCellH(r, 'pitch')}</td>
                 <td>${escH(out.dep)}</td><td>${escH(out.ten)}</td><td>${escH(out.bel)}</td>
                 <td>${escH(pitch.dep)}</td><td>${escH(pitch.ten)}</td><td>${escH(pitch.bel)}</td>
                 ${idx===0 ? `<td rowspan="${rowspanH}">${escH(kodeWarnaH)}</td><td rowspan="${rowspanH}">${escH(putusanH)}</td><td rowspan="${rowspanH}">${dateH(data.jadwal_berikutnya || data.periksa_berikut)}</td>` : ''}
@@ -4882,7 +4944,7 @@ html, body {
                         return p[2] + ' - ' + p[1] + ' - ' + p[0];
                     }
             
-                    let dbStr = (data.jadwal_berikutnya && data.jadwal_berikutnya !== 'null' && data.jadwal_berikutnya !== '-') ? formatTanggalReversed(data.jadwal_berikutnya) : '<b>Memerlukan Kalibrasi</b>';
+                    let dbStr = qaNoNextDate ? '-' : ((data.jadwal_berikutnya && data.jadwal_berikutnya !== 'null' && data.jadwal_berikutnya !== '-') ? formatTanggalReversed(data.jadwal_berikutnya) : '<b>Memerlukan Kalibrasi</b>');
 
                     let crossSuhu = (!data.suhu || data.suhu === '') ? 'diagonal-strike' : '';
                     let crossKelembapan = (!data.kelembapan || data.kelembapan === '') ? 'diagonal-strike' : '';

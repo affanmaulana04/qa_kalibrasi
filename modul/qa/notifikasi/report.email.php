@@ -9,6 +9,10 @@ $id_pemakai = $_SESSION['userid'] ?? '';
 function e($v) {
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 }
+function tanggalTampilEmail($value) {
+    $text = trim((string)$value);
+    return $text === '' ? '-' : preg_replace('/^(\d{4})-(\d{2})-(\d{2})/', '$3-$2-$1', $text);
+}
 $sql = "SELECT l.*, COALESCE(sp.kode_pemilik, s.kode_seksi, '-') AS seksi
       FROM qa_email_log l
       LEFT JOIN qa_part p ON p.id=l.alat_id
@@ -88,9 +92,9 @@ if ($res)
                                 <td><?php echo e($r['email']);?></td>
                                 <td><?php echo e($r['seksi']);?></td>
                                 <td class="text-center"><?php echo e($r['jenis_email']);?></td>
-                                <td class="text-center"><?php echo e($r['tanggal_jadwal']?:'-');?></td>
-                                <td class="text-center"><?php echo e(($r['periode_mulai']?:'-') . ' s.d. ' . ($r['periode_selesai']?:'-'));?></td>
-                                <td class="text-center"><?php echo e($r['tanggal_kirim']?:'-');?></td>
+                                <td class="text-center"><?php echo e(tanggalTampilEmail($r['tanggal_jadwal']));?></td>
+                                <td class="text-center"><?php echo e(tanggalTampilEmail($r['periode_mulai']) . ' s.d. ' . tanggalTampilEmail($r['periode_selesai']));?></td>
+                                <td class="text-center"><?php echo e(tanggalTampilEmail($r['tanggal_kirim']));?></td>
                                 <td class="text-center"><?php echo $r['status'] === 'sent'?'<span class="label label-success">Terkirim</span>':'<span class="label label-danger">Gagal</span>';?></td>
                                 <td><?php echo e($r['keterangan']);?></td>
                             </tr><?php endforeach;

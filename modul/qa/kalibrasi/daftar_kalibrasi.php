@@ -261,7 +261,7 @@ $total_pages = count($pages);
                         } else {
                             $row = $item['data'];
                             $tgl_jadwal = $row['jadwal_kalibrasi'];
-                            $format_tgl_jadwal = date('d.m.Y', strtotime($tgl_jadwal));
+                            $format_tgl_jadwal = date('d-m-Y', strtotime($tgl_jadwal));
                         
                             $datetime_hari_ini = new DateTime($tanggal_hari_ini);
                             $datetime_jadwal = new DateTime($tgl_jadwal);

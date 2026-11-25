@@ -22,17 +22,93 @@ $backLabel = $fromMasterdata ? 'Kembali ke Master Data' : 'Kembali ke Menu Utama
 
 $filter_seksi = isset($_GET['seksi']) ? mysqli_real_escape_string($konek, $_GET['seksi']) : 'ALL';
 $filter_tgl = isset($_GET['tgl']) ? mysqli_real_escape_string($konek, $_GET['tgl']) : date('Y-m-d');
+$dateParts = explode('-', $filter_tgl);
+if (count($dateParts) !== 3 || !ctype_digit(implode('', $dateParts)) ||
+    !checkdate((int)$dateParts[1], (int)$dateParts[2], (int)$dateParts[0]) ||
+    !preg_match('/^\d{4}-\d{2}-\d{2}$/', $filter_tgl)) {
+    $filter_tgl = date('Y-m-d');
+}
 $signatures = qaJadwalSignatures($konek, substr($filter_tgl, 0, 7));
 
-$where = qaSeksiSql($konek, 'seksi_pemilik') . " AND status = 'aktif' AND jadwal_kalibrasi <= '$filter_tgl'";
-if ($filter_seksi !== 'ALL') {
-    $where .= " AND seksi_pemilik = '$filter_seksi'";
+$masters = [];
+$jadwalRows = [];
+foreach (['qa_part', 'qa_alat_ng', 'qa_alat_rusak', 'qa_alat_discontinue', 'qa_alat_ditarik'] as $table) {
+    $where = qaSeksiSql($konek, 'seksi_pemilik');
+    $query = @mysqli_query($konek, "SELECT no_part,nama_part,spesifikasi,resolusi,seksi_pemilik,periode_kalibrasi,jadwal_kalibrasi,status FROM `$table` WHERE $where");
+    if (!$query)
+        continue;
+    while ($r = mysqli_fetch_assoc($query)) {
+        $no = strtoupper(trim((string)$r['no_part']));
+        if ($no === '')
+            continue;
+        if (!isset($masters[$no]) || $table === 'qa_part')
+            $masters[$no] = $r;
+        if ($table !== 'qa_part' || strtolower((string)$r['status']) !== 'aktif')
+            continue;
+        $due = substr((string)$r['jadwal_kalibrasi'], 0, 10);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $due) || $due > $filter_tgl)
+            continue;
+        if ($filter_seksi !== 'ALL' && strcasecmp((string)$r['seksi_pemilik'], $filter_seksi) !== 0)
+            continue;
+        $r['tanggal_rencana'] = $due;
+        $r['tanggal_aktual'] = '';
+        $r['hasil_qa'] = '';
+        $r['tanggal_berikutnya'] = '';
+        $jadwalRows[$no . '|' . $due] = $r;
+    }
 }
 
-$query = mysqli_query($konek, "SELECT * FROM qa_part WHERE $where ORDER BY seksi_pemilik ASC, jadwal_kalibrasi ASC");
+// Jadwal master bergeser setelah approval. Snapshot transaksi menjaga rencana lama tetap tercetak.
+$qFinal = mysqli_query($konek, "SELECT no_part,tanggal_jadwal_saat_pengecekan,tanggal_pengecekan,
+    status_kalibrasi,periode_berikutnya,hasil_json
+    FROM qa_pengecekan
+    WHERE (tanggal_jadwal_saat_pengecekan <= '$filter_tgl'
+      OR LEFT(tanggal_pengecekan,10) <= '$filter_tgl')
+      AND status_validasi='final_disetujui'
+      AND COALESCE(jenis_transaksi,'update_hasil_kalibrasi') <> 'registrasi_alat'
+      AND (nomor_pengecekan IS NULL OR nomor_pengecekan NOT LIKE 'QA-REG-%')
+    ORDER BY tanggal_pengecekan ASC,id ASC");
+if ($qFinal) {
+    while ($q = mysqli_fetch_assoc($qFinal)) {
+        $no = strtoupper(trim((string)$q['no_part']));
+        $due = substr((string)($q['tanggal_jadwal_saat_pengecekan'] ?: $q['tanggal_pengecekan']), 0, 10);
+        if ($no === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $due))
+            continue;
+        $snapshot = json_decode((string)($q['hasil_json'] ?? ''), true);
+        $header = is_array($snapshot['header'] ?? null) ? $snapshot['header'] : [];
+        $master = $masters[$no] ?? [];
+        $seksi = trim((string)($header['seksi_pemilik'] ?? ($master['seksi_pemilik'] ?? '')));
+        if (!qaSeksiBoleh($konek, $seksi))
+            continue;
+        if ($filter_seksi !== 'ALL' && strcasecmp($seksi, $filter_seksi) !== 0)
+            continue;
+        $key = $no . '|' . $due;
+        $row = $jadwalRows[$key] ?? $master;
+        $row['no_part'] = $q['no_part'];
+        $row['nama_part'] = $header['nama_part'] ?? ($row['nama_part'] ?? $q['no_part']);
+        $row['spesifikasi'] = $header['spesifikasi'] ?? ($row['spesifikasi'] ?? '');
+        $row['resolusi'] = $header['resolusi'] ?? ($row['resolusi'] ?? '');
+        $row['seksi_pemilik'] = $seksi;
+        $row['periode_kalibrasi'] = $master['periode_kalibrasi'] ?? ($row['periode_kalibrasi'] ?? '');
+        $row['tanggal_rencana'] = $due;
+        $row['tanggal_aktual'] = substr((string)$q['tanggal_pengecekan'], 0, 10);
+        $status = strtoupper(trim((string)$q['status_kalibrasi']));
+        $row['hasil_qa'] = in_array($status, ['GOOD', 'OK'], true) ? 'OK'
+            : (in_array($status, ['BAD', 'NG', 'NOT GOOD', 'BURUK'], true) ? 'NOT GOOD'
+            : ($status === 'RUSAK VISUAL' ? 'RUSAK'
+            : ($status === 'DITARIK' ? 'DITARIK TECHNICAL' : $status)));
+        $row['tanggal_berikutnya'] = $row['hasil_qa'] === 'OK'
+            ? substr((string)($q['periode_berikutnya'] ?? ''), 0, 10) : '-';
+        $jadwalRows[$key] = $row;
+    }
+}
 
+uasort($jadwalRows, static function ($a, $b) {
+    return [strtoupper((string)$a['seksi_pemilik']), (string)$a['tanggal_rencana'], strtoupper((string)$a['no_part'])]
+        <=> [strtoupper((string)$b['seksi_pemilik']), (string)$b['tanggal_rencana'], strtoupper((string)$b['no_part'])];
+});
 $data_per_seksi = [];
-while ($r = mysqli_fetch_assoc($query)) {
+foreach ($jadwalRows as $r) {
     $seksi = $r['seksi_pemilik'];
     if (!isset($data_per_seksi[$seksi])) {
         $data_per_seksi[$seksi] = [];
@@ -189,8 +265,7 @@ while ($r = mysqli_fetch_assoc($query)) {
         echo "<div class='a4-landscape text-center' style='padding-top:100px;'><h3>Tidak ada jadwal kalibrasi sampai tanggal " . date('d-m-Y', strtotime($filter_tgl)) . "</h3></div>";
     }
 
-$bulan = array(1 => 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember');
-$tgl_indo = date('d') . ' ' . $bulan[(int)date('m')] . ' ' . date('Y');
+$tgl_indo = date('d-m-Y');
 
 foreach ($data_per_seksi as $seksi => $items) {
     $chunks = array_chunk($items, 30); // Max 30 baris per halaman biar fit
@@ -247,19 +322,29 @@ foreach ($data_per_seksi as $seksi => $items) {
                         <?php
                     $no = ($idx * 30) + 1;
         foreach ($chunk as $row) {
-            $periode_txt = $row['periode_kalibrasi'] == 365 ? '1 Tahun' : ($row['periode_kalibrasi'] == 180 ? '6 Bulan' : $row['periode_kalibrasi'] . ' Hari');
-            $tgl_ren = date('d - m - Y', strtotime($row['jadwal_kalibrasi']));
+            $periode = (int)($row['periode_kalibrasi'] ?? 0);
+            $periode_txt = $periode === 365 ? '1 Tahun' : ($periode === 180 ? '6 Bulan' : ($periode > 0 ? $periode . ' Hari' : '-'));
+            $tgl_ren = date('d-m-Y', strtotime($row['tanggal_rencana']));
+            $tgl_aktual = !empty($row['tanggal_aktual']) ? date('d-m-Y', strtotime($row['tanggal_aktual'])) : '-';
+            $hasil = $row['hasil_qa'] !== '' ? $row['hasil_qa'] : '-';
+            $tgl_berikutnya = !empty($row['tanggal_berikutnya']) && $row['tanggal_berikutnya'] !== '-'
+                ? date('d-m-Y', strtotime($row['tanggal_berikutnya'])) : '-';
+            $nama = htmlspecialchars((string)$row['nama_part'], ENT_QUOTES, 'UTF-8');
+            $spesifikasi = htmlspecialchars((string)$row['spesifikasi'], ENT_QUOTES, 'UTF-8');
+            $no_alat = htmlspecialchars((string)$row['no_part'], ENT_QUOTES, 'UTF-8');
+            $resolusi = htmlspecialchars((string)($row['resolusi'] ?: '~'), ENT_QUOTES, 'UTF-8');
+            $hasil = htmlspecialchars((string)$hasil, ENT_QUOTES, 'UTF-8');
             echo "<tr>
                                 <td>{$no}</td>
-                                <td class='text-left'>{$row['nama_part']}</td>
-                                <td class='text-left'>{$row['spesifikasi']}</td>
-                                <td class='text-left'>{$row['no_part']}</td>
-                                <td>~</td>
+                                <td class='text-left'>{$nama}</td>
+                                <td class='text-left'>{$spesifikasi}</td>
+                                <td class='text-left'>{$no_alat}</td>
+                                <td>{$resolusi}</td>
                                 <td>{$periode_txt}</td>
                                 <td>{$tgl_ren}</td>
-                                <td>&nbsp;</td>
-                                <td>&nbsp;</td>
-                                <td>&nbsp;</td>
+                                <td>{$tgl_aktual}</td>
+                                <td>{$hasil}</td>
+                                <td>{$tgl_berikutnya}</td>
                             </tr>";
             $no++;
         }

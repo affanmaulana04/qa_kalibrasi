@@ -14,6 +14,12 @@ $konek->set_charset('utf8mb4');
 function dailyH($v) {
     return htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
+function dailyDisplayDate($value) {
+    $text = trim((string)$value);
+    if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})(.*)$/', $text, $parts))
+        return $text !== '' ? $text : '-';
+    return $parts[3] . '-' . $parts[2] . '-' . $parts[1] . $parts[4];
+}
 $today = (new DateTimeImmutable('now', new DateTimeZone('Asia/Bangkok')))->format('Y-m-d');
 $date = is_string($_GET['tanggal'] ?? null) ? $_GET['tanggal'] : $today;
 $section = is_string($_GET['seksi'] ?? null) ? trim($_GET['seksi']) : '';
@@ -331,8 +337,8 @@ $dailyScriptVersion = substr(hash_file('sha256', __DIR__ . '/../../../js/qa_dail
                                 <td><?= dailyH($p['nama_part'])?></td>
                                 <td><?= dailyH($p['format'])?></td>
                                 <td><?= dailyH($p['no_laporan'])?></td>
-                                <td><?= dailyH($record['created_at'])?></td>
-                                <td><?= dailyH($p['tanggal_periksa'])?></td>
+                                <td><?= dailyH(dailyDisplayDate($record['created_at']))?></td>
+                                <td><?= dailyH(dailyDisplayDate($p['tanggal_periksa']))?></td>
                                 <td><?= dailyH($record['status'])?><?= $p['hasil_array']?'':' · Rincian hasil kosong'?></td>
                             </tr><?php endforeach; ?>
 </tbody>

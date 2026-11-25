@@ -31,9 +31,12 @@ $qaActionPermissions = [
     'get_riwayat_laporan_validasi' => ['approval_pemeriksa', 'approval_penyetuju'],
     'get_bbrau' => ['laporan_bbrau', 'kalibrasi'],
     'get_history_print' => ['kalibrasi', 'laporan_hasil'],
+    'foto_visual' => ['kalibrasi', 'laporan_hasil', 'approval_pemeriksa', 'approval_penyetuju'],
+    'sertifikat_external' => ['kalibrasi', 'laporan_hasil', 'approval_pemeriksa', 'approval_penyetuju'],
     'simpan_laporan_transaksi' => ['masterdata'],
     'simpan_master_seksi' => ['pengguna'],
     'hapus_master_seksi' => ['pengguna'],
+    'restore_alat' => ['pengguna'],
 ];
 qaRbacRequireAny($konek, $qaActionPermissions[$action] ?? ['kalibrasi'], true);
 // Semua endpoint berbasis nomor/ID alat diperiksa di server sebelum data dikembalikan atau diubah.
@@ -41,8 +44,8 @@ if (!in_array($action, ['simpan_alat', 'simpan_master_seksi', 'hapus_master_seks
     $noAkses = $_POST['no_part'] ?? ($_GET['no_part'] ?? '');
     if (is_string($noAkses) && $noAkses !== '')
         qaSeksiRequireNo($konek, $noAkses);
-    if (in_array($action, ['validasi_pemeriksa', 'validasi_penyetuju', 'get_history_print', 'get_transaksi_detail', 'get_riwayat_validasi'], true)) {
-        qaSeksiRequirePengecekan($konek, $_POST['pengecekan_id'] ?? ($_POST['id'] ?? 0));
+    if (in_array($action, ['validasi_pemeriksa', 'validasi_penyetuju', 'get_history_print', 'get_transaksi_detail', 'get_riwayat_validasi', 'foto_visual', 'sertifikat_external'], true)) {
+        qaSeksiRequirePengecekan($konek, $_POST['pengecekan_id'] ?? ($_GET['pengecekan_id'] ?? ($_POST['id'] ?? 0)));
     }
 }
 
@@ -51,6 +54,73 @@ if (in_array($action, ['validasi_laporan_pemeriksa', 'validasi_laporan_penyetuju
     qaSeksiRequireLaporan($konek, $_POST['laporan_id'] ?? 0);
 $id_pemakai = isset($_SESSION['userid']) ? $_SESSION['userid'] : '';
 $nama_petugas = isset($_SESSION['username']) && $_SESSION['username'] !== '' ? $_SESSION['username'] : (isset($_SESSION['nama_lengkap']) && $_SESSION['nama_lengkap'] !== '' ? $_SESSION['nama_lengkap'] : ($id_pemakai ?: 'SISTEM'));
+
+function qaHNumber($value): ?float {
+    $text = str_replace(',', '.', trim((string)$value));
+    return preg_match('/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/', $text) ? (float)$text : null;
+}
+
+function qaHBounds(array $point, string $dimension): ?array {
+    $standard = qaHNumber($point['std_' . $dimension] ?? '');
+    if ($standard === null) return null;
+    $lowerKey = 'tol_' . $dimension . '_lower';
+    $upperKey = 'tol_' . $dimension . '_upper';
+    if (array_key_exists($lowerKey, $point) || array_key_exists($upperKey, $point)) {
+        $lowerText = trim((string)($point[$lowerKey] ?? ''));
+        $upperText = trim((string)($point[$upperKey] ?? ''));
+        if (!preg_match('/^[+-](?:\d+(?:[.,]\d*)?|[.,]\d+)$/', $lowerText) ||
+            !preg_match('/^[+-](?:\d+(?:[.,]\d*)?|[.,]\d+)$/', $upperText)) return null;
+        $lower = qaHNumber($lowerText);
+        $upper = qaHNumber($upperText);
+    } else {
+        $legacy = preg_replace('/^[\s±+\-]*/u', '', (string)($point['tol_' . $dimension] ?? ''));
+        $tol = qaHNumber($legacy);
+        if ($tol === null) return null;
+        $lower = -abs($tol);
+        $upper = abs($tol);
+    }
+    if ($lower === null || $upper === null || $lower > $upper) return null;
+    return [$standard + $lower, $standard + $upper];
+}
+
+function qaHValidStandards($input): bool {
+    if (!is_array($input) || !$input) return false;
+    $hasStandard = false;
+    foreach ($input as $point) {
+        if (!is_array($point)) return false;
+        foreach (['out', 'pitch'] as $dimension) {
+            $standard = trim((string)($point['std_' . $dimension] ?? ''));
+            $lower = trim((string)($point['tol_' . $dimension . '_lower'] ?? ''));
+            $upper = trim((string)($point['tol_' . $dimension . '_upper'] ?? ''));
+            if ($standard === '' && $lower === '' && $upper === '') continue;
+            if (qaHBounds($point, $dimension) === null) return false;
+            $hasStandard = true;
+        }
+    }
+    return $hasStandard;
+}
+
+function qaHActualWithinBounds($raw, array $master): ?bool {
+    $actual = json_decode((string)$raw, true);
+    if (!is_array($actual) || count($actual) !== count($master)) return null;
+    $within = true;
+    $hasMeasurement = false;
+    foreach ($master as $index => $point) {
+        if (!is_array($point) || !is_array($actual[$index] ?? null)) return null;
+        foreach (['out' => ['out_dep','out_ten','out_bel'], 'pitch' => ['pitch_dep','pitch_ten','pitch_bel']] as $dimension => $keys) {
+            if (trim((string)($point['std_' . $dimension] ?? '')) === '') continue;
+            $bounds = qaHBounds($point, $dimension);
+            if ($bounds === null) return null;
+            foreach ($keys as $key) {
+                $value = qaHNumber($actual[$index][$key] ?? '');
+                if ($value === null) return null;
+                $hasMeasurement = true;
+                if ($value < $bounds[0] - 1e-9 || $value > $bounds[1] + 1e-9) $within = false;
+            }
+        }
+    }
+    return $hasMeasurement ? $within : null;
+}
 
 function build_hasil_snapshot_json($rawJson, $meta) {
     $decoded = json_decode($rawJson, true);
@@ -109,6 +179,10 @@ function build_hasil_snapshot_json($rawJson, $meta) {
             'operator' => (string)($meta['operator'] ?? ''),
         ],
         'rows' => array_values($rows),
+        'pelaksana_kalibrasi' => (string)($meta['pelaksana_kalibrasi'] ?? ''),
+        'sertifikat_vendor' => (string)($meta['sertifikat_vendor'] ?? ''),
+        'visual_rusak' => !empty($meta['visual_rusak']),
+        'foto_visual' => $meta['foto_visual'] ?? [],
     ];
 
     return json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -315,6 +389,57 @@ function qaJenisLaporanDariFormat($format) {
     return in_array($format, ['L', 'M', 'R', 'U', 'V', 'X'], true) ? 'kalibrasi' : 'periksa';
 }
 
+function qaFormatACADStandards($input, $format): ?array {
+    if (!is_array($input) || count($input) < 1 || count($input) > 20 || array_keys($input) !== range(0, count($input) - 1))
+        return null;
+    $result = [];
+    $unitOrder = ['V' => 0, 'MV' => 1, 'OHM' => 2];
+    $unitCounts = ['V' => 0, 'MV' => 0, 'OHM' => 0];
+    $lastUnit = 0;
+    foreach ($input as $row) {
+        if (!is_array($row)) return null;
+        if ($format === 'AC') {
+            $unit = strtoupper(trim((string)($row['unit'] ?? '')));
+            if (!isset($unitOrder[$unit]) || $unitOrder[$unit] < $lastUnit || $unitOrder[$unit] > $lastUnit + 1)
+                return null;
+            $lastUnit = $unitOrder[$unit];
+            if (++$unitCounts[$unit] > 18) return null;
+            foreach (['setting', 'standar'] as $key)
+                if (qaFormatABNumber($row[$key] ?? null) === null) return null;
+            $result[] = ['unit' => $unit, 'nomor' => (string)$unitCounts[$unit], 'setting' => trim((string)$row['setting']), 'standar' => trim((string)$row['standar'])];
+        } else {
+            $display = trim((string)($row['display'] ?? ''));
+            if ($display === '' || strlen($display) > 30 || qaFormatABNumber($row['setting'] ?? null) === null || qaFormatABNumber($row['alat_std'] ?? null) === null) return null;
+            $result[] = ['display' => $display, 'setting' => trim((string)$row['setting']), 'alat_std' => trim((string)$row['alat_std'])];
+        }
+    }
+    if ($format === 'AC' && in_array(0, $unitCounts, true)) return null;
+    return $result;
+}
+
+function qaFormatACADActual($raw, array $masters, $format, $tolerance = ''): ?array {
+    $rows = json_decode((string)$raw, true);
+    if (!is_array($rows) || count($rows) !== count($masters) || array_keys($rows) !== range(0, count($masters) - 1)) return null;
+    $limitText = preg_replace('/^\s*(?:±|\+\/-)\s*/u', '', (string)$tolerance);
+    $limit = $format === 'AD' && preg_match('/^\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))/D', trim($limitText), $matches)
+        ? qaFormatABNumber($matches[1]) : null;
+    if ($format === 'AD' && ($limit === null || $limit < 0)) return null;
+    $actual = [];
+    foreach ($masters as $i => $master) {
+        $value = $rows[$i]['hasil'] ?? null;
+        $number = qaFormatABNumber($value);
+        if ($number === null) return null;
+        $reference = qaFormatABNumber($master[$format === 'AC' ? 'standar' : 'alat_std']);
+        $difference = $reference - $number;
+        $actual[] = $master + [
+            'hasil' => trim((string)$value),
+            'koreksi' => (string)round($difference, 3),
+            'status' => $format === 'AD' ? (abs($difference) <= $limit + 1e-9 ? 'OK' : 'NOT GOOD') : ''
+        ];
+    }
+    return $actual;
+}
+
 function qaBulanRomawi($bulan) {
     $romawi = [1 => 'I', 2 => 'II', 3 => 'III', 4 => 'IV', 5 => 'V', 6 => 'VI', 7 => 'VII', 8 => 'VIII', 9 => 'IX', 10 => 'X', 11 => 'XI', 12 => 'XII'];
     return $romawi[(int)$bulan] ?? '';
@@ -381,9 +506,8 @@ function qaGenerateNoLaporan($konek, $jenis, $tanggalRef) {
 }
 
 function qaIsAdmin() {
-    $role = strtolower(trim((string)($_SESSION['role'] ?? '')));
-    $admin = strtoupper(trim((string)($_SESSION['admin'] ?? 'N')));
-    return $admin === 'Y' || $admin === '1' || $role === 'admin';
+    global $konek;
+    return qaRbacIsAdmin($konek);
 }
 
 function qaUserFlags($konek) {
@@ -461,7 +585,7 @@ function qaArchiveDefs() {
 }
 function qaNormalizeFinalStatus($raw) {
     $s = strtoupper(trim((string)$raw));
-    $map = ['GOOD' => 'OK', 'OK' => 'OK', 'BAD' => 'NOT GOOD', 'NOT GOOD' => 'NOT GOOD', 'BURUK' => 'NOT GOOD', 'RUSAK' => 'RUSAK', 'DISCONTINUE' => 'DISCONTINUE', 'DITARIK' => 'DITARIK TECHNICAL', 'DITARIK TECHNICAL' => 'DITARIK TECHNICAL', 'DITARIK MECHANICAL' => 'DITARIK TECHNICAL'];
+    $map = ['GOOD' => 'OK', 'OK' => 'OK', 'BAD' => 'NOT GOOD', 'NOT GOOD' => 'NOT GOOD', 'BURUK' => 'NOT GOOD', 'RUSAK' => 'RUSAK', 'RUSAK VISUAL' => 'RUSAK', 'DISCONTINUE' => 'DISCONTINUE', 'DITARIK' => 'DITARIK TECHNICAL', 'DITARIK TECHNICAL' => 'DITARIK TECHNICAL', 'DITARIK MECHANICAL' => 'DITARIK TECHNICAL'];
     return $map[$s] ?? '';
 }
 function qaArchiveNoPart($original, $code) {
@@ -479,17 +603,27 @@ function qaRegistryHistory($konek, $registryId, $no_part, $limit = 5) {
     $limit = max(1, (int)$limit);
     $rows = [];
     if ($registryId > 0) {
-        $q = mysqli_query($konek, "SELECT * FROM qa_pengecekan WHERE alat_registry_id='$registryId' ORDER BY tanggal_pengecekan DESC,id DESC LIMIT $limit");
+        $q = mysqli_query($konek, "SELECT * FROM qa_pengecekan WHERE alat_registry_id='$registryId' OR UPPER(TRIM(no_part))='$no' ORDER BY tanggal_pengecekan DESC,id DESC LIMIT $limit");
         if ($q) {
-            while ($r = mysqli_fetch_assoc($q))
+            while ($r = mysqli_fetch_assoc($q)) {
+                $snapshot = json_decode((string)($r['hasil_json'] ?? ''), true);
+                $r['visual_rusak'] = !empty($snapshot['visual_rusak']);
+                $r['visual_photo_count'] = $r['visual_rusak'] && isset($snapshot['foto_visual']) && is_array($snapshot['foto_visual']) ? count($snapshot['foto_visual']) : 0;
+                $r['external_certificate'] = !empty($snapshot['sertifikat_vendor']);
                 $rows[] = $r;
+            }
         }
     }
     if (!$rows) {
         $q = mysqli_query($konek, "SELECT * FROM qa_pengecekan WHERE UPPER(TRIM(no_part))='$no' ORDER BY tanggal_pengecekan DESC,id DESC LIMIT $limit");
         if ($q) {
-            while ($r = mysqli_fetch_assoc($q))
+            while ($r = mysqli_fetch_assoc($q)) {
+                $snapshot = json_decode((string)($r['hasil_json'] ?? ''), true);
+                $r['visual_rusak'] = !empty($snapshot['visual_rusak']);
+                $r['visual_photo_count'] = $r['visual_rusak'] && isset($snapshot['foto_visual']) && is_array($snapshot['foto_visual']) ? count($snapshot['foto_visual']) : 0;
+                $r['external_certificate'] = !empty($snapshot['sertifikat_vendor']);
                 $rows[] = $r;
+            }
         }
     }
     return $rows;
@@ -547,6 +681,7 @@ foreach (['qa_part', 'qa_alat_ng', 'qa_alat_rusak', 'qa_alat_discontinue', 'qa_a
     if ($masterTable !== 'qa_part')
         mysqli_query($konek, "CREATE TABLE IF NOT EXISTS `$masterTable` LIKE `qa_part`");
     pastikan_kolom($konek, $masterTable, 'alat_registry_id', "INT(10) UNSIGNED NULL AFTER id");
+    pastikan_kolom($konek, $masterTable, 'kalibrator', "VARCHAR(100) NOT NULL DEFAULT ''");
 }
 foreach (['qa_alat_ng', 'qa_alat_rusak', 'qa_alat_discontinue', 'qa_alat_ditarik'] as $archiveTable) {
     pastikan_kolom($konek, $archiveTable, 'nomor_arsip', "VARCHAR(150) NULL AFTER no_part");
@@ -607,11 +742,21 @@ mysqli_query($konek, "CREATE TABLE IF NOT EXISTS qa_validasi (
 // NOT GOOD/RUSAK = permanen. DISCONTINUE/DITARIK TECHNICAL = nonaktif, restore Admin saja.
 function qaLatestApprovedNonOk($konek, $no_part) {
     $no = esc($konek, strtoupper(trim((string)$no_part)));
+    $registry = qaGetRegistry($konek, $no_part);
     $q = mysqli_query($konek, "SELECT * FROM qa_pengecekan WHERE UPPER(TRIM(no_part))='$no' AND status_validasi='final_disetujui' ORDER BY tanggal_pengecekan DESC,id DESC");
     if ($q) {
         while ($r = mysqli_fetch_assoc($q)) {
             $st = qaNormalizeFinalStatus($r['status_kalibrasi'] ?? '');
-            if ($st !== '' && $st !== 'OK')
+            if ($st === 'OK')
+                return null;
+            $defs = qaArchiveDefs();
+            $temporary = isset($defs[$st]) && !$defs[$st]['permanent'];
+            $restoredAt = (string)($registry['diaktifkan_at'] ?? '');
+            $checkedAt = (string)($r['created_at'] ?? ($r['tanggal_pengecekan'] ?? ''));
+            if ($temporary && strtoupper((string)($registry['status_alat'] ?? '')) === 'AKTIF' &&
+                $restoredAt !== '' && $restoredAt >= $checkedAt)
+                return null;
+            if ($st !== '')
                 return ['row' => $r, 'status' => $st];
         }
     }
@@ -692,6 +837,16 @@ function qaFinalizeApprovedResult($konek, $pengecekan_id) {
         throw new Exception('Gagal membaca struktur qa_part: ' . mysqli_error($konek));
     while ($c = mysqli_fetch_assoc($qCols)) {
         $partCols[$c['Field']] = true;
+    }
+    if (isset($partCols['fungsi'])) {
+        $qFungsiArsip = mysqli_query($konek, "SHOW COLUMNS FROM `{$def['table']}` LIKE 'fungsi'");
+        if (!$qFungsiArsip) {
+            throw new Exception('Gagal membaca kolom fungsi tabel arsip.');
+        }
+        if (mysqli_num_rows($qFungsiArsip) === 0 &&
+            !mysqli_query($konek, "ALTER TABLE `{$def['table']}` ADD COLUMN `fungsi` VARCHAR(500) NULL")) {
+            throw new Exception('Gagal menyiapkan kolom fungsi tabel arsip.');
+        }
     }
     $qArcCols = mysqli_query($konek, "SHOW COLUMNS FROM `{$def['table']}`");
     if (!$qArcCols)
@@ -803,6 +958,67 @@ function qaStandarMigrasiBelumDiisi($db, $no): bool {
     return strtoupper((string)$r['status_standar']) !== 'TERKUNCI';
 }
 
+if ($action === 'foto_visual') {
+    $id = (int)($_GET['pengecekan_id'] ?? 0);
+    $index = filter_var($_GET['index'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'max_range' => 2]]);
+    if ($id < 1 || $index === false) {
+        http_response_code(400);
+        exit;
+    }
+    $qFoto = mysqli_query($konek, "SELECT hasil_json FROM qa_pengecekan WHERE id='$id' LIMIT 1");
+    $fotoRow = $qFoto ? mysqli_fetch_assoc($qFoto) : null;
+    $snapFoto = $fotoRow ? json_decode((string)$fotoRow['hasil_json'], true) : null;
+    $name = $snapFoto['foto_visual'][$index] ?? '';
+    if (empty($snapFoto['visual_rusak']) || !is_string($name) || !preg_match('/^(?:[A-Za-z0-9][A-Za-z0-9._-]{0,79}_(?:[0-9]{8}|[0-9]{2}-[0-9]{2}-[0-9]{4})_[a-f0-9]{16}|[a-f0-9]{32})\.(?:jpg|png|webp)$/', $name)) {
+        http_response_code(404);
+        exit;
+    }
+    $base = realpath(__DIR__ . '/../../../images/alat_rusak');
+    $path = $base ? $base . DIRECTORY_SEPARATOR . $name : '';
+    if (!$path || !is_file($path)) {
+        http_response_code(404);
+        exit;
+    }
+    $mime = ['jpg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp'][pathinfo($name, PATHINFO_EXTENSION)];
+    header('Content-Type: ' . $mime);
+    header('Content-Length: ' . filesize($path));
+    header('Cache-Control: private, no-store');
+    header('X-Content-Type-Options: nosniff');
+    readfile($path);
+    exit;
+}
+
+if ($action === 'sertifikat_external') {
+    $id = (int)($_GET['pengecekan_id'] ?? 0);
+    if ($id < 1) {
+        http_response_code(400);
+        exit;
+    }
+    $qCertificate = mysqli_query($konek, "SELECT hasil_json FROM qa_pengecekan WHERE id='$id' LIMIT 1");
+    $certificateRow = $qCertificate ? mysqli_fetch_assoc($qCertificate) : null;
+    $snapshot = $certificateRow ? json_decode((string)$certificateRow['hasil_json'], true) : null;
+    $filename = $snapshot['sertifikat_vendor'] ?? '';
+    if (!is_array($snapshot) || strtoupper((string)($snapshot['pelaksana_kalibrasi'] ?? '')) !== 'EXTERNAL' ||
+        !is_string($filename) || !preg_match('/^(?:[A-Za-z0-9][A-Za-z0-9._-]{0,79}_(?:[0-9]{8}|[0-9]{2}-[0-9]{2}-[0-9]{4})_[a-f0-9]{16}|[a-f0-9]{32})\.(pdf|jpg|png)$/', $filename, $match)) {
+        http_response_code(404);
+        exit;
+    }
+    $folder = realpath(__DIR__ . '/../../../images/sertifikat_vendor');
+    $path = $folder ? $folder . DIRECTORY_SEPARATOR . $filename : '';
+    if (!$path || !is_file($path)) {
+        http_response_code(404);
+        exit;
+    }
+    $mime = ['pdf' => 'application/pdf', 'jpg' => 'image/jpeg', 'png' => 'image/png'][$match[1]];
+    header('Content-Type: ' . $mime);
+    header('Content-Length: ' . filesize($path));
+    header('Content-Disposition: inline; filename="sertifikat-vendor.' . $match[1] . '"');
+    header('Cache-Control: private, no-store');
+    header('X-Content-Type-Options: nosniff');
+    readfile($path);
+    exit;
+}
+
 if ($action == 'cek_alat') {
     try {
         $no_part = isset($_POST['no_part'])?normalisasi_no_part($konek, $_POST['no_part']):'';
@@ -827,7 +1043,15 @@ if ($action == 'cek_alat') {
                 $regLock = qaGetRegistry($konek, $no_part);
             }
             $permanentLock = $defLock ? (bool)$defLock['permanent'] : true;
-            echo json_encode(['found' => false, 'is_archived' => true, 'is_rusak' => $permanentLock, 'archive_status' => $lockStatus, 'original_no_part' => $no_part, 'can_restore' => (qaIsAdmin() && !$permanentLock), 'registry' => $regLock, 'history' => qaRegistryHistory($konek, (int)($regLock['id'] ?? 0), $no_part, 5), 'message' => $permanentLock?'Nomor alat ini NONAKTIF PERMANEN karena ' . $lockStatus . ' dan tidak dapat digunakan kembali.':'Nomor alat ini NONAKTIF karena ' . $lockStatus . '. Hanya Admin yang dapat mengaktifkan kembali beserta history alat.'], JSON_UNESCAPED_UNICODE);
+            $archiveTable = $defLock['table'] ?? '';
+            $archiveData = null;
+            if ($archiveTable !== '') {
+                $registryId = (int)($regLock['id'] ?? 0);
+                $qArchive = mysqli_query($konek, "SELECT * FROM `$archiveTable` WHERE alat_registry_id='$registryId' OR UPPER(TRIM(no_part))='$no_part' ORDER BY id DESC LIMIT 1");
+                $archiveData = $qArchive ? (mysqli_fetch_assoc($qArchive) ?: null) : null;
+            }
+            $canRestore = qaIsAdmin() && !$permanentLock && strtoupper((string)($regLock['status_alat'] ?? '')) === 'NONAKTIF_SEMENTARA' && $archiveData;
+            echo json_encode(['found' => false, 'is_archived' => true, 'is_rusak' => $permanentLock, 'archive_status' => $lockStatus, 'archive_table' => $archiveTable, 'archive_data' => $archiveData, 'nomor_arsip' => $archiveData['nomor_arsip'] ?? ($regLock['nomor_arsip_terakhir'] ?? ''), 'original_no_part' => $no_part, 'can_restore' => (bool)$canRestore, 'registry' => $regLock, 'history' => qaRegistryHistory($konek, (int)($regLock['id'] ?? 0), $no_part, 1000), 'message' => $permanentLock?'Nomor alat ini di Nonaktifkan secara permanen karena ' . $lockStatus . ' dan tidak dapat digunakan / dikalibrasi kembali.':'Nomor alat ini NONAKTIF karena ' . $lockStatus . '. Hanya Admin yang dapat mengaktifkan kembali beserta history alat.'], JSON_UNESCAPED_UNICODE);
             exit;
         }
         $reg = qaGetRegistry($konek, $no_part);
@@ -876,7 +1100,8 @@ if ($action == 'cek_alat') {
             }
             $permanent = ($st === 'BLOKIR_PERMANEN');
             $reason = $reg['alasan_status']?:$reg['hasil_terakhir']?:'ARSIP';
-            echo json_encode(['found' => false, 'is_archived' => true, 'is_rusak' => $permanent, 'archive_status' => $reason, 'archive_table' => $archiveTable, 'archive_no_part' => $no_part, 'original_no_part' => $no_part, 'nomor_arsip' => $arc['nomor_arsip'] ?? ($reg['nomor_arsip_terakhir'] ?? ''), 'can_restore' => (qaIsAdmin() && $st === 'NONAKTIF_SEMENTARA'), 'archive_data' => $arc, 'registry' => $reg, 'history' => qaRegistryHistory($konek, $rid, $no_part, 5), 'message' => $permanent?"Nomor alat ini sudah diblokir permanen karena {$reason} dan tidak dapat digunakan kembali.":"Nomor alat ini sedang nonaktif karena {$reason}. Admin dapat mengaktifkan kembali nomor alat ini."], JSON_UNESCAPED_UNICODE);
+            $canRestore = qaIsAdmin() && $st === 'NONAKTIF_SEMENTARA' && $arc && in_array(qaNormalizeFinalStatus($reason), ['DISCONTINUE', 'DITARIK TECHNICAL'], true);
+            echo json_encode(['found' => false, 'is_archived' => true, 'is_rusak' => $permanent, 'archive_status' => $reason, 'archive_table' => $archiveTable, 'archive_no_part' => $no_part, 'original_no_part' => $no_part, 'nomor_arsip' => $arc['nomor_arsip'] ?? ($reg['nomor_arsip_terakhir'] ?? ''), 'can_restore' => (bool)$canRestore, 'archive_data' => $arc, 'registry' => $reg, 'history' => qaRegistryHistory($konek, $rid, $no_part, 1000), 'message' => $permanent?"Nomor alat ini di Nonaktifkan secara permanen karena {$reason} dan tidak dapat digunakan / dikalibrasi kembali.":"Nomor alat ini sedang nonaktif karena {$reason}. Admin dapat mengaktifkan kembali nomor alat ini."], JSON_UNESCAPED_UNICODE);
             exit;
         }
         $q = mysqli_query($konek, "SELECT * FROM qa_part WHERE UPPER(TRIM(no_part))='$no_part' LIMIT 1");
@@ -922,6 +1147,11 @@ elseif ($action == 'restore_alat') {
             throw new Exception('Nomor alat ini tidak berstatus nonaktif sementara.');
         }
 
+        $restoreReason = qaNormalizeFinalStatus($reg['alasan_status'] ?: ($reg['hasil_terakhir'] ?? ''));
+        if (!in_array($restoreReason, ['DISCONTINUE', 'DITARIK TECHNICAL'], true)) {
+            throw new Exception('Hanya alat DISCONTINUE atau DITARIK TECHNICAL yang dapat diaktifkan kembali.');
+        }
+
         $defs = qaArchiveDefs();
         $archiveTable = trim((string)($_POST['archive_table'] ?? ''));
         $allowedTables = array_column($defs, 'table');
@@ -936,6 +1166,10 @@ elseif ($action == 'restore_alat') {
         }
         if (!in_array($archiveTable, $allowedTables, true)) {
             throw new Exception('Tabel arsip nomor alat tidak dapat ditentukan.');
+        }
+
+        if ($archiveTable !== $defs[$restoreReason]['table']) {
+            throw new Exception('Arsip tidak sesuai dengan status nomor alat.');
         }
 
         $def = null;
@@ -1070,7 +1304,7 @@ elseif ($action == 'restore_alat') {
         $no = normalisasi_no_part($konek, $_POST['no_part'] ?? '');
         $format = strtoupper(trim((string)($_POST['format_laporan'] ?? '')));
         $raw = (string)($_POST['titik_standar_json'] ?? '');
-        if ($no === '' || !preg_match('/^(?:[A-Z]|AA|AB)$/', $format))
+        if ($no === '' || !preg_match('/^(?:[A-Z]|AA|AB|AC|AD)$/', $format))
             throw new Exception('No alat atau format tidak valid.');
         if (strlen($raw) > 200000)
             throw new Exception('Titik standar melebihi batas 200 KB.');
@@ -1112,6 +1346,8 @@ elseif ($action == 'restore_alat') {
             $points = qaFormatAAStandards($points);
         elseif ($format === 'AB')
             $points = qaFormatABStandards($points);
+        elseif ($format === 'AC' || $format === 'AD')
+            $points = qaFormatACADStandards($points, $format);
         if ($points === null)
             throw new Exception('Standar format ' . $format . ' belum lengkap atau tidak valid.');
         $json = json_encode($points, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
@@ -1195,6 +1431,12 @@ elseif ($action == 'restore_alat') {
         $merk = isset($_POST['merk'])     ? mysqli_real_escape_string($konek, trim($_POST['merk']))     : '';
         $buatan = isset($_POST['buatan'])   ? mysqli_real_escape_string($konek, trim($_POST['buatan']))   : '';
         $fungsi = isset($_POST['fungsi'])   ? mysqli_real_escape_string($konek, trim($_POST['fungsi']))   : '';
+        $kalibratorInput = trim((string)($_POST['kalibrator'] ?? ''));
+        if (strlen($kalibratorInput) > 100) {
+            echo json_encode(['status' => 'error', 'message' => 'Kalibrator maksimal 100 karakter.']);
+            exit;
+        }
+        $kalibrator = mysqli_real_escape_string($konek, $kalibratorInput);
 
         $tgl_manual = isset($_POST['tgl_manual']) ? mysqli_real_escape_string($konek, trim($_POST['tgl_manual'])) : '';
 
@@ -1211,12 +1453,16 @@ elseif ($action == 'restore_alat') {
 
         // Registrasi mendukung Format A sampai Y
         $format_laporan = strtoupper(trim((string)$format_laporan));
-        $format_valid = array_merge(str_split('ABCDEFGHIJKLMNOPQRSTUVWXYZ'), ['AA', 'AB']);
+        $format_valid = array_merge(str_split('ABCDEFGHIJKLMNOPQRSTUVWXYZ'), ['AA', 'AB', 'AC', 'AD']);
         if (!in_array($format_laporan, $format_valid)) {
             echo json_encode(['status' => 'error', 'message' => 'Format laporan tidak valid.']);
             exit;
         }
 
+        if ($format_laporan === 'H' && !qaHValidStandards(json_decode($titik_standar_raw, true))) {
+            echo json_encode(['status' => 'error', 'message' => 'Format H: isi standar serta batas bawah/atas bertanda (+ atau -) dengan urutan bawah tidak melebihi atas.']);
+            exit;
+        }
         if ($format_laporan === 'S' || $format_laporan === 'Z') {
             $mastersNew = $format_laporan === 'S'
                 ? qaFormatSStandards(json_decode($titik_standar_raw, true))
@@ -1267,6 +1513,15 @@ elseif ($action == 'restore_alat') {
             $titik_standar_raw = json_encode($mastersAB, JSON_UNESCAPED_UNICODE);
             $titik_standar_json = mysqli_real_escape_string($konek, $titik_standar_raw);
         }
+        if ($format_laporan === 'AC' || $format_laporan === 'AD') {
+            $mastersNew = qaFormatACADStandards(json_decode($titik_standar_raw, true), $format_laporan);
+            if ($mastersNew === null) {
+                echo json_encode(['status' => 'error', 'message' => 'Lengkapi setiap baris standar format ' . $format_laporan . '.']);
+                exit;
+            }
+            $titik_standar_raw = json_encode($mastersNew, JSON_UNESCAPED_UNICODE);
+            $titik_standar_json = mysqli_real_escape_string($konek, $titik_standar_raw);
+        }
 
         $tgl_start = !empty($tgl_manual) ? $tgl_manual : date('Y-m-d');
         $jenis_laporan = qaJenisLaporanDariFormat($format_laporan);
@@ -1313,9 +1568,9 @@ elseif ($action == 'restore_alat') {
             if ($registryId <= 0)
                 throw new Exception('Registry nomor alat tidak terbentuk.');
             $sql = "INSERT INTO qa_part
-                    (alat_registry_id,no_part,no_laporan,jenis_laporan,nama_part,seksi_pemilik,periode_kalibrasi,jadwal_kalibrasi,status,created_at,ukuran,resolusi,lokasi,type,kls,foto_alat,spesifikasi,toleransi_global,satuan,metode_uji,standar_uji,traceability,format_laporan,titik_standar_json,no_fa,merk,buatan,fungsi)
+                    (alat_registry_id,no_part,no_laporan,jenis_laporan,nama_part,seksi_pemilik,periode_kalibrasi,jadwal_kalibrasi,status,created_at,ukuran,resolusi,lokasi,type,kls,foto_alat,spesifikasi,toleransi_global,satuan,metode_uji,standar_uji,traceability,format_laporan,titik_standar_json,no_fa,merk,buatan,fungsi,kalibrator)
                     VALUES
-                    ('$registryId','$no_part','$no_laporan','$jenis_laporan','$nama_part','$seksi','$periode','$jadwal_kalibrasi','aktif','$created_at','$ukuran','$resolusi','$lokasi','$type','$kls','$nama_file_foto','$spesifikasi','$toleransi_global','$satuan','$metode_uji','$standar_uji','$traceability','$format_laporan','$titik_standar_json','$no_fa','$merk','$buatan','$fungsi')";
+                    ('$registryId','$no_part','$no_laporan','$jenis_laporan','$nama_part','$seksi','$periode','$jadwal_kalibrasi','aktif','$created_at','$ukuran','$resolusi','$lokasi','$type','$kls','$nama_file_foto','$spesifikasi','$toleransi_global','$satuan','$metode_uji','$standar_uji','$traceability','$format_laporan','$titik_standar_json','$no_fa','$merk','$buatan','$fungsi','$kalibrator')";
             if (!mysqli_query($konek, $sql))
                 throw new Exception(mysqli_error($konek));
             $alat_id = (int)mysqli_insert_id($konek);
@@ -1370,7 +1625,7 @@ elseif ($action == 'restore_alat') {
                 'titik_standar_json' => $titik_standar_raw, 'audit' => []
             ];
             // Format S/Z: satuan tersimpan di qa_part, sertakan juga di payload cetak langsung setelah registrasi.
-            if ($formatUpper === 'S' || $formatUpper === 'Z' || $formatUpper === 'AA' || $formatUpper === 'AB') {
+            if (in_array($formatUpper, ['S', 'Z', 'AA', 'AB', 'AC', 'AD'], true)) {
                 $registrationPrint['satuan'] = trim((string)($_POST['satuan'] ?? ''));
                 // Standar Toleransi pada footer S/Z harus ikut pada cetak registrasi.
                 $registrationPrint['toleransi_global'] = trim((string)($_POST['toleransi_global'] ?? ''));
@@ -1393,7 +1648,10 @@ elseif ($action == 'simpan_qa') {
         $no_part_raw = isset($_POST['no_part']) ? trim($_POST['no_part']) : '';
         $no_part = normalisasi_no_part($konek, $no_part_raw);
         $status_raw = isset($_POST['status_qa']) ? trim($_POST['status_qa']) : '';
-        $status_qa = qaNormalizeFinalStatus($status_raw);
+        $visualRusak = strtoupper($status_raw) === 'RUSAK VISUAL';
+        $externalCertificate = !$visualRusak && strtoupper(trim((string)($_POST['pelaksana_kalibrasi'] ?? ''))) === 'EXTERNAL';
+        $status_qa = $visualRusak ? 'RUSAK' : qaNormalizeFinalStatus($status_raw);
+        $manualNonactive = in_array($status_qa, ['DISCONTINUE', 'DITARIK TECHNICAL'], true);
         $kode_warna = isset($_POST['kode_warna']) ? trim($_POST['kode_warna']) : '';
         if ($status_qa === '') {
             echo json_encode(['status' => 'error', 'message' => 'Keputusan Final tidak valid. Pilih OK, NOT GOOD, RUSAK, DISCONTINUE, atau DITARIK TECHNICAL.']);
@@ -1406,7 +1664,7 @@ elseif ($action == 'simpan_qa') {
             exit;
         }
         // Import master belum boleh digunakan untuk transaksi hingga standar dikunci.
-        if (qaStandarMigrasiBelumDiisi($konek, $no_part)) {
+        if (!$visualRusak && !$externalCertificate && qaStandarMigrasiBelumDiisi($konek, $no_part)) {
             echo json_encode(['status' => 'error', 'message' => 'Standar alat hasil migrasi belum lengkap. Isi dan kunci standar dahulu.']);
             exit;
         }
@@ -1436,10 +1694,10 @@ elseif ($action == 'simpan_qa') {
         $satuan = isset($_POST['satuan']) ? mysqli_real_escape_string($konek, trim($_POST['satuan'])) : '';
         $lokasi = isset($_POST['lokasi']) ? mysqli_real_escape_string($konek, trim($_POST['lokasi'])) : '';
         $format_laporan = isset($_POST['format_laporan']) ? strtoupper(trim($_POST['format_laporan'])) : '';
-        $hasil_raw = isset($_POST['hasil_json']) ? $_POST['hasil_json'] : '[]';
+        $hasil_raw = ($visualRusak || $externalCertificate) ? '[]' : (isset($_POST['hasil_json']) ? $_POST['hasil_json'] : '[]');
 
         // Update hasil mendukung Format A sampai Y
-        if (!in_array($format_laporan, array_merge(str_split('ABCDEFGHIJKLMNOPQRSTUVWXYZ'), ['AA', 'AB']), true)) {
+        if (!in_array($format_laporan, array_merge(str_split('ABCDEFGHIJKLMNOPQRSTUVWXYZ'), ['AA', 'AB', 'AC', 'AD']), true)) {
             echo json_encode(['status' => 'error', 'message' => 'Format laporan tidak valid.']);
             exit;
         }
@@ -1448,6 +1706,22 @@ elseif ($action == 'simpan_qa') {
         $jenis_laporan = strtolower(trim((string)($_POST['jenis_laporan'] ?? '')));
         if (!in_array($jenis_laporan, ['periksa', 'kalibrasi', 'verifikasi'], true)) {
             echo json_encode(['status' => 'error', 'message' => 'Jenis laporan wajib dipilih: Pemeriksaan, Verifikasi, atau Kalibrasi.']);
+            exit;
+        }
+        $pelaksana_kalibrasi = strtoupper(trim((string)($_POST['pelaksana_kalibrasi'] ?? '')));
+        if (!$visualRusak && !in_array($pelaksana_kalibrasi, ['INTERNAL', 'EXTERNAL'], true)) {
+            echo json_encode(['status' => 'error', 'message' => 'Pelaksana kalibrasi wajib dipilih: Internal atau External.']);
+            exit;
+        }
+        if ($visualRusak) {
+            $pelaksana_kalibrasi = '';
+        }
+        if ($visualRusak && trim((string)($_POST['keterangan'] ?? '')) === '') {
+            echo json_encode(['status' => 'error', 'message' => 'Keterangan kerusakan visual wajib diisi.']);
+            exit;
+        }
+        if ($externalCertificate && empty($_FILES['sertifikat_vendor'])) {
+            echo json_encode(['status' => 'error', 'message' => 'Sertifikat vendor wajib diunggah.']);
             exit;
         }
         $waktu_sekarang = date('Y-m-d H:i:s');
@@ -1472,6 +1746,24 @@ elseif ($action == 'simpan_qa') {
             echo json_encode(['status' => 'error', 'message' => 'Nomor alat sedang tidak aktif dan tidak dapat digunakan untuk update hasil.']);
             exit;
         }
+        if (!$visualRusak && !$externalCertificate && $format_laporan === 'H') {
+            if (strtoupper(trim((string)($d_part['format_laporan'] ?? ''))) !== 'H') {
+                echo json_encode(['status' => 'error', 'message' => 'Format hasil tidak sesuai dengan format alat terdaftar.']);
+                exit;
+            }
+            $masterH = json_decode((string)($d_part['titik_standar_json'] ?? ''), true);
+            if (!qaHValidStandards($masterH)) {
+                echo json_encode(['status' => 'error', 'message' => 'Standar dan batas Format H belum lengkap.']);
+                exit;
+            }
+            $withinH = qaHActualWithinBounds($hasil_raw, $masterH);
+            if ($withinH === null) {
+                echo json_encode(['status' => 'error', 'message' => 'Hasil Format H belum lengkap atau tidak sesuai dengan standar.']);
+                exit;
+            }
+            if (!$withinH && $status_qa === 'OK') $status_qa = 'NOT GOOD';
+        }
+        if (!$visualRusak && !$externalCertificate) {
         if ($format_laporan === 'S' || $format_laporan === 'Z') {
             if (strtoupper(trim((string)($d_part['format_laporan'] ?? ''))) !== $format_laporan) {
                 echo json_encode(['status' => 'error', 'message' => 'Format hasil tidak sesuai dengan format alat terdaftar.']);
@@ -1488,10 +1780,11 @@ elseif ($action == 'simpan_qa') {
                 exit;
             }
             $hasil_raw = json_encode($actualNew, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            if ($format_laporan === 'S')
+            if ($format_laporan === 'S' && !$manualNonactive) {
                 $status_qa = count(array_filter($actualNew, static function ($r) {
-                return $r['status'] === 'NOT GOOD';
-            }))?'NOT GOOD':'OK';
+                    return $r['status'] === 'NOT GOOD';
+                })) ? 'NOT GOOD' : 'OK';
+            }
             // Z tidak menampilkan toleransi; status final tetap dari pilihan operator.
         }
         if ($format_laporan === 'Y') {
@@ -1507,9 +1800,11 @@ elseif ($action == 'simpan_qa') {
             }
             $hasil_raw = json_encode($actualY, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             // Keputusan dari angka master + aktual, bukan label hasil dari browser.
-            $status_qa = count(array_filter($actualY, static function ($row) {
-                return $row['status'] === 'NOT GOOD';
-            }))?'NOT GOOD':'OK';
+            if (!$manualNonactive) {
+                $status_qa = count(array_filter($actualY, static function ($row) {
+                    return $row['status'] === 'NOT GOOD';
+                })) ? 'NOT GOOD' : 'OK';
+            }
         }
         if ($format_laporan === 'X') {
             if (strtoupper(trim((string)($d_part['format_laporan'] ?? ''))) !== 'X') {
@@ -1538,9 +1833,11 @@ elseif ($action == 'simpan_qa') {
                 exit;
             }
             $hasil_raw = json_encode($actualAA, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            $status_qa = count(array_filter($actualAA, static function ($row) {
-                return $row['status'] === 'NOT GOOD';
-            })) ? 'NOT GOOD' : 'OK';
+            if (!$manualNonactive) {
+                $status_qa = count(array_filter($actualAA, static function ($row) {
+                    return $row['status'] === 'NOT GOOD';
+                })) ? 'NOT GOOD' : 'OK';
+            }
             $toleransi_global = mysqli_real_escape_string($konek, $masterTolerance);
         }
         if ($format_laporan === 'AB') {
@@ -1555,10 +1852,29 @@ elseif ($action == 'simpan_qa') {
                 exit;
             }
             $hasil_raw = json_encode($actualAB, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            $status_qa = count(array_filter($actualAB, static function ($row) {
-                return $row['status'] === 'NOT GOOD';
-            })) ? 'NOT GOOD' : 'OK';
+            if (!$manualNonactive) {
+                $status_qa = count(array_filter($actualAB, static function ($row) {
+                    return $row['status'] === 'NOT GOOD';
+                })) ? 'NOT GOOD' : 'OK';
+            }
             $toleransi_global = mysqli_real_escape_string($konek, (string)($d_part['toleransi_global'] ?? ''));
+        }
+        if ($format_laporan === 'AC' || $format_laporan === 'AD') {
+            if (strtoupper(trim((string)($d_part['format_laporan'] ?? ''))) !== $format_laporan) {
+                echo json_encode(['status' => 'error', 'message' => 'Format tidak sesuai dengan master alat.']);
+                exit;
+            }
+            $mastersNew = qaFormatACADStandards(json_decode((string)($d_part['titik_standar_json'] ?? ''), true), $format_laporan);
+            $actualNew = $mastersNew !== null ? qaFormatACADActual($hasil_raw, $mastersNew, $format_laporan, $d_part['toleransi_global'] ?? '') : null;
+            if ($actualNew === null) {
+                echo json_encode(['status' => 'error', 'message' => 'Isi hasil setiap baris. Format AD memerlukan toleransi numerik pada master.']);
+                exit;
+            }
+            $hasil_raw = json_encode($actualNew, JSON_UNESCAPED_UNICODE);
+            if ($format_laporan === 'AD' && !$manualNonactive) {
+                $status_qa = in_array('NOT GOOD', array_column($actualNew, 'status'), true) ? 'NOT GOOD' : 'OK';
+            }
+        }
         }
         $no_laporan_raw = qaGenerateNoLaporan($konek, $jenis_laporan, $tgl_pengecekan);
         $no_laporan = esc($konek, $no_laporan_raw);
@@ -1577,6 +1893,16 @@ elseif ($action == 'simpan_qa') {
 
         $seksi_pemilik = mysqli_real_escape_string($konek, $d_part['seksi_pemilik'] ?? '');
         qaSeksiRequire($konek, $d_part['seksi_pemilik'] ?? '', true);
+        if (($visualRusak || $externalCertificate) && strtoupper((string)($d_part['format_laporan'] ?? '')) !== $format_laporan) {
+            echo json_encode(['status' => 'error', 'message' => 'Format alat tidak sesuai dengan master terdaftar.']);
+            exit;
+        }
+        if ($visualRusak || $externalCertificate) {
+            foreach (['nama_part', 'type', 'spesifikasi', 'resolusi', 'metode_uji', 'standar_uji', 'traceability', 'toleransi_global', 'satuan', 'lokasi'] as $field) {
+                $$field = mysqli_real_escape_string($konek, (string)($d_part[$field] ?? ''));
+            }
+            $suhu = $kelembapan = $ketidakpastian = $confidence = $kode_warna = '';
+        }
         $tgl_jadwal_lama = $d_part['jadwal_kalibrasi'] ?: date('Y-m-d');
         $periode = !empty($d_part['periode_kalibrasi']) ? (int)$d_part['periode_kalibrasi'] : 30;
         $alat_id = (int)$d_part['id'];
@@ -1584,9 +1910,92 @@ elseif ($action == 'simpan_qa') {
         $no_part_asli = $no_part;
         $no_part_final = $no_part;
         $jadwal_baru = null;
+        $fotoVisualNames = [];
+        $fotoVisualPaths = [];
+        $fileNoAlat = substr(trim((string)preg_replace('/[^A-Za-z0-9._-]+/', '_', $no_part), '._-'), 0, 80);
+        if ($fileNoAlat === '') {
+            $fileNoAlat = 'ALAT';
+        }
+        $filePrefix = $fileNoAlat . '_' . date('d-m-Y', strtotime($tgl_pengecekan)) . '_';
+        if ($visualRusak) {
+            $upload = $_FILES['foto_visual'] ?? null;
+            $names = $upload['name'] ?? [];
+            if (!is_array($names) || count($names) < 1 || count($names) > 3) {
+                echo json_encode(['status' => 'error', 'message' => 'Unggah 1 sampai 3 foto kerusakan.']);
+                exit;
+            }
+            $validUploads = [];
+            foreach ($names as $i => $unused) {
+                $tmp = $upload['tmp_name'][$i] ?? '';
+                $size = (int)($upload['size'][$i] ?? 0);
+                if (($upload['error'][$i] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || $size < 1 || $size > 5 * 1024 * 1024 || !is_uploaded_file($tmp)) {
+                    echo json_encode(['status' => 'error', 'message' => 'Setiap foto harus valid dan maksimal 5 MB.']);
+                    exit;
+                }
+                $info = @getimagesize($tmp);
+                $extensions = [IMAGETYPE_JPEG => 'jpg', IMAGETYPE_PNG => 'png', IMAGETYPE_WEBP => 'webp'];
+                if (!$info || !isset($extensions[$info[2]]) || $info[0] > 6000 || $info[1] > 6000) {
+                    echo json_encode(['status' => 'error', 'message' => 'Foto wajib JPG, PNG, atau WebP dengan dimensi maksimal 6000 piksel.']);
+                    exit;
+                }
+                $validUploads[] = [$tmp, $extensions[$info[2]]];
+            }
+            $fotoDir = __DIR__ . '/../../../images/alat_rusak';
+            if (!is_dir($fotoDir) && !mkdir($fotoDir, 0750, true)) {
+                throw new Exception('Folder foto kerusakan tidak dapat dibuat.');
+            }
+            try {
+                foreach ($validUploads as [$tmp, $extension]) {
+                    $filename = $filePrefix . bin2hex(random_bytes(8)) . '.' . $extension;
+                    $path = $fotoDir . '/' . $filename;
+                    if (!move_uploaded_file($tmp, $path))
+                        throw new Exception('Gagal menyimpan foto kerusakan.');
+                    $fotoVisualNames[] = $filename;
+                    $fotoVisualPaths[] = $path;
+                }
+            } catch (Exception $uploadError) {
+                foreach ($fotoVisualPaths as $path) @unlink($path);
+                throw $uploadError;
+            }
+        }
 
-        mysqli_begin_transaction($konek);
+        $certificateFilename = '';
+        $certificatePath = '';
+        if ($externalCertificate) {
+            $file = $_FILES['sertifikat_vendor'];
+            $tmp = $file['tmp_name'] ?? '';
+            $size = (int)($file['size'] ?? 0);
+            if (!is_string($tmp) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || $size < 1 || $size > 10 * 1024 * 1024 || !is_uploaded_file($tmp)) {
+                throw new Exception('Sertifikat harus satu file valid dengan ukuran maksimal 10 MB.');
+            }
+            $signature = file_get_contents($tmp, false, null, 0, 8);
+            $image = @getimagesize($tmp);
+            if (strncmp((string)$signature, '%PDF-', 5) === 0) {
+                $extension = 'pdf';
+            } elseif ($image && $image[2] === IMAGETYPE_JPEG) {
+                $extension = 'jpg';
+            } elseif ($image && $image[2] === IMAGETYPE_PNG) {
+                $extension = 'png';
+            } else {
+                throw new Exception('Sertifikat wajib berupa PDF, JPG, atau PNG.');
+            }
+            $certificateDir = __DIR__ . '/../../../images/sertifikat_vendor';
+            if (!is_dir($certificateDir) && !mkdir($certificateDir, 0750, true)) {
+                throw new Exception('Folder sertifikat tidak dapat dibuat.');
+            }
+            $denyFile = $certificateDir . '/.htaccess';
+            if (!is_file($denyFile) && file_put_contents($denyFile, "Require all denied\n") === false) {
+                throw new Exception('Folder sertifikat belum dapat diproteksi.');
+            }
+            $certificateFilename = $filePrefix . bin2hex(random_bytes(8)) . '.' . $extension;
+            $certificatePath = $certificateDir . '/' . $certificateFilename;
+            if (!move_uploaded_file($tmp, $certificatePath)) {
+                throw new Exception('Gagal menyimpan sertifikat vendor.');
+            }
+        }
+
         try {
+            mysqli_begin_transaction($konek);
             // Simpan perubahan header/footer ke master terlebih dahulu.
             $update_master = "UPDATE qa_part SET
                 nama_part='$nama_part',
@@ -1600,7 +2009,7 @@ elseif ($action == 'simpan_qa') {
                 satuan='$satuan',
                 lokasi='$lokasi'
                 WHERE id='$alat_id' LIMIT 1";
-            if (!mysqli_query($konek, $update_master)) {
+            if (!$visualRusak && !$externalCertificate && !mysqli_query($konek, $update_master)) {
                 throw new Exception(mysqli_error($konek));
             }
 
@@ -1636,6 +2045,10 @@ elseif ($action == 'simpan_qa') {
                 'petugas' => $nama_petugas,
                 'operator' => $operator,
                 'kode_warna' => $kode_warna,
+                'pelaksana_kalibrasi' => $pelaksana_kalibrasi,
+                'sertifikat_vendor' => $certificateFilename,
+                'visual_rusak' => $visualRusak,
+                'foto_visual' => $fotoVisualNames,
             ]);
             $snapshot_json_sql = mysqli_real_escape_string($konek, $snapshot_json);
 
@@ -1647,7 +2060,7 @@ elseif ($action == 'simpan_qa') {
                  created_at, suhu, kelembapan, ketidakpastian, confidence_level, hasil_json)
                 VALUES
                 ('$registryId', '$alat_id', '$no_part_final', '$nomor_pengecekan', '$no_laporan', '$jenis_laporan', '$tgl_pengecekan',
-                 '$tgl_jadwal_lama', '$status_qa', 'menunggu_pemeriksa', 'update_hasil_kalibrasi',
+                 '$tgl_jadwal_lama', '$status_qa', 'menunggu_pemeriksa', '" . ($visualRusak ? "pemeriksaan_visual" : ($externalCertificate ? "sertifikat_external" : "update_hasil_kalibrasi")) . "',
                  '$seksi_qa', '$operator', $jadwal_sql, '$nama_petugas', '$keterangan',
                  '$waktu_sekarang', '$suhu', '$kelembapan', '$ketidakpastian', '$confidence', '$snapshot_json_sql')";
 
@@ -1667,9 +2080,12 @@ elseif ($action == 'simpan_qa') {
                 'pengecekan_id' => $pengecekan_id,
                 'no_part_final' => $no_part_final,
                 'status_final' => $status_qa,
+                'visual_rusak' => $visualRusak,
             ], JSON_UNESCAPED_UNICODE);
         } catch (Exception $ex) {
             mysqli_rollback($konek);
+            foreach ($fotoVisualPaths as $path) @unlink($path);
+            if ($certificatePath !== '') @unlink($certificatePath);
             echo json_encode(['status' => 'error', 'message' => 'Gagal menyimpan hasil kalibrasi: ' . $ex->getMessage()]);
         }
     } catch (Exception $e) {
@@ -1986,6 +2402,7 @@ if ($action === 'get_history_print') {
         'titik_standar_json' => !empty($h['titik_standar_json']) ? $h['titik_standar_json'] : ($row['db_titik_standar_json'] ?? '')
     ];
 
+    $print['visual_rusak'] = !empty($raw['visual_rusak']);
     echo json_encode(['status' => 'success', 'print_data' => $print, 'audit' => $audit], JSON_UNESCAPED_UNICODE);
     exit;
 }
@@ -2116,7 +2533,10 @@ if ($action === 'get_transaksi_detail') {
     $print = [
         'no_part' => $row['no_part'], 'no_alat' => $row['no_part'], 'nama_part' => $row['nama_part'] ?? ($h['nama_part'] ?? ''), 'nama_alat' => $row['nama_part'] ?? ($h['nama_part'] ?? ''), 'spesifikasi' => $row['spesifikasi'] ?? ($h['spesifikasi'] ?? ''), 'seksi_pemilik' => $row['seksi_pemilik'] ?? ($h['seksi_pemilik'] ?? ''), 'seksi' => $row['seksi_pemilik'] ?? ($h['seksi_pemilik'] ?? ''), 'metode' => $h['metode_uji'] ?? '', 'metode_uji' => $h['metode_uji'] ?? '', 'standar_uji' => $h['standar_uji'] ?? '', 'traceability' => $h['traceability'] ?? '', 'toleransi_global' => $h['toleransi_global'] ?? '', 'toleransi' => $h['toleransi_global'] ?? '', 'resolusi' => $h['resolusi'] ?? '', 'satuan' => $h['satuan'] ?? '', 'suhu' => $row['suhu'] ?? ($env['suhu'] ?? ''), 'kelembapan' => $row['kelembapan'] ?? ($env['kelembapan'] ?? ''), 'ketidakpastian' => $row['ketidakpastian'] ?? ($env['ketidakpastian'] ?? ''), 'confidence_level' => $row['confidence_level'] ?? ($env['confidence_level'] ?? ''), 'keterangan' => $row['keterangan'] ?? ($ft['keterangan'] ?? ''), 'format' => $row['format_laporan'] ?? ($raw['format'] ?? ''), 'hasil_array' => $rows, 'tanggal_periksa' => $row['tanggal_pengecekan'], 'jadwal_berikutnya' => (qaNormalizeFinalStatus($row['status_kalibrasi'] ?? '') === 'OK' ? $row['periode_berikutnya'] : null), 'operator' => $row['operator'] ?? ($ft['operator'] ?? $row['created_by']), 'petugas' => $row['created_by'], 'foreman' => $pemeriksa, 'supervisor' => $penyetuju, 'pemeriksa' => $pemeriksa, 'penyetuju' => $penyetuju, 'tanggal_validasi_pemeriksa' => $tanggal_validasi_pemeriksa, 'tanggal_validasi_penyetuju' => $tanggal_validasi_penyetuju, 'validasi_pemeriksa_at' => $tanggal_validasi_pemeriksa, 'validasi_penyetuju_at' => $tanggal_validasi_penyetuju, 'signature_pembuat' => true, 'signature_pemeriksa' => $pOk, 'signature_penyetuju' => $sOk, 'nomor_pengecekan' => $row['nomor_pengecekan'], 'status_final' => qaNormalizeFinalStatus($row['status_kalibrasi'] ?? ''), 'keputusan' => qaNormalizeFinalStatus($row['status_kalibrasi'] ?? ''), 'status_validasi' => $row['status_validasi'], 'audit' => $audit, 'no_gambar' => $no_gambar_print, 'no_laporan' => (($row['no_laporan'] ?? '') !== '' ? $row['no_laporan'] : $row['nomor_pengecekan']), 'jenis_laporan' => strtolower(trim((string)($row['jenis_laporan'] ?? ''))), 'titik_standar_json' => !empty($h['titik_standar_json']) ? $h['titik_standar_json'] : ($row['db_titik_standar_json'] ?? ''), 'type' => $row['type'] ?? ($h['type'] ?? '')
     ];
-    echo json_encode(['status' => 'success', 'data' => $row, 'audit' => $audit, 'print_data' => $print], JSON_UNESCAPED_UNICODE);
+    $print['visual_rusak'] = !empty($raw['visual_rusak']);
+    $print['external_certificate'] = !empty($raw['sertifikat_vendor']);
+    $visualPhotoCount = !empty($raw['visual_rusak']) && is_array($raw['foto_visual'] ?? null) ? min(3, count($raw['foto_visual'])) : 0;
+    echo json_encode(['status' => 'success', 'data' => $row, 'audit' => $audit, 'print_data' => $print, 'visual_photo_count' => $visualPhotoCount, 'external_certificate' => $print['external_certificate']], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -2225,6 +2645,7 @@ elseif ($action === 'simpan_laporan_transaksi') {
         echo json_encode(['status' => 'error', 'message' => 'Data laporan tidak lengkap.']);
         exit;
     }
+    qaRbacRequire($konek, 'masterdata', true);
     $payloadDecoded = json_decode($payload, true);
     if (!is_array($payloadDecoded)) {
         echo json_encode(['status' => 'error', 'message' => 'Snapshot laporan tidak valid.']);

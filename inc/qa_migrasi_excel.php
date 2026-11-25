@@ -20,8 +20,9 @@ function qaMigCatalog(): array {
         'S' => 'Gelas ukur', 'T' => 'Plug gauge',
         'U' => 'Ring standar / Dial Caliper gage / Height gage / Cylinder gage / Inside micrometer / Penggaris / Tapered Gage / Infrared Thermometer / Stop Watch',
         'V' => 'Sigmat Digital', 'W' => 'Bevel protractor', 'X' => 'Dial Indicator',
-        'Y' => 'Hygro Thermometer', 'Z' => 'Blow Timer', 'AA' => 'pH meter',
-        'AB' => 'Electric Driver'
+        'Y' => 'Hygro Thermometer', 'Z' => 'Blow Timer', 'AA' => 'pH Meter',
+        'AB' => 'Electric Driver', 'AC' => 'Tang Ampere digital',
+        'AD' => 'Barrel Temperature'
     ];
 }
 function qaMigAliases(): array {
@@ -495,11 +496,9 @@ function qaMigPlan(mysqli $db, array $data): array {
         $e = [];
         if ($no === '' || $m['NAMA_ALAT'] === '' || $m['SEKSI_PEMILIK'] === '')
             $e[] = 'No. Alat, Nama Alat, dan Seksi wajib diisi.';
-        $formatValid = (bool)preg_match('/^(?:[A-Z]|AA|AB)$/', $m['FORMAT_FINAL']);
+        $formatValid = (bool)preg_match('/^(?:[A-Z]|AA|AB|AC|AD)$/', $m['FORMAT_FINAL']);
         if (!$formatValid)
             $e[] = 'Nama alat pada baris ' . $m['_row'] . ' tidak dikenali, Silahkan Pilih Format A-Z jika ada format yang sama.';
-        if ($m['FORMAT_FINAL'] === 'AA' && qaFormatAATolerance($m['STANDAR_TOLERANSI']) === null)
-            $e[] = 'Format AA wajib mengisi STANDAR_TOLERANSI numerik, contoh ± 0.5 pH.';
         if (isset($seen[$no]))
             $e[] = 'Nomor alat duplikat pada MASTER_ALAT (baris ' . $seen[$no] . ').';
         $seen[$no] = $m['_row'];

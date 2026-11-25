@@ -57,7 +57,7 @@ function qaDailyPayload(array $row, array $master, array $audit): array {
     $payload['petugas'] = $payload['operator'];
     $result = strtoupper(trim((string)$row['status_kalibrasi']));
     $payload['status_final'] = $payload['keputusan'] = ['GOOD' => 'OK', 'BAD' => 'NOT GOOD', 'NG' => 'NOT GOOD', 'BURUK' => 'NOT GOOD'][$result] ?? $result;
-    $payload['jadwal_berikutnya'] = $payload['keputusan'] === 'OK' ? $row['periode_berikutnya'] : '';
+    $payload['jadwal_berikutnya'] = $payload['keputusan'] === 'OK' ? $row['periode_berikutnya'] : '-';
     $payload['status_validasi'] = $row['status_validasi'];
     $payload['signature_pembuat'] = true;
     foreach (['pemeriksa', 'penyetuju'] as $stage) {

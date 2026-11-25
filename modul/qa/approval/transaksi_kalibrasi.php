@@ -17,6 +17,10 @@ $is_admin = qaRbacIsAdmin($konek);
 function h($v) {
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 }
+function tanggalTampil($value) {
+    $text = trim((string)$value);
+    return preg_replace('/^(\d{4})-(\d{2})-(\d{2})/', '$3-$2-$1', $text);
+}
 
 // Pastikan tabel laporan validator tersedia tanpa INFORMATION_SCHEMA/PREPARE.
 $cekJenis = mysqli_query($konek, "SHOW COLUMNS FROM qa_pengecekan LIKE 'jenis_transaksi'");
@@ -228,7 +232,7 @@ function statusLabel($s) {
                                 <td><?= h(jenisLabel($r['jenis'])) ?></td>
                                 <td><b><?= h($r['no_part']) ?></b></td>
                                 <td><?= h($r['operator'] !== '-' ? $r['operator'] : $r['created_by']) ?></td>
-                                <td><?= h($r['tanggal']) ?></td>
+                                <td><?= h(tanggalTampil($r['tanggal'])) ?></td>
                                 <td class="text-center"><?= h($r['hasil']) ?></td>
                                 <td class="text-center"><span class="label label-<?= $sl[1] ?> status-label"><?= h($sl[0]) ?></span></td>
                                 <td class="text-center">
@@ -283,6 +287,9 @@ function statusLabel($s) {
                     function esc(v) {
                         return $('<div>').text(v == null ? '' : String(v)).html();
                     }
+                    function tanggalTampil(v) {
+                        return String(v || '-').replace(/^(\d{4})-(\d{2})-(\d{2})/, '$3-$2-$1');
+                    }
 
                     function notif(title, msg, type, cb) {
                         BootstrapDialog.alert({
@@ -331,7 +338,7 @@ function statusLabel($s) {
                             var html = '<div class="row">' +
                                 '<div class="col-sm-3"><b>No. Alat:</b><br>' + esc(d.no_part || '-') + '</div>' +
                                 '<div class="col-sm-3"><b>Nama Alat:</b><br>' + esc(d.nama_part || '-') + '</div>' +
-                                '<div class="col-sm-3"><b>Tanggal:</b><br>' + esc(d.tanggal_pengecekan || '-') + '</div>' +
+                                '<div class="col-sm-3"><b>Tanggal:</b><br>' + esc(tanggalTampil(d.tanggal_pengecekan)) + '</div>' +
                                 '<div class="col-sm-3"><b>Hasil:</b><br>' + esc(d.status_kalibrasi || '-') + '</div>' +
                                 '</div>' +
                                 '<div class="row" style="margin-top:10px">' +

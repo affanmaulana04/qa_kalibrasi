@@ -29,6 +29,13 @@ $nama_petugas = isset($_SESSION['nama_lengkap']) && $_SESSION['nama_lengkap'] !=
 function h($v) {
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 }
+function formatMasterDailyDate($value) {
+    $date = substr(trim((string)$value), 0, 10);
+    if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $date, $parts) ||
+        !checkdate((int)$parts[2], (int)$parts[3], (int)$parts[1]))
+        return '-';
+    return $parts[3] . '-' . $parts[2] . '-' . $parts[1];
+}
 function esc($db, $v) {
     return mysqli_real_escape_string($db, (string)$v);
 }
@@ -43,6 +50,13 @@ function finalStatusFromTable($table) {
 }
 function originalNoPartFromArchive($no) {
     return preg_replace('/_(?:NOTGOOD|RUSAK|DISCONTINUE|DITARIK)_\d{10,14}$/i', '', $no);
+}
+function qaMasterVisualRusak($row) {
+    if (strtolower(trim((string)($row['jenis_transaksi'] ?? ''))) === 'pemeriksaan_visual' ||
+        strtoupper(trim((string)($row['status_kalibrasi'] ?? ''))) === 'RUSAK VISUAL')
+        return true;
+    $snapshot = json_decode((string)($row['hasil_json'] ?? ''), true);
+    return is_array($snapshot) && !empty($snapshot['visual_rusak']);
 }
 if (!$isMonthlyReport) {
     foreach (['qa_alat_ng', 'qa_alat_rusak', 'qa_alat_discontinue', 'qa_alat_ditarik'] as $archiveTable) {
@@ -84,6 +98,7 @@ $today = date('Y-m-d');
 $val_harian = $_GET['tgl_harian'] ?? $today;
 $val_bulanan = $_GET['tgl_bulanan'] ?? date('Y-m');
 $val_tahunan = $_GET['tgl_tahunan'] ?? date('Y');
+$val_triwulan = (int)($_GET['triwulan'] ?? 0);
 if ($isMonthlyReport) {
     $filter_seksi = $monthlyReportOptions['seksi'];
     $filter_status = 'ALL';
@@ -98,6 +113,8 @@ if (!preg_match('/^\d{4}-\d{2}$/', $val_bulanan))
     $val_bulanan = date('Y-m');
 if (!preg_match('/^\d{4}$/', $val_tahunan))
     $val_tahunan = date('Y');
+if ($val_triwulan < 1 || $val_triwulan > 4)
+    $val_triwulan = $val_tahunan === date('Y') ? (int)ceil((int)date('n') / 3) : 1;
 $selectedYear = (int)substr($val_bulanan, 0, 4);
 $selectedMonth = (int)substr($val_bulanan, 5, 2);
 $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $selectedMonth, $selectedYear);
@@ -155,13 +172,19 @@ if ($q_seksi)
             $seksiOptions[] = qaSectionKey($s['nama_seksi']);
 $seksiOptions = array_values(array_unique($seksiOptions));
 $masterRows = [];
+$metaTable = mysqli_query($konek, "SHOW TABLES LIKE 'qa_migrasi_alat_meta'");
+$metaColumn = $metaTable && mysqli_num_rows($metaTable) > 0
+    ? mysqli_query($konek, "SHOW COLUMNS FROM qa_migrasi_alat_meta LIKE 'petugas'") : false;
+$petugasMetaSql = $metaColumn && mysqli_num_rows($metaColumn) > 0
+    ? "NULLIF((SELECT mm.petugas FROM qa_migrasi_alat_meta mm WHERE mm.no_part=p.no_part LIMIT 1), '')," : 'NULL,';
 $tables = ['qa_part', 'qa_alat_ng', 'qa_alat_rusak', 'qa_alat_discontinue', 'qa_alat_ditarik'];
 foreach ($tables as $t) {
     $status = finalStatusFromTable($t);
     $sql = "SELECT p.*,
+            COALESCE($petugasMetaSql
             (SELECT q0.created_by FROM qa_pengecekan q0
              WHERE q0.no_part = p.no_part AND q0.nomor_pengecekan LIKE 'QA-REG-%'
-             ORDER BY q0.id ASC LIMIT 1) AS petugas_daftar
+             ORDER BY q0.id ASC LIMIT 1)) AS petugas_daftar
             FROM `$t` p ORDER BY p.seksi_pemilik ASC, p.nama_part ASC, p.no_part ASC";
     $q = mysqli_query($konek, $sql);
     if (!$q)
@@ -195,8 +218,10 @@ $qApproved = mysqli_query($konek, "SELECT q.* FROM qa_pengecekan q
     INNER JOIN (SELECT no_part, MAX(id) max_id FROM qa_pengecekan WHERE status_validasi='final_disetujui' GROUP BY no_part) z
         ON z.no_part=q.no_part AND z.max_id=q.id");
 if ($qApproved) {
-    while ($q = mysqli_fetch_assoc($qApproved))
+    while ($q = mysqli_fetch_assoc($qApproved)) {
         $approvedByNo[$q['no_part']] = $q;
+        $approvedByNo[strtoupper(trim((string)$q['no_part']))] = $q;
+    }
 }
 $registryByNo = [];
 $qRegistry = mysqli_query($konek, "SELECT no_part,status_alat,alasan_status,hasil_terakhir FROM qa_alat_registry");
@@ -219,11 +244,15 @@ function displayMasterStatus($master, $latestByNo, $registryByNo = []) {
             return 'MENUNGGU VALIDASI';
         if ($sv === 'ditolak_pemeriksa' || $sv === 'ditolak_penyetuju')
             return 'DITOLAK VALIDASI';
+        if ($sv === 'final_disetujui' && qaMasterVisualRusak($latest))
+            return 'RUSAK';
     }
     if ($registry) {
         $rs = strtoupper(trim((string)($registry['status_alat'] ?? '')));
-        if ($rs === 'BLOKIR_PERMANEN')
-            return strtoupper((string)($registry['alasan_status'] ?: ($registry['hasil_terakhir'] ?: 'RUSAK')));
+        if ($rs === 'BLOKIR_PERMANEN') {
+            $reason = strtoupper((string)($registry['alasan_status'] ?: ($registry['hasil_terakhir'] ?: 'RUSAK')));
+            return $reason === 'RUSAK VISUAL' ? 'RUSAK' : $reason;
+        }
         if ($rs === 'NONAKTIF_SEMENTARA')
             return strtoupper((string)($registry['alasan_status'] ?: ($registry['hasil_terakhir'] ?: 'NONAKTIF')));
         if ($rs === 'AKTIF' && $latest && strtolower((string)($latest['status_validasi'] ?? '')) === 'final_disetujui')
@@ -232,11 +261,14 @@ function displayMasterStatus($master, $latestByNo, $registryByNo = []) {
     return $final !== '' ? $final : 'OK';
 }
 function statusMatches($rowStatus, $filterStatus) {
-    return $filterStatus === 'ALL' || strtoupper($rowStatus) === strtoupper($filterStatus);
+    $status = strtoupper(trim((string)$rowStatus));
+    if ($status === 'RUSAK VISUAL')
+        $status = 'RUSAK';
+    return $filterStatus === 'ALL' || $status === strtoupper($filterStatus);
 }
 function isNegativeMasterStatus($status) {
     $s = strtoupper(trim((string)$status));
-    return in_array($s, ['RUSAK', 'DISCONTINUE', 'DITARIK TECHNICAL', 'NOT GOOD'], true);
+    return in_array($s, ['RUSAK', 'RUSAK VISUAL', 'DISCONTINUE', 'DITARIK TECHNICAL', 'NOT GOOD', 'NG'], true);
 }
 function masterColValue($row, $keys, $fallback = '') {
     foreach ((array)$keys as $k) {
@@ -248,10 +280,14 @@ function masterColValue($row, $keys, $fallback = '') {
 // MASTER NON-OK V2 - DEDUPE NOMOR ALAT, PRIORITASKAN DATA ARSIP NON-OK
 // Jika data legacy masih tersisa di qa_part sekaligus sudah ada di tabel arsip, tampilkan arsip saja.
 $dedupMaster = [];
+$fungsiAktifByNo = [];
 foreach ($masterRows as $r) {
     $key = strtoupper(trim((string)($r['no_part'] ?? '')));
     if ($key === '')
         continue;
+    if (($r['_table'] ?? 'qa_part') === 'qa_part' && trim((string)($r['fungsi'] ?? '')) !== '') {
+        $fungsiAktifByNo[$key] = $r['fungsi'];
+    }
     $isArchive = (($r['_table'] ?? 'qa_part') !== 'qa_part');
     if (!isset($dedupMaster[$key]) || $isArchive)
         $dedupMaster[$key] = $r;
@@ -268,17 +304,25 @@ foreach ($masterRows as $r) {
         continue;
     $filteredMasters[] = $r;
 }
-function buildPlanEvents($konek, $masterByNo, $latestByNo) {
+function qaAnnualPelaksana($hasilJson) {
+    $snapshot = json_decode((string)$hasilJson, true);
+    $value = is_array($snapshot) ? strtoupper(trim((string)($snapshot['pelaksana_kalibrasi'] ?? ''))) : '';
+    return $value === 'EXTERNAL' ? 'EXTERNAL' : 'INTERNAL';
+}
+function buildPlanEvents($konek, $masterByNo, $latestByNo, $approvedByNo, $inactiveCutoffs) {
     $events = [];
     foreach ($masterByNo as $no => $m) {
         if (($m['_table'] ?? '') === 'qa_part' && !empty($m['jadwal_kalibrasi'])) {
             $d = qaJadwalEfektif($konek, substr((string)$m['jadwal_kalibrasi'], 0, 10));
+            if (isset($inactiveCutoffs[$no]) && $d > $inactiveCutoffs[$no])
+                continue;
             if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $d)) {
                 $events[$no . '|' . $d] = [
                     'no_part' => $no, 'nama_part' => $m['nama_part'], 'seksi' => $m['seksi_pemilik'],
                     'spesifikasi' => $m['spesifikasi'] ?? ($m['ukuran'] ?? ''), 'resolusi' => $m['resolusi'] ?? '',
                     'periode' => $m['periode_kalibrasi'] ?? '', 'plan_date' => $d, 'status' => $m['_final_status'],
-                    'petugas' => $m['petugas_daftar'] ?? '-'
+                    'petugas' => $m['petugas_daftar'] ?? '-',
+                    'pelaksana' => qaAnnualPelaksana($approvedByNo[$no]['hasil_json'] ?? '')
                 ];
             }
         }
@@ -286,11 +330,16 @@ function buildPlanEvents($konek, $masterByNo, $latestByNo) {
     $q = mysqli_query($konek, "SELECT q.* FROM qa_pengecekan q WHERE COALESCE(q.jenis_transaksi,'update_hasil_kalibrasi') <> 'registrasi_alat' AND q.tanggal_jadwal_saat_pengecekan IS NOT NULL AND q.tanggal_jadwal_saat_pengecekan <> '' ORDER BY q.id ASC");
     if ($q) {
         while ($x = mysqli_fetch_assoc($q)) {
+            $visualRusak = qaMasterVisualRusak($x);
+            if ($visualRusak && $x['status_validasi'] !== 'final_disetujui')
+                continue;
             $d = substr((string)$x['tanggal_jadwal_saat_pengecekan'], 0, 10);
             if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $d))
                 continue;
             $no = $x['no_part'] ?? '';
             if (!isset($masterByNo[$no]))
+                continue;
+            if (isset($inactiveCutoffs[$no]) && $d > $inactiveCutoffs[$no])
                 continue;
             $m = $masterByNo[$no];
             if (!qaSeksiBoleh($konek, $m['seksi_pemilik'] ?? ''))
@@ -298,25 +347,47 @@ function buildPlanEvents($konek, $masterByNo, $latestByNo) {
             $events[$no . '|' . $d] = [
                 'no_part' => $no, 'nama_part' => $m['nama_part'], 'seksi' => $m['seksi_pemilik'],
                 'spesifikasi' => $m['spesifikasi'] ?? ($m['ukuran'] ?? ''), 'resolusi' => $m['resolusi'] ?? '',
-                'periode' => $m['periode_kalibrasi'] ?? '', 'plan_date' => $d, 'status' => $m['_final_status'],
-                'petugas' => $m['petugas_daftar'] ?? '-'
+                'periode' => $m['periode_kalibrasi'] ?? '', 'plan_date' => $d,
+                'status' => $visualRusak ? 'RUSAK' : $m['_final_status'],
+                'petugas' => $m['petugas_daftar'] ?? '-',
+                'pelaksana' => $x['status_validasi'] === 'final_disetujui'
+                    ? qaAnnualPelaksana($x['hasil_json'] ?? '') : 'INTERNAL'
             ];
         }
     }
     return array_values($events);
 }
 $masterByNo = [];
-foreach ($masterRows as $r)
+foreach ($masterRows as $r) {
     $masterByNo[(string)$r['no_part']] = $r;
+    if (($r['_table'] ?? 'qa_part') !== 'qa_part') {
+        $originalNo = originalNoPartFromArchive((string)$r['no_part']);
+        if ($originalNo !== (string)$r['no_part'])
+            $masterByNo[$originalNo] = $r;
+    }
+}
 $masterByNo = array_filter($masterByNo, function ($m) use ($konek) {
     return qaSeksiBoleh($konek, $m['seksi_pemilik'] ?? '');
 });
-$planEvents = buildPlanEvents($konek, $masterByNo, $latestByNo);
+$inactiveCutoffs = [];
+foreach ($masterByNo as $no => $m) {
+    if (!isNegativeMasterStatus(displayMasterStatus($m, $latestByNo, $registryByNo)))
+        continue;
+    $approved = $approvedByNo[$no] ?? null;
+    $approvedStatus = strtoupper(trim((string)($approved['status_kalibrasi'] ?? '')));
+    $approvedDate = substr((string)($approved['tanggal_pengecekan'] ?? ''), 0, 10);
+    $inactiveCutoffs[$no] = isNegativeMasterStatus($approvedStatus) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $approvedDate)
+        ? $approvedDate : $today;
+}
+$planEvents = buildPlanEvents($konek, $masterByNo, $latestByNo, $approvedByNo, $inactiveCutoffs);
 $actualEvents = [];
 $monthlyActualEvents = [];
 $qActual = mysqli_query($konek, "SELECT q.* FROM qa_pengecekan q WHERE COALESCE(q.jenis_transaksi,'update_hasil_kalibrasi') <> 'registrasi_alat' AND q.status_validasi IN ('menunggu_pemeriksa','menunggu_penyetuju','final_disetujui') AND (q.nomor_pengecekan IS NULL OR q.nomor_pengecekan NOT LIKE 'QA-REG-%') ORDER BY q.tanggal_pengecekan ASC, q.id ASC");
 if ($qActual) {
     while ($q = mysqli_fetch_assoc($qActual)) {
+        $visualRusak = qaMasterVisualRusak($q);
+        if ($visualRusak && $q['status_validasi'] !== 'final_disetujui')
+            continue;
         $no = (string)($q['no_part'] ?? '');
         if (!isset($masterByNo[$no]))
             continue;
@@ -328,10 +399,13 @@ if ($qActual) {
             'periode' => $m['periode_kalibrasi'] ?? '',
             'plan_date' => substr((string)$q['tanggal_jadwal_saat_pengecekan'], 0, 10),
             'actual_date' => substr((string)$q['tanggal_pengecekan'], 0, 10),
-            'status' => $m['_final_status'],
-            'petugas' => $m['petugas_daftar'] ?? '-',
-            'hasil' => $m['_final_status'],
-            'next_date' => $q['periode_berikutnya'] ?? ($m['jadwal_kalibrasi'] ?? '')
+            'status' => $visualRusak ? 'RUSAK' : $m['_final_status'],
+            'petugas' => trim((string)($q['created_by'] ?? '')) !== ''
+                ? $q['created_by'] : ($q['operator'] ?? '-'),
+            'hasil' => $visualRusak ? 'RUSAK' : $m['_final_status'],
+            'pelaksana' => qaAnnualPelaksana($q['hasil_json'] ?? ''),
+            'next_date' => isNegativeMasterStatus($visualRusak ? 'RUSAK' : $m['_final_status'])
+                ? '-' : ($q['periode_berikutnya'] ?? ($m['jadwal_kalibrasi'] ?? ''))
         ];
         $monthlyActualEvents[] = $event;
         if ($q['status_validasi'] === 'final_disetujui')
@@ -351,7 +425,7 @@ if ($filter_waktu === 'harian') {
             continue;
         $daily[$e['no_part']] = [
             'no_part' => $e['no_part'], 'nama_part' => $e['nama_part'], 'spesifikasi' => $e['spesifikasi'], 'resolusi' => $e['resolusi'],
-            'seksi' => $e['seksi'], 'periode' => $e['periode'], 'rencana' => $e['plan_date'], 'aktual' => '', 'hasil' => '', 'next' => '', 'petugas' => $e['petugas'], 'status' => $e['status']
+            'seksi' => $e['seksi'], 'periode' => $e['periode'], 'rencana' => $e['plan_date'], 'aktual' => '', 'hasil' => '', 'next' => '', 'petugas' => '-', 'status' => $e['status']
         ];
     }
     foreach ($actualEvents as $e) {
@@ -364,72 +438,90 @@ if ($filter_waktu === 'harian') {
         if (!isset($daily[$e['no_part']])) {
             $daily[$e['no_part']] = [
                 'no_part' => $e['no_part'], 'nama_part' => $e['nama_part'], 'spesifikasi' => $e['spesifikasi'], 'resolusi' => $e['resolusi'],
-                'seksi' => $e['seksi'], 'periode' => $e['periode'], 'rencana' => $e['plan_date'], 'aktual' => '', 'hasil' => '', 'next' => '', 'petugas' => $e['petugas'], 'status' => $e['status']
+                'seksi' => $e['seksi'], 'periode' => $e['periode'], 'rencana' => $e['plan_date'], 'aktual' => '', 'hasil' => '', 'next' => '', 'petugas' => '-', 'status' => $e['status']
             ];
         }
         $daily[$e['no_part']]['aktual'] = $e['actual_date'];
         $daily[$e['no_part']]['hasil'] = $e['hasil'];
         $daily[$e['no_part']]['next'] = $e['next_date'];
+        $daily[$e['no_part']]['petugas'] = trim((string)$e['petugas']) !== '' ? $e['petugas'] : '-';
     }
     $reportRows = array_values($daily);
     usort($reportRows, fn ($a, $b) => strtoupper($a['seksi'] . $a['nama_part'] . $a['no_part']) <=> strtoupper($b['seksi'] . $b['nama_part'] . $b['no_part']));
-    $reportMeta = ['jenis' => 'laporan_harian', 'periode_key' => $val_harian, 'periode_label' => 'Harian ' . $val_harian];
+    $reportMeta = ['jenis' => 'laporan_harian', 'periode_key' => $val_harian, 'periode_label' => 'Harian ' . formatMasterDailyDate($val_harian)];
 } elseif ($filter_waktu === 'bulanan') {
     $reportRows = qaMonthlyCounts($planEvents, $monthlyActualEvents, $val_bulanan, $daysInMonth, $filter_seksi, $filter_status, true);
     $reportMeta = ['jenis' => 'laporan_bulanan', 'periode_key' => $val_bulanan, 'periode_label' => 'Bulanan ' . date('F Y', strtotime($val_bulanan . '-01'))];
 } elseif ($filter_waktu === 'tahunan') {
     $year = (int)$val_tahunan;
-    $groups = [];
-    $rSeen = [];
-    foreach ($planEvents as $e) {
-        if ((int)substr($e['plan_date'], 0, 4) !== $year)
-            continue;
-        if ($filter_seksi !== 'ALL' && strtoupper($e['seksi']) !== strtoupper($filter_seksi))
-            continue;
-        $display = displayMasterStatus($masterByNo[$e['no_part']] ?? ['_final_status' => $e['status'], 'no_part' => $e['no_part']], $latestByNo, $registryByNo);
-        if (!statusMatches($display, $filter_status))
-            continue;
-        $gk = strtoupper(trim($e['seksi'])) . '|' . strtoupper(trim($e['nama_part']));
-        $key = $gk . '|' . $e['no_part'] . '|' . $e['plan_date'];
-        if (isset($rSeen[$key]))
-            continue;
-        $rSeen[$key] = true;
-        if (!isset($groups[$gk]))
-            $groups[$gk] = ['seksi' => $e['seksi'], 'nama_part' => $e['nama_part'], 'R' => array_fill(1, 12, 0), 'H' => array_fill(1, 12, 0), 'petugas' => []];
-        $m = (int)substr($e['plan_date'], 5, 2);
-        if ($m >= 1 && $m <= 12)
-            $groups[$gk]['R'][$m]++;
-        if (($e['petugas'] ?? '-') !== '-')
-            $groups[$gk]['petugas'][] = $e['petugas'];
+    $annualMonths = range(1, 12);
+    $annualSections = $filter_seksi === 'ALL' ? $seksiOptions : [$filter_seksi];
+    $annualTypeLabels = [
+        'INTERNAL' => 'INTERNAL',
+        'EXTERNAL' => 'EKSTERNAL'
+    ];
+    $groups = array_fill_keys(array_keys($annualTypeLabels), []);
+    $seen = ['R' => [], 'H' => []];
+    foreach (['R' => $planEvents, 'H' => $actualEvents] as $code => $events) {
+        foreach ($events as $e) {
+            $date = $code === 'R' ? $e['plan_date'] : $e['actual_date'];
+            if ((int)substr($date, 0, 4) !== $year)
+                continue;
+            $section = qaSectionKey($e['seksi']);
+            if (!in_array($section, $annualSections, true))
+                continue;
+            $display = $code === 'R'
+                ? displayMasterStatus($masterByNo[$e['no_part']] ?? ['_final_status' => $e['status'], 'no_part' => $e['no_part']], $latestByNo, $registryByNo)
+                : $e['status'];
+            if (!statusMatches($display, $filter_status))
+                continue;
+            $month = (int)substr($date, 5, 2);
+            if ($month < 1 || $month > 12)
+                continue;
+            $key = strtoupper(trim($e['nama_part']));
+            $type = $e['pelaksana'] ?? 'INTERNAL';
+            if (!isset($groups[$type]))
+                $type = 'INTERNAL';
+            $unique = $e['no_part'] . '|' . $date;
+            if (isset($seen[$code][$unique]))
+                continue;
+            $seen[$code][$unique] = true;
+            if (!isset($groups[$type][$key])) {
+                $groups[$type][$key] = ['nama_part' => $e['nama_part'], 'R' => [], 'H' => []];
+            }
+            $groups[$type][$key][$code][$month][$section] = (int)($groups[$type][$key][$code][$month][$section] ?? 0) + 1;
+        }
     }
-    foreach ($actualEvents as $e) {
-        if ((int)substr($e['actual_date'], 0, 4) !== $year)
-            continue;
-        if ($filter_seksi !== 'ALL' && strtoupper($e['seksi']) !== strtoupper($filter_seksi))
-            continue;
-        if (!statusMatches($e['status'], $filter_status))
-            continue;
-        $gk = strtoupper(trim($e['seksi'])) . '|' . strtoupper(trim($e['nama_part']));
-        if (!isset($groups[$gk]))
-            $groups[$gk] = ['seksi' => $e['seksi'], 'nama_part' => $e['nama_part'], 'R' => array_fill(1, 12, 0), 'H' => array_fill(1, 12, 0), 'petugas' => []];
-        $m = (int)substr($e['actual_date'], 5, 2);
-        if ($m >= 1 && $m <= 12)
-            $groups[$gk]['H'][$m]++;
-        if (($e['petugas'] ?? '-') !== '-')
-            $groups[$gk]['petugas'][] = $e['petugas'];
+    $annualTotalsByType = [];
+    $reportRows = [];
+    foreach ($groups as $type => &$typeGroups) {
+        ksort($typeGroups, SORT_NATURAL | SORT_FLAG_CASE);
+        $annualTotalsByType[$type] = ['R' => [], 'H' => [], 'B' => []];
+        foreach ($typeGroups as &$g) {
+            $g['B'] = [];
+            foreach (range(1, 12) as $month) {
+                foreach ($annualSections as $section) {
+                    $r = (int)($g['R'][$month][$section] ?? 0);
+                    $h = (int)($g['H'][$month][$section] ?? 0);
+                    $g['B'][$month][$section] = max(0, $r - $h);
+                    foreach (['R' => $r, 'H' => $h, 'B' => $g['B'][$month][$section]] as $code => $count) {
+                        $annualTotalsByType[$type][$code][$month][$section] = (int)($annualTotalsByType[$type][$code][$month][$section] ?? 0) + $count;
+                    }
+                }
+            }
+        }
+        unset($g);
+        $reportRows[$type] = array_values(array_filter($typeGroups, function ($group) use ($annualMonths, $annualSections) {
+            foreach ($annualMonths as $month) {
+                foreach ($annualSections as $section) {
+                    if (!empty($group['R'][$month][$section]) || !empty($group['H'][$month][$section]))
+                        return true;
+                }
+            }
+            return false;
+        }));
     }
-    foreach ($groups as &$g) {
-        $g['B'] = array_fill(1, 12, 0);
-        for ($m = 1;$m <= 12;$m++)
-            $g['B'][$m] = max(0, (int)$g['R'][$m] - (int)$g['H'][$m]);
-        $g['totalR'] = array_sum($g['R']);
-        $g['totalH'] = array_sum($g['H']);
-        $g['totalB'] = array_sum($g['B']);
-        $g['petugas'] = implode(', ', array_values(array_unique(array_filter($g['petugas']))));
-    }
-    unset($g);
-    uasort($groups, fn ($a, $b) => strtoupper($a['seksi'] . $a['nama_part']) <=> strtoupper($b['seksi'] . $b['nama_part']));
-    $reportRows = $groups;
+    unset($typeGroups);
     $reportMeta = ['jenis' => 'laporan_tahunan', 'periode_key' => (string)$year, 'periode_label' => 'Tahunan ' . $year];
 }
 // Normalisasi data untuk daftar default.
@@ -565,6 +657,18 @@ if ($isMonthlyReport) {
             .r-row {
                 background: #fff9e6
             }
+            .annual-matrix { width: 100%; table-layout: auto; }
+            .annual-matrix th, .annual-matrix td { padding: 5px 8px; font-size: 11px; white-space: nowrap; }
+            .annual-matrix .annual-section { min-width: 44px; white-space: nowrap; }
+            .annual-month-heading { margin-top: 20px; margin-bottom: 0; font-weight: bold; }
+            .annual-month-heading { scroll-margin-top: 85px; }
+            .annual-month-shortcuts { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+            .annual-month-shortcuts a { display: inline-block; padding: 5px 10px; border: 1px solid #337ab7; border-radius: 4px; color: #337ab7; background: #fff; text-decoration: none; }
+            .annual-month-shortcuts a:hover, .annual-month-shortcuts a:focus { color: #fff; background: #337ab7; }
+            .annual-matrix .r-row, .annual-matrix .h-row, .annual-matrix .b-row { background: #fff; }
+            .annual-matrix .annual-month-total { background: #edf2f6; font-weight: bold; }
+            .annual-matrix .annual-group-title th { background: #dbe5ec; text-align: left; padding: 8px; }
+            .annual-matrix .annual-group-total th { background: #f3f6f8; }
             .h-row {
                 background: #eef8ee
             }
@@ -920,10 +1024,10 @@ if (!$calendarRow || !(int)$calendarRow['jumlah']): ?>
                                 <option value="1" <?= $monthlyDisplayFormat === '1'?'selected':''?>>Format 1 — Daftar Rencana Kalibrasi</option>
                                 <?php endif; ?>
                                 <?php if (qaRbacCan($konek, qaRbacMonthlyPermission('2'))): ?>
-                                <option value="2" <?= $monthlyDisplayFormat === '2'?'selected':''?>>Format 2 — Jadwal Kalibrasi Internal</option>
+                                <option value="2" <?= $monthlyDisplayFormat === '2'?'selected':''?>>Format 2 — Laporan Bulanan Internal QA</option>
                                 <?php endif; ?>
                                 <?php if (qaRbacCan($konek, qaRbacMonthlyPermission('3'))): ?>
-                                <option value="3" <?= $monthlyDisplayFormat === '3'?'selected':''?>>Format 3 — Jadwal Kalibrasi External</option>
+                                <option value="3" <?= $monthlyDisplayFormat === '3'?'selected':''?>>Format 3 — Laporan Bulanan Seksi</option>
                                 <?php endif; ?>
                             </select>
                         </div>
@@ -942,7 +1046,7 @@ if (!$calendarRow || !(int)$calendarRow['jumlah']): ?>
                     <?php if ($monthlyDisplayFormat === '1'): ?>
                     <header class="monthly-heading">
                         <div>PT. SURYA TOTO INDONESIA Tbk.</div>
-                        <h2>LAPORAN JADWAL KALIBRASI BULANAN</h2>
+                        <h2><?= $monthlyDisplayFormat === '2' ? 'LAPORAN BULANAN INTERNAL QA' : ($monthlyDisplayFormat === '3' ? 'LAPORAN BULANAN SEKSI' : 'DAFTAR RENCANA KALIBRASI BULANAN') ?></h2>
                         <p><?= h($monthlyTitle)?> &middot; Seksi: <?= h($filter_seksi === 'ALL'?'Semua Seksi':$filter_seksi)?></p>
                     </header>
                     <?php endif; ?>
@@ -1075,20 +1179,27 @@ if (!$calendarRow || !(int)$calendarRow['jumlah']): ?>
                         $negative = isNegativeMasterStatus($r['_display_status'] ?? '');
                         $noAsset = masterColValue($r, ['no_asset', 'no_aset', 'no_fa'], '~');
                         $fungsi = masterColValue($r, ['fungsi'], '');
+                        if ($fungsi === '' && ($r['_table'] ?? 'qa_part') !== 'qa_part') {
+                            $fungsi = $fungsiAktifByNo[strtoupper(originalNoPartFromArchive((string)($r['no_part'] ?? '')))] ?? '';
+                        }
                         // Kalibrator adalah alat referensi (mis. Micrometer), bukan petugas.
                         $kalibrator = masterColValue($r, ['kalibrator'], '');
-                        $ket = masterColValue($r, ['keterangan'], '');
                         $res = trim((string)($r['resolusi'] ?? ''));
                         $kls = trim((string)($r['kls'] ?? ''));
                         $resKls = trim($res . ($kls !== ''?' / ' . $kls:''));
                         if ($resKls === '')
                             $resKls = '~';
-                        $statusTampil = trim((string)($r['_display_status'] ?? ''));
-                        // O = OK Kalibrasi, V = OK Verifikasi.
-                        // Status selain OK tetap sesuai hasil/kondisi asli.
+                        $hasilKondisi = strtoupper(trim((string)($r['_display_status'] ?? '')));
                         $noJenis = (string)($r['no_part'] ?? '');
-                        $jenisTerakhir = $approvedByNo[$noJenis] ?? null;
-                        $statusTampil = qaMasterResultLabel($statusTampil, $r['jenis_laporan'] ?? '', $jenisTerakhir['jenis_laporan'] ?? '');
+                        if (($r['_table'] ?? 'qa_part') !== 'qa_part') {
+                            $noJenis = originalNoPartFromArchive($noJenis);
+                        }
+                        $jenisTerakhir = $approvedByNo[$noJenis] ?? ($approvedByNo[strtoupper(trim($noJenis))] ?? null);
+                        $statusTampil = qaMasterResultLabel('OK', $r['jenis_laporan'] ?? '', $jenisTerakhir['jenis_laporan'] ?? '');
+                        if ($statusTampil !== 'V') {
+                            $statusTampil = 'O';
+                        }
+                        $ket = $hasilKondisi === 'OK' ? '' : $hasilKondisi;
                         ?>
                                 <tr class="<?= $negative?'negative-row':''?>">
                                     <td>
@@ -1115,14 +1226,14 @@ if (!$calendarRow || !(int)$calendarRow['jumlah']): ?>
                                         <?= h($fungsi)?>
                                     </td>
                                     <td>
-                                        <span class="label <?= $negative?'label-danger':'label-default'?>">
+                                        <span class="label label-default">
                                             <?= h($statusTampil)?>
                                         </span>
                                     </td>
                                     <td>
                                         <?= h($kalibrator)?>
                                     </td>
-                                    <td class="text-left">
+                                    <td class="text-center">
                                         <?= h($ket)?>
                                     </td>
                                 </tr>
@@ -1178,13 +1289,13 @@ if (!$calendarRow || !(int)$calendarRow['jumlah']): ?>
                                 FUNGSI
                             </th>
                                     <th>
-                                KETERANGAN
-                            </th>
-                                    <th>
-                                TANGGAL KALIBRASI TERAKHIR
+                                STATUS
                             </th>
                                     <th>
                                 KALIBRATOR
+                            </th>
+                                    <th>
+                                KETERANGAN
                             </th>
                                 </tr>
                             </thead>
@@ -1197,11 +1308,28 @@ if (!$calendarRow || !(int)$calendarRow['jumlah']): ?>
                     $lastSection = $sec;
                     echo '<tr class="tr-seksi"><td colspan="10" class="text-left">SEKSI: ' . h(strtoupper($sec)) . '</td></tr>';
                 }
-                $noAsset = masterColValue($r, ['no_asset', 'no_aset'], '');
+                $noAsset = masterColValue($r, ['no_asset', 'no_aset', 'no_fa'], '~');
                 $fungsi = masterColValue($r, ['fungsi'], '');
+                if ($fungsi === '' && ($r['_table'] ?? 'qa_part') !== 'qa_part') {
+                    $fungsi = $fungsiAktifByNo[strtoupper(originalNoPartFromArchive((string)($r['no_part'] ?? '')))] ?? '';
+                }
                 $kalibrator = masterColValue($r, ['kalibrator'], '');
-                $tgl = $r['_last_calibration'] ?? '';
-                $tglFmt = ($tgl && strtotime($tgl) !== false)?date('d-m-Y', strtotime($tgl)):'-'; ?>
+                $res = trim((string)($r['resolusi'] ?? ''));
+                $kls = trim((string)($r['kls'] ?? ''));
+                $resKls = trim($res . ($kls !== '' ? ' / ' . $kls : ''));
+                if ($resKls === '') {
+                    $resKls = '~';
+                }
+                $noJenis = (string)($r['no_part'] ?? '');
+                if (($r['_table'] ?? 'qa_part') !== 'qa_part') {
+                    $noJenis = originalNoPartFromArchive($noJenis);
+                }
+                $jenisTerakhir = $approvedByNo[$noJenis] ?? ($approvedByNo[strtoupper(trim($noJenis))] ?? null);
+                $statusTampil = qaMasterResultLabel('OK', $r['jenis_laporan'] ?? '', $jenisTerakhir['jenis_laporan'] ?? '');
+                if ($statusTampil !== 'V') {
+                    $statusTampil = 'O';
+                }
+                $ket = strtoupper(trim((string)($r['_display_status'] ?? ''))); ?>
                         <tr class="negative-row">
                                     <td>
                                 <?= $no?>
@@ -1218,7 +1346,7 @@ if (!$calendarRow || !(int)$calendarRow['jumlah']): ?>
                                 </b>
                             </td>
                                     <td>
-                                <?= h(($r['resolusi'] ?? '') . (($r['kls'] ?? '')?' / ' . $r['kls']:''))?>
+                                <?= h($resKls)?>
                             </td>
                                     <td>
                                 <?= h($noAsset)?>
@@ -1227,15 +1355,15 @@ if (!$calendarRow || !(int)$calendarRow['jumlah']): ?>
                                 <?= h($fungsi)?>
                             </td>
                                     <td>
-                                <span class="label label-danger">
-                                    <?= h($r['_display_status'])?>
+                                <span class="label label-default">
+                                    <?= h($statusTampil)?>
                                 </span>
                             </td>
                                     <td>
-                                <?= h($tglFmt)?>
+                                <?= h($kalibrator)?>
                             </td>
                                     <td>
-                                <?= h($kalibrator)?>
+                                <?= h($ket)?>
                             </td>
                                 </tr>
                     <?php endforeach;
@@ -1253,7 +1381,7 @@ if (!$calendarRow || !(int)$calendarRow['jumlah']): ?>
     <div class="filter-box">
         <b>
             JADWAL KALIBRASI HARIAN
-            <?= h($val_harian)?>
+            <?= h(formatMasterDailyDate($val_harian))?>
         </b>
     </div>
                     <div class="table-wrap">
@@ -1303,7 +1431,7 @@ if (!$calendarRow || !(int)$calendarRow['jumlah']): ?>
             $last = $r['seksi'];
             echo '<tr class="tr-seksi"><td colspan="11" class="text-left">SEKSI: ' . h(strtoupper($last)) . '</td></tr>';
         }
-        $actualBadge = $r['aktual'] !== ''?$r['aktual']:'-';
+        $actualBadge = formatMasterDailyDate($r['aktual']);
         $hasil = $r['hasil'] !== ''?$r['hasil']:'-';
         $dailyStatus = $r['status'] ?? ($hasil !== '-'?$hasil:'');
         $negative = isNegativeMasterStatus($dailyStatus);?>
@@ -1329,7 +1457,7 @@ if (!$calendarRow || !(int)$calendarRow['jumlah']): ?>
                         <?= h($r['periode'])?>
                     </td>
                                     <td>
-                        <?= h($r['rencana'])?>
+                        <?= h(formatMasterDailyDate($r['rencana']))?>
                     </td>
                                     <td>
                         <?= h($actualBadge)?>
@@ -1338,7 +1466,7 @@ if (!$calendarRow || !(int)$calendarRow['jumlah']): ?>
                         <?= h($hasil)?>
                     </td>
                                     <td>
-                        <?= h($r['next'])?>
+                        <?= h(isNegativeMasterStatus($dailyStatus) ? '-' : formatMasterDailyDate($r['next']))?>
                     </td>
                                     <td>
                         <?= h($r['petugas'])?>
@@ -1371,7 +1499,7 @@ if (!$calendarRow || !(int)$calendarRow['jumlah']): ?>
            'embed' => '1'
        ];
         ?>
-    <iframe class="monthly-preview-frame" id="monthlyPreviewFrame" title="Pratinjau Jadwal Kalibrasi <?= $monthlyDisplayFormat === '2' ? 'Internal' : 'External' ?>" src="../jadwal_bulanan/cetak_jadwal_bulanan.php?<?= h(http_build_query($monthlyFrameParams))?>"></iframe>
+    <iframe class="monthly-preview-frame" id="monthlyPreviewFrame" title="Pratinjau <?= $monthlyDisplayFormat === '2' ? 'Laporan Bulanan Internal QA' : 'Laporan Bulanan Seksi' ?>" src="../jadwal_bulanan/cetak_jadwal_bulanan.php?<?= h(http_build_query($monthlyFrameParams))?>"></iframe>
     <?php endif; ?>
     <?php else: ?>
     <div class="filter-box">
@@ -1504,106 +1632,112 @@ if (!$calendarRow || !(int)$calendarRow['jumlah']): ?>
 </div>
 <?php endif; ?>
 <?php elseif ($filter_waktu === 'tahunan'): ?>
-    <div class="filter-box">
-        <b>
-            JADWAL KALIBRASI TAHUNAN
-            <?= h($val_tahunan)?>
-        </b>
-    </div>
-                    <div class="table-wrap">
-                        <table class="table-jadwal">
-                            <thead>
-                                <tr>
-                                    <th rowspan="2">
-                        NO
-                    </th>
-                                    <th rowspan="2">
-                        NAMA ALAT
-                    </th>
-                                    <th rowspan="2">
-                        SEKSI
-                    </th>
-                                    <th rowspan="2">
-                        JENIS
-                    </th>
-                    <?php for ($m = 1;$m <= 12;$m++):?>
-                        <th>
-                            <?= date('M', mktime(0, 0, 0, $m, 1))?>
-                        </th>
-                    <?php endfor;?>
-                    <th rowspan="2">
-                        TOTAL
-                    </th>
-                                    <th rowspan="2">
-                        PETUGAS
-                    </th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                <?php $n = 0;
-    $last = '';
-    foreach ($reportRows as $g):$n++;
-        if ($g['seksi'] !== $last) {
-            $last = $g['seksi'];
-            echo '<tr class="tr-seksi"><td colspan="17" class="text-left">SEKSI: ' . h(strtoupper($last)) . '</td></tr>';
+    <div class="filter-box"><b>JADWAL KALIBRASI TAHUNAN <?= h($val_tahunan) ?></b></div>
+    <?php
+        $annualMonthNames = [
+            1 => 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+            'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+        ];
+        $annualSectionLabels = [];
+        $usedLabels = [];
+        foreach ($annualSections as $section) {
+            $words = preg_split('/\s+/', strtoupper(trim((string)$section)));
+            $lastWord = end($words);
+            if (ctype_digit((string)$lastWord) && count($words) > 1) {
+                $label = substr($words[0], 0, 1) . substr((string)$lastWord, 0, 2);
+            } elseif (count($words) > 1) {
+                $label = substr(implode('', array_map(function ($word) { return substr($word, 0, 1); }, $words)), 0, 3);
+            } else {
+                $label = substr($words[0] ?? '', 0, 3);
+            }
+            $label = $label ?: 'S';
+            for ($suffix = 1; isset($usedLabels[$label]); $suffix++) {
+                $code = strtoupper(base_convert($suffix, 10, 36));
+                $label = substr($words[0] ?? 'S', 0, max(0, 3 - strlen($code))) . $code;
+            }
+            $usedLabels[$label] = true;
+            $annualSectionLabels[$section] = $label;
         }
-        $codes = ['R' => $g['R'], 'H' => $g['H'], 'B' => $g['B']];
-        $totals = ['R' => $g['totalR'], 'H' => $g['totalH'], 'B' => $g['totalB']];
-        foreach ($codes as $code => $arr):?>
-                <tr class="<?= strtolower($code)?>-row">
-                                    <td>
-                        <?= ($code === 'R'?$n:'')?>
-                    </td>
-                                    <td>
-                        <?= ($code === 'R'?h($g['nama_part']):'')?>
-                    </td>
-                                    <td>
-                        <?= ($code === 'R'?h($g['seksi']):'')?>
-                    </td>
-                                    <td>
-                        <b>
-                            <?= $code?>
-                        </b>
-                    </td>
-                    <?php for ($m = 1;$m <= 12;$m++):?>
-                        <td>
-                            <?= ((int)($arr[$m] ?? 0))?:''?>
-                        </td>
-                    <?php endfor;?>
-                    <td>
-                        <b>
-                            <?= $totals[$code]?>
-                        </b>
-                    </td>
-                                    <td>
-                        <?= ($code === 'R'?h($g['petugas']?:'-'):'')?>
-                    </td>
-                                </tr>
-            <?php endforeach;endforeach;
-    if ($n === 0):?>
-            <tr>
-                                    <td colspan="17" class="text-center">
-                    Tidak ada data jadwal tahunan.
-                </td>
-                                </tr>
-        <?php endif;?>
-    </tbody>
-                        </table>
-                    </div>
-                    <div style="margin-top:8px;font-size:12px;color:#666">
-    <b>
-        R
-    </b>
-    = Rencana.
-    <b>
-        H
-    </b>
-    = Aktual hasil Update Hasil Kalibrasi.
-    <b>
-        B
-    </b>
-    = Beda/terlewat = max(R-H, 0) pada bulan tersebut.
-</div>
+    ?>
+    <nav class="annual-month-shortcuts no-print" aria-label="Loncat ke bulan jadwal tahunan">
+        <?php foreach ($annualMonthNames as $month => $monthName): ?>
+            <a href="#annual-month-<?= (int)$month ?>" data-annual-month="<?= (int)$month ?>"><?= h($monthName) ?></a>
+        <?php endforeach; ?>
+    </nav>
+    <?php foreach ($annualMonthNames as $month => $monthName):
+        $monthSections = [];
+        foreach ($annualSections as $section) {
+            foreach ($annualTypeLabels as $type => $label) {
+                foreach ($reportRows[$type] as $group) {
+                    if (!empty($group['R'][$month][$section]) || !empty($group['H'][$month][$section])) {
+                        $monthSections[] = $section;
+                        break 2;
+                    }
+                }
+            }
+        }
+        $monthRows = [];
+        foreach ($annualTypeLabels as $type => $label) {
+            $monthRows[$type] = array_values(array_filter($reportRows[$type], function ($group) use ($month, $monthSections) {
+                foreach ($monthSections as $section) {
+                    if (!empty($group['R'][$month][$section]) || !empty($group['H'][$month][$section])) {
+                        return true;
+                    }
+                }
+                return false;
+            }));
+        }
+    ?>
+    <div class="annual-month-heading" id="annual-month-<?= (int)$month ?>"><?= h(strtoupper($monthName)) ?> <?= h($val_tahunan) ?></div>
+    <div class="table-wrap" style="margin-top:8px">
+        <table class="table-jadwal annual-matrix">
+            <thead>
+                <tr>
+                    <th>NO</th>
+                    <th style="min-width:130px">NAMA ALAT</th>
+                    <th>R/H/B</th>
+                    <?php foreach ($monthSections as $section): ?>
+                        <th class="annual-section" title="<?= h($section) ?>"><?= h($annualSectionLabels[$section]) ?></th>
+                    <?php endforeach; ?>
+                    <th class="annual-month-total">TOTAL</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($annualTypeLabels as $type => $label): ?>
+                    <tr class="annual-group-title"><th colspan="<?= 4 + count($monthSections) ?>"><?= h($label) ?></th></tr>
+                    <?php foreach ($monthRows[$type] as $index => $group): ?>
+                        <?php foreach (['R', 'H', 'B'] as $code): ?>
+                            <tr class="<?= strtolower($code) ?>-row">
+                                <?php if ($code === 'R'): ?>
+                                    <td rowspan="3"><?= $index + 1 ?></td>
+                                    <td rowspan="3" class="text-left"><?= h($group['nama_part']) ?></td>
+                                <?php endif; ?>
+                                <td><b><?= $code ?></b></td>
+                                <?php $monthTotal = 0; foreach ($monthSections as $section): ?>
+                                    <?php $count = (int)($group[$code][$month][$section] ?? 0); $monthTotal += $count; ?>
+                                    <td><?= $count ?: '' ?></td>
+                                <?php endforeach; ?>
+                                <td class="annual-month-total"><b><?= $monthTotal ?></b></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endforeach; ?>
+                    <tr class="annual-group-total">
+                        <th colspan="3" class="text-left">TOTAL <?= h($label) ?></th>
+                        <?php $monthTotal = 0; foreach ($monthSections as $section): ?>
+                            <?php $count = (int)($annualTotalsByType[$type]['R'][$month][$section] ?? 0); $monthTotal += $count; ?>
+                            <th><?= $count ?: '' ?></th>
+                        <?php endforeach; ?>
+                        <th><?= $monthTotal ?></th>
+                    </tr>
+                <?php endforeach; ?>
+                <?php if (!array_filter($monthRows)): ?>
+                    <tr><td colspan="<?= 4 + count($monthSections) ?>">Tidak ada data jadwal pada bulan ini.</td></tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+    <?php endforeach; ?>
+    <div style="margin-top:8px;font-size:12px;color:#666"><b>R</b> = Rencana, <b>H</b> = hasil aktual, <b>B</b> = selisih R-H (minimum 0). Baris TOTAL menghitung R per bulan. Arahkan kursor ke singkatan seksi untuk nama lengkap.</div>
 <?php endif; ?>
 <?php if ($isMonthlyReport): ?></section><?php endif; ?>
 </div>
@@ -1669,6 +1803,12 @@ if (!$calendarRow || !(int)$calendarRow['jumlah']): ?>
 </script>
         <script>
             (function() {
+                $('.annual-month-shortcuts a').on('click', function(event) {
+                    var target = document.getElementById('annual-month-' + this.getAttribute('data-annual-month'));
+                    if (!target) return;
+                    event.preventDefault();
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                });
                 function toggleDate() {
                     var v = $('#filter_waktu').val();
                     $('.view-date').hide();

@@ -19,7 +19,7 @@ function formatTanggalTitik($value) {
     if (!$value)
         return '-';
     $time = strtotime($value);
-    return $time ? date('d.m.Y', $time) : '-';
+    return $time ? date('d-m-Y', $time) : '-';
 }
 
 // LOGIKA 3 WARNA SAJA: Terlewat (Merah), Hari Ini (Kuning), Terjadwal (Hijau)
@@ -56,7 +56,7 @@ if ($result) {
 $perPage = 23;
 $pages = $rows ? array_chunk($rows, $perPage) : [[]];
 $totalPages = count($pages);
-$todayLabel = date('d.m.Y');
+$todayLabel = date('d-m-Y');
 ?>
 <!DOCTYPE html>
 <html lang="id">

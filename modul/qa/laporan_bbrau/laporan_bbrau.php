@@ -27,6 +27,22 @@ function normStatus($v) {
         return 'NG';
     return $s;
 }
+function jenisCheckBbrau($row) {
+    if (!$row)
+        return '';
+    if (strtolower(trim((string)($row['jenis_transaksi'] ?? ''))) === 'registrasi_alat')
+        return 'Registrasi';
+    if (!empty($row['migrasi_excel'])) {
+        $jenisMigrasi = trim((string)($row['jenis_check_migrasi'] ?? ''));
+        return $jenisMigrasi !== '' ? $jenisMigrasi : 'Kalibrasi';
+    }
+    $jenis = strtolower(trim((string)($row['jenis_laporan'] ?? '')));
+    if ($jenis === 'verifikasi')
+        return 'Verifikasi';
+    if ($jenis === 'periksa' || $jenis === 'pemeriksaan')
+        return 'Pemeriksaan';
+    return 'Kalibrasi';
+}
 function firstNonEmpty($row, $keys, $def = '') {
     foreach ($keys as $k) {
         if (isset($row[$k]) && trim((string)$row[$k]) !== '')
@@ -160,26 +176,10 @@ foreach ($riwayat as $i => $r) {
     $slot = ($i % 8) + 1;
     $miniSlots[$slot] = $r;
 }
-$slots = array_fill(1, 26, null);
-foreach ($histUtama as $i => $r) {
-    $slot = ($i % 26) + 1;
-    $slots[$slot] = $r;
-}
-
-// Untuk alat dengan migrasi dan registrasi, isi 26 slot dari CHECK/kalibrasi
-// terbaru saja. Slot pertama tidak lagi digunakan oleh REGISTRASI.
-$adaMigrasi = false;
-foreach ($hist as $r) {
-    if (!empty($r['migrasi_excel'])) {
-        $adaMigrasi = true;
-        break;
-    }
-}
-if ($adaMigrasi && $hist && ($hist[0]['jenis_transaksi'] ?? '') === 'registrasi_alat') {
-    $slots = array_fill(1, 26, null);
-    foreach (array_slice($histUtama, -26) as $i => $r)
-        $slots[$i + 1] = $r;
-}
+$detailPages = array_chunk($histUtama, 26);
+if (!$detailPages)
+    $detailPages = [[]];
+$totalPages = count($detailPages);
 
 // REGISTRASI tetap di baris pertama box RIWAYAT, bahkan jika lebih dari 8 riwayat.
 if ($riwayat && ($riwayat[0]['jenis_transaksi'] ?? '') === 'registrasi_alat') {
@@ -212,6 +212,35 @@ $type = $alat?firstNonEmpty($alat, ['type', 'tipe']):'';
                 margin: 0;
                 background: #eef1f4;
                 color: #000
+            }
+            .site-header {
+                height: 66px;
+                background: #f8f8f8;
+                border-bottom: 1px solid #e7e7e7;
+                font-family: Arial,sans-serif
+            }
+            .site-header-inner {
+                max-width: 1420px;
+                height: 100%;
+                margin: 0 auto;
+                padding: 0 18px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between
+            }
+            .site-header-logo img {
+                display: block;
+                height: 30px;
+                width: auto
+            }
+            .site-header-logout {
+                color: #666;
+                text-decoration: none;
+                font-size: 16px
+            }
+            .site-header-logout:hover {
+                color: #222;
+                text-decoration: none
             }
             .no-print {
                 max-width: 980px;
@@ -408,6 +437,11 @@ $type = $alat?firstNonEmpty($alat, ['type', 'tipe']):'';
                 font: 7pt Arial;
                 margin-top: 1mm
             }
+            .page-no {
+                float: left;
+                font: 7pt Arial;
+                margin-top: 1mm
+            }
             .slot-no {
                 width: 4%
             }
@@ -484,7 +518,7 @@ $type = $alat?firstNonEmpty($alat, ['type', 'tipe']):'';
                     padding: 0!important;
                     background: #fff!important
                 }
-                .no-print {
+                .no-print, .site-header {
                     display: none!important
                 }
                 .sheet {
@@ -496,8 +530,12 @@ $type = $alat?firstNonEmpty($alat, ['type', 'tipe']):'';
                     overflow: hidden!important;
                     box-shadow: none!important;
                     break-before: avoid!important;
-                    break-after: auto!important;
+                    break-after: page!important;
                     page-break-before: avoid!important;
+                    page-break-after: always!important
+                }
+                .sheet:last-of-type {
+                    break-after: auto!important;
                     page-break-after: auto!important
                 }
                 .sheet-content {
@@ -541,13 +579,19 @@ $type = $alat?firstNonEmpty($alat, ['type', 'tipe']):'';
         </style>
     </head>
     <body>
+        <header class="site-header">
+            <div class="site-header-inner">
+                <a class="site-header-logo" href="../../../media.php" aria-label="TOTO - Media"><img src="../../../images/toto.png" alt="TOTO"></a>
+                <a class="site-header-logout" href="../../../logout.php">Logout</a>
+            </div>
+        </header>
         <div class="no-print">
             <div class="toolbar-head">
                 <div>
                     <div class="toolbar-title">Laporan BBRAU</div>
                     <div class="toolbar-sub">Buku Besar Riwayat Alat Ukur</div>
                 </div>
-  <a class="backbtn" href="../../../media.php">&#8592; Kembali ke Media</a>
+  <a class="backbtn" href="../kalibrasi/cek_alat.php">&#8592; Kembali ke Cek Alat</a>
  </div>
             <div class="search-wrap">
                 <form class="search" method="get"><input name="no_alat" value="<?= h($no)?>" placeholder="Masukkan Nomor Alat" autofocus><button type="submit">Cari Alat</button><?php if ($alat):?><button type="button" class="printbtn" onclick="window.print()">Print BBRAU</button><?php endif;?></form>
@@ -555,6 +599,11 @@ $type = $alat?firstNonEmpty($alat, ['type', 'tipe']):'';
  </div>
         </div>
 <?php if ($alat): ?>
+<?php foreach ($detailPages as $pageIndex => $detailRows):
+    $slots = array_fill(1, 26, null);
+    foreach ($detailRows as $index => $detailRow)
+        $slots[$index + 1] = $detailRow;
+?>
 <div class="sheet">
             <div class="sheet-content">
                 <div class="company">PT. SURYA TOTO INDONESIA Tbk.</div>
@@ -631,7 +680,7 @@ $type = $alat?firstNonEmpty($alat, ['type', 'tipe']):'';
  <?php for ($i = 1;$i <= 26;$i++):$r = $slots[$i];?><tr>
                             <td><?= $i ?></td>
                             <td><?= h($r?dmy($r['tanggal_pengecekan'] ?? ''):'')?></td>
-                            <td><?= h($r?(($r['jenis_transaksi'] ?? '') === 'registrasi_alat'?'Registrasi':(!empty($r['migrasi_excel'])?($r['jenis_check_migrasi']?:'Kalibrasi'):'Kalibrasi')):'')?></td>
+                            <td><?= h(jenisCheckBbrau($r))?></td>
                             <td><?= h($r?normStatus($r['status_kalibrasi'] ?? ''):'')?></td>
                             <td><?= h($r?($r['operator'] ?? $r['created_by'] ?? ''):'')?></td>
                             <td><?= h($r?($r['nama_pemeriksa'] ?? ''):'')?></td>
@@ -640,37 +689,44 @@ $type = $alat?firstNonEmpty($alat, ['type', 'tipe']):'';
                         </tr><?php endfor;?>
  </tbody>
                 </table>
+                <div class="page-no">HAL : <?= $pageIndex + 1 ?> / <?= $totalPages ?></div>
                 <div class="doc">STIS-CMFG4-01/R4</div>
             </div>
         </div>
+<?php endforeach; ?>
 <?php endif; ?>
 <script>
             // Saat cetak, perkecil isi HANYA bila riwayat panjang melebihi satu halaman A4.
             // Tidak memotong baris dan tidak mengubah tampilan layar atau data BBRAU.
             (function() {
-                var sheet = document.querySelector('.sheet');
-                var inner = sheet && sheet.querySelector('.sheet-content');
-                if (!inner) return;
+                var sheets = Array.from(document.querySelectorAll('.sheet'));
+                if (!sheets.length) return;
 
                 function fitPrint() {
-                    inner.style.setProperty('--bbrau-fit', '1');
-                    inner.style.setProperty('--bbrau-width', '100%');
                     document.documentElement.classList.add('bbrau-print-measuring');
-                    var cs = getComputedStyle(sheet);
-                    var padding = parseFloat(cs.paddingTop || 0) + parseFloat(cs.paddingBottom || 0);
-                    var available = sheet.clientHeight - padding - 8;
-                    var required = inner.scrollHeight;
+                    sheets.forEach(function(sheet) {
+                        var inner = sheet.querySelector('.sheet-content');
+                        inner.style.setProperty('--bbrau-fit', '1');
+                        inner.style.setProperty('--bbrau-width', '100%');
+                        var cs = getComputedStyle(sheet);
+                        var padding = parseFloat(cs.paddingTop || 0) + parseFloat(cs.paddingBottom || 0);
+                        var available = sheet.clientHeight - padding - 8;
+                        var required = inner.scrollHeight;
+                        if (required > available && available > 0) {
+                            var scale = Math.min(1, available / required);
+                            inner.style.setProperty('--bbrau-fit', String(scale));
+                            inner.style.setProperty('--bbrau-width', (100 / scale) + '%');
+                        }
+                    });
                     document.documentElement.classList.remove('bbrau-print-measuring');
-                    if (required > available && available > 0) {
-                        var scale = Math.min(1, available / required);
-                        inner.style.setProperty('--bbrau-fit', String(scale));
-                        inner.style.setProperty('--bbrau-width', (100 / scale) + '%');
-                    }
                 }
                 window.addEventListener('beforeprint', fitPrint);
                 window.addEventListener('afterprint', function() {
-                    inner.style.removeProperty('--bbrau-fit');
-                    inner.style.removeProperty('--bbrau-width');
+                    sheets.forEach(function(sheet) {
+                        var inner = sheet.querySelector('.sheet-content');
+                        inner.style.removeProperty('--bbrau-fit');
+                        inner.style.removeProperty('--bbrau-width');
+                    });
                 });
             })();
         </script>
